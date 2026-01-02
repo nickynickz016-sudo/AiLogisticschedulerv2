@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { Job, JobStatus, LoadingType, UserProfile, MainCategory, SubCategory, Personnel, Vehicle, UserRole, ShipmentDetailsType } from '../types';
-import { Plus, Search, MapPin, Package, Clock, User, X, Layers, Calendar as CalendarIcon, List, CheckCircle2, Truck, Settings2, Edit3, Lock, Unlock, Trash2, Users, Download } from 'lucide-react';
+import { Plus, Search, MapPin, Package, Clock, User, X, Layers, Calendar as CalendarIcon, List, CheckCircle2, Truck, Settings2, Edit3, Lock, Unlock, Trash2, Users, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { JobDetailModal } from './JobDetailModal';
 
 interface ScheduleViewProps {
@@ -57,8 +56,10 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   const [showAllocationModal, setShowAllocationModal] = useState<Job | null>(null);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [filter, setFilter] = useState('');
-  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('list');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [viewMode, setViewMode] = useState<'calendar' | 'list' | 'month'>('list');
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const selectedDate = currentDate.toISOString().split('T')[0];
 
   const [editAllocation, setEditAllocation] = useState<{ team_leader: string, vehicle: string, writer_crew: string[] }>({
     team_leader: '',
@@ -115,12 +116,16 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   };
 
   const handleExport = () => {
-    if (filteredJobs.length === 0) {
-      alert("No data to export for the selected date.");
+    const jobsToExport = viewMode === 'month' 
+      ? jobs.filter(j => new Date(j.job_date).getMonth() === currentDate.getMonth() && new Date(j.job_date).getFullYear() === currentDate.getFullYear())
+      : filteredJobs;
+
+    if (jobsToExport.length === 0) {
+      alert("No data to export for the selected period.");
       return;
     }
     const headers = ['job_id', 'shipper_name', 'location', 'job_date', 'job_time', 'job_type', 'status', 'team_leader', 'writer_crew', 'vehicle'];
-    const dataToExport = filteredJobs.map(job => ({
+    const dataToExport = jobsToExport.map(job => ({
         job_id: job.id,
         shipper_name: job.shipper_name,
         location: job.location,
@@ -133,7 +138,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         vehicle: job.vehicle || 'N/A'
     }));
     const csv = convertToCSV(dataToExport, headers);
-    downloadCSV(csv, `job-schedule-${selectedDate}.csv`);
+    const filename = viewMode === 'month' ? `job-schedule-${currentDate.getFullYear()}-${currentDate.getMonth() + 1}.csv` : `job-schedule-${selectedDate}.csv`;
+    downloadCSV(csv, filename);
   };
 
   const openAllocationEditor = (job: Job, e: React.MouseEvent) => {
@@ -157,7 +163,6 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     onDeleteJob(jobId);
   };
 
-
   const handleUpdateAllocation = (e: React.FormEvent) => {
     e.preventDefault();
     if (showAllocationModal) {
@@ -177,8 +182,117 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     });
   };
 
-  const availableTLs = personnel.filter(p => p.type === 'Team Leader');
-  const availableCrews = personnel.filter(p => p.type === 'Writer Crew');
+  const handleDateInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const date = new Date(e.target.value);
+    const tzOffset = date.getTimezoneOffset() * 60000;
+    setCurrentDate(new Date(date.getTime() + tzOffset));
+  };
+  
+  const handlePrev = () => {
+    setCurrentDate(prev => {
+      if (viewMode === 'month') {
+        return new Date(prev.getFullYear(), prev.getMonth() - 1, 1);
+      }
+      const newDate = new Date(prev);
+      newDate.setDate(newDate.getDate() - 1);
+      return newDate;
+    });
+  };
+
+  const handleNext = () => {
+    setCurrentDate(prev => {
+      if (viewMode === 'month') {
+        return new Date(prev.getFullYear(), prev.getMonth() + 1, 1);
+      }
+      const newDate = new Date(prev);
+      newDate.setDate(newDate.getDate() + 1);
+      return newDate;
+    });
+  };
+
+  // Month View Component
+  const MonthView = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+
+    const firstDayOfMonth = new Date(year, month, 1);
+    const lastDayOfMonth = new Date(year, month + 1, 0);
+
+    const firstDayOfWeek = firstDayOfMonth.getDay();
+    const numDaysInMonth = lastDayOfMonth.getDate();
+
+    const calendarDays: { day: number, isCurrentMonth: boolean, date: Date | null }[] = [];
+
+    // Days from previous month
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+    for (let i = firstDayOfWeek; i > 0; i--) {
+        calendarDays.push({ day: prevMonthLastDay - i + 1, isCurrentMonth: false, date: null });
+    }
+
+    // Days from current month
+    for (let i = 1; i <= numDaysInMonth; i++) {
+        calendarDays.push({ day: i, isCurrentMonth: true, date: new Date(year, month, i) });
+    }
+
+    // Days from next month
+    while (calendarDays.length % 7 !== 0) {
+        calendarDays.push({ day: calendarDays.length - numDaysInMonth - firstDayOfWeek + 1, isCurrentMonth: false, date: null });
+    }
+
+    const jobsForMonth = jobs.filter(job => {
+        const jobDate = new Date(job.job_date);
+        return jobDate.getFullYear() === year && jobDate.getMonth() === month;
+    });
+
+    const handleDayClick = (day: number) => {
+        setCurrentDate(new Date(year, month, day));
+        setViewMode('list');
+    };
+
+    return (
+      <div className="flex flex-col">
+        <div className="grid grid-cols-7 gap-px bg-slate-200 text-center text-xs font-bold text-slate-500">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+            <div key={day} className="py-3 bg-slate-50">{day}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 grid-rows-5 gap-px bg-slate-200 border-t-0">
+          {calendarDays.map((day, index) => {
+            const jobsForThisDay = day.isCurrentMonth ? jobsForMonth.filter(job => new Date(job.job_date).getDate() === day.day) : [];
+            const isToday = day.isCurrentMonth && day.date?.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+
+            return (
+              <div
+                key={index}
+                className={`p-2 h-36 flex flex-col relative group transition-all ${day.isCurrentMonth ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/50'}`}
+                onClick={() => day.isCurrentMonth && handleDayClick(day.day)}
+              >
+                <span className={`text-sm font-bold ${
+                  isToday ? 'bg-blue-600 text-white rounded-full w-7 h-7 flex items-center justify-center' : 
+                  day.isCurrentMonth ? 'text-slate-800' : 'text-slate-400'
+                }`}>
+                  {day.day}
+                </span>
+                {day.isCurrentMonth && (
+                  <div className="mt-1 space-y-1 overflow-y-auto custom-scrollbar flex-1">
+                    {jobsForThisDay.map(job => (
+                      <div 
+                        key={job.id} 
+                        className="p-1.5 bg-blue-50 text-blue-800 rounded-md text-[10px] font-bold truncate cursor-pointer hover:bg-blue-100"
+                        title={job.shipper_name}
+                      >
+                       {job.shipper_name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
@@ -189,33 +303,49 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
             Job Allocation Board
           </h2>
           <div className="flex flex-wrap items-center gap-4 mt-3">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg">
-              <CalendarIcon className="w-4 h-4 text-slate-400" />
-              <input 
-                type="date" 
-                value={selectedDate} 
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="text-xs font-bold text-slate-700 bg-transparent border-none outline-none cursor-pointer"
-              />
-            </div>
+             <button onClick={() => setCurrentDate(new Date())} className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors">
+                Today
+              </button>
+             <div className="flex items-center gap-1">
+                <button onClick={handlePrev} className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors text-slate-500"><ChevronLeft className="w-4 h-4" /></button>
+                <button onClick={handleNext} className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors text-slate-500"><ChevronRight className="w-4 h-4" /></button>
+             </div>
+             {viewMode === 'month' ? (
+                <h3 className="text-sm font-bold text-slate-700 w-40 text-center">
+                  {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                </h3>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg">
+                  <CalendarIcon className="w-4 h-4 text-slate-400" />
+                  <input 
+                    type="date" 
+                    value={selectedDate} 
+                    onChange={handleDateInputChange}
+                    className="text-xs font-bold text-slate-700 bg-transparent border-none outline-none cursor-pointer"
+                  />
+                </div>
+              )}
             <div className="flex bg-slate-100 p-1 rounded-xl">
-              <button onClick={() => setViewMode('calendar')} className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${viewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Calendar</button>
-              <button onClick={() => setViewMode('list')} className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>List View</button>
+              <button onClick={() => setViewMode('list')} className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>List</button>
+              <button onClick={() => setViewMode('calendar')} className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${viewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Day</button>
+              <button onClick={() => setViewMode('month')} className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${viewMode === 'month' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Month</button>
             </div>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-4">
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder="Search ID or Shipper..."
-              className="pl-11 pr-6 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-1 focus:ring-blue-500 outline-none w-64"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-            />
-          </div>
+          {viewMode !== 'month' && (
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input 
+                type="text" 
+                placeholder="Search ID or Shipper..."
+                className="pl-11 pr-6 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-1 focus:ring-blue-500 outline-none w-64"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+              />
+            </div>
+          )}
           <button
             onClick={handleExport}
             className="flex items-center gap-2 bg-slate-100 text-slate-600 px-8 py-3.5 rounded-xl hover:bg-slate-200 transition-all font-bold uppercase text-[11px] tracking-widest"
@@ -234,7 +364,9 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
       </div>
 
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-        {viewMode === 'calendar' ? (
+        {viewMode === 'month' ? (
+          <MonthView />
+        ) : viewMode === 'calendar' ? (
           <div className="max-h-[70vh] overflow-y-auto custom-scrollbar">
              <div className="grid grid-cols-[120px_1fr] border-b bg-slate-50 text-slate-400 sticky top-0 z-10">
                 <div className="p-4 text-[10px] font-bold uppercase tracking-widest text-center">Timing</div>
