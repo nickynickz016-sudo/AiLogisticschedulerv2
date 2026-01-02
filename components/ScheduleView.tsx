@@ -19,7 +19,14 @@ const HOURS = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '
 const CATEGORIES: MainCategory[] = ['Commercial', 'Agent', 'Private', 'Corporate'];
 const SHIPMENT_TYPES: ShipmentDetailsType[] = ['Local Move', 'Sea FCL', 'AIR', 'AIR LCL', 'SEA LCL', 'Groupage', 'Road'];
 const LOADING_TYPES: LoadingType[] = ['Warehouse Removal', 'Direct Loading', 'Storage', 'Local Storage', 'Delivery'];
-
+const countryCodes = [
+  { name: 'UAE', code: '+971' },
+  { name: 'USA', code: '+1' },
+  { name: 'UK', code: '+44' },
+  { name: 'India', code: '+91' },
+  { name: 'KSA', code: '+966' },
+  { name: 'Qatar', code: '+974' },
+];
 
 // Helper functions for CSV export
 const convertToCSV = (data: any[], headers: string[]) => {
@@ -72,6 +79,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   const [newJob, setNewJob] = useState<Partial<Job>>({
     id: '', 
     shipper_name: '',
+    shipper_phone: '+971 ',
     location: '',
     shipment_details: 'Local Move',
     description: '',
@@ -693,19 +701,44 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Shipper Name *</label>
                     <input required type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.shipper_name} onChange={e => setNewJob({...newJob, shipper_name: e.target.value})} />
                   </div>
+                   <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Shipper Phone</label>
+                    <div className="flex">
+                      <select 
+                        className="w-1/3 px-3 py-3.5 bg-slate-50 border border-r-0 border-slate-200 rounded-l-xl text-xs font-bold focus:ring-1 focus:ring-blue-500 outline-none appearance-none"
+                        value={newJob.shipper_phone?.split(' ')[0] || '+971'}
+                        onChange={e => {
+                          const numberPart = newJob.shipper_phone?.split(' ')[1] || '';
+                          setNewJob({ ...newJob, shipper_phone: `${e.target.value} ${numberPart}` });
+                        }}
+                      >
+                        {countryCodes.map(c => <option key={c.code} value={c.code}>{c.name} ({c.code})</option>)}
+                      </select>
+                      <input 
+                        type="tel"
+                        className="w-2/3 px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-r-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" 
+                        value={newJob.shipper_phone?.split(' ')[1] || ''}
+                        onChange={e => {
+                          const prefixPart = newJob.shipper_phone?.split(' ')[0] || '+971';
+                          setNewJob({ ...newJob, shipper_phone: `${prefixPart} ${e.target.value}` });
+                        }}
+                        placeholder="50 123 4567"
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Allocation Date</label>
                     <input required type="date" min={today} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.job_date} onChange={e => setNewJob({...newJob, job_date: e.target.value})} />
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="md:col-span-2 space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Location</label>
+                    <input required type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.location} onChange={e => setNewJob({...newJob, location: e.target.value})} />
+                  </div>
+                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Timing</label>
                     <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.job_time} onChange={e => setNewJob({...newJob, job_time: e.target.value})}>
                       {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
                     </select>
-                  </div>
-                  <div className="md:col-span-2 space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Location</label>
-                    <input required type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.location} onChange={e => setNewJob({...newJob, location: e.target.value})} />
                   </div>
                 </div>
               </section>

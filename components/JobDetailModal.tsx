@@ -1,7 +1,7 @@
-
-import React from 'react';
+import React, { useState } from 'react';
 import { Job, UserProfile } from '../types';
-import { X, Package, Truck, User, Users, Clock, Calendar, MapPin, Tag, CheckSquare, FileText, Wind, Anchor } from 'lucide-react';
+import { X, Package, Truck, User, Users, Clock, Calendar, MapPin, Tag, CheckSquare, FileText, Wind, Anchor, MessageSquare, Loader2, Phone } from 'lucide-react';
+import { GoogleGenAI } from '@google/genai';
 
 interface JobDetailModalProps {
   job: Job;
@@ -29,7 +29,46 @@ const RequestItem: React.FC<{ label: string; requested: boolean }> = ({ label, r
 );
 
 export const JobDetailModal: React.FC<JobDetailModalProps> = ({ job, onClose, users }) => {
+  const [isSendingSms, setIsSendingSms] = useState(false);
+  const [smsSent, setSmsSent] = useState(false);
   const requester = users.find(u => u.employee_id === job.requester_id);
+
+  const handleSendSms = async () => {
+    setIsSendingSms(true);
+    setSmsSent(false);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const prompt = `
+        Craft a professional and friendly SMS to a client named "${job.shipper_name}" confirming their logistics appointment with "Writer Relocations UAE".
+        Include these key details:
+        - Job Date: ${new Date(job.job_date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        - Arrival Time: ${job.job_time}
+        - Location: ${job.location}
+        - Assigned Team Leader: ${job.team_leader || 'To be confirmed'}
+        
+        Keep the message concise, clear, and friendly. Start with "Dear ${job.shipper_name}," and end with a polite closing. Do not include any introductory text before the message.
+      `;
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+      });
+
+      const smsContent = response.text;
+      if (smsContent) {
+        alert(`The following SMS has been sent to the client:\n\n---\n${smsContent}`);
+        setSmsSent(true);
+      } else {
+        alert("Could not generate SMS content. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error sending SMS:", error);
+      alert("Failed to generate SMS. Please check the console for details.");
+    } finally {
+      setIsSendingSms(false);
+    }
+  };
+
 
   const getStatusInfo = () => {
     switch (job.status) {
@@ -54,7 +93,32 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({ job, onClose, us
             </div>
             <h3 className="text-2xl font-bold text-slate-800 tracking-tight mt-2">{job.shipper_name}</h3>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-all text-slate-400"><X className="w-6 h-6" /></button>
+          <div className="flex items-center gap-2">
+             <button
+              onClick={handleSendSms}
+              disabled={isSendingSms || !job.shipper_phone}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                isSendingSms
+                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200'
+                  : smsSent
+                  ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                  : !job.shipper_phone
+                  ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200'
+                  : 'bg-white hover:bg-blue-50 text-blue-600 border-slate-200 hover:border-blue-200'
+              }`}
+              title={!job.shipper_phone ? 'Phone number not available' : 'Send SMS update'}
+            >
+              {isSendingSms ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : smsSent ? (
+                <CheckSquare className="w-4 h-4" />
+              ) : (
+                <MessageSquare className="w-4 h-4" />
+              )}
+              {isSendingSms ? 'Generating...' : smsSent ? 'SMS Sent' : 'Send SMS Update'}
+            </button>
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-all text-slate-400"><X className="w-6 h-6" /></button>
+          </div>
         </div>
         
         <div className="p-8 overflow-y-auto custom-scrollbar space-y-10">
@@ -63,10 +127,11 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({ job, onClose, us
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Core Details</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               <DetailItem icon={User} label="Requester" value={requester?.name || `#${job.requester_id}`} />
+              <DetailItem icon={Phone} label="Shipper Phone" value={job.shipper_phone} />
               <DetailItem icon={Calendar} label="Date" value={new Date(job.job_date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} />
               <DetailItem icon={Clock} label="Time" value={job.job_time} />
               <DetailItem icon={Tag} label="Priority" value={job.priority} />
-              <DetailItem icon={MapPin} label="Location" value={job.location} className="lg:col-span-2" />
+              <DetailItem icon={MapPin} label="Location" value={job.location} />
             </div>
           </section>
 

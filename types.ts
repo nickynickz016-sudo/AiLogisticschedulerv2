@@ -1,4 +1,3 @@
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   USER = 'USER'
@@ -68,6 +67,7 @@ export interface Job {
   id: string; // Job No.
   title: string;
   shipper_name: string;
+  shipper_phone?: string;
   location?: string;
   shipment_details?: ShipmentDetailsType;
   description?: string;
