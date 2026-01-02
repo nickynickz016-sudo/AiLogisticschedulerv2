@@ -1,4 +1,3 @@
-
 import { UserProfile, UserRole } from './types';
 
 export interface MockUser {
@@ -74,6 +73,18 @@ export const USERS: MockUser[] = [
     profile: {
       id: 'f6a7b8c9-d0e1-2345-6789-0abcdef12345',
       employee_id: 'OPS-105',
+      name: 'Anoop',
+      role: UserRole.USER,
+      avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Anoop',
+      status: 'Active',
+    },
+  },
+  {
+    username: 'User6',
+    password: 'User6',
+    profile: {
+      id: 'g7a8b9c0-d1e2-3456-7890-1abcdef123456',
+      employee_id: 'OPS-106',
       name: 'Anoop',
       role: UserRole.USER,
       avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Anoop',
