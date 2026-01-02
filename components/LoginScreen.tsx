@@ -81,11 +81,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
             </button>
           </form>
         </div>
-        <div className="text-center text-xs text-slate-400 mt-6 space-y-2">
-            <p className="font-bold">Demo Accounts:</p>
-            <p><span className="font-semibold">Admin:</span> Admin / Admin</p>
-            <p><span className="font-semibold">Users:</span> User1/User1 ... User6/User6</p>
-        </div>
       </div>
     </div>
   );

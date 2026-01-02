@@ -61,7 +61,10 @@ const App: React.FC = () => {
   const fetchSettings = useCallback(async () => {
     const { data, error } = await supabase.from('system_settings').select('daily_job_limits, holidays').eq('id', 1).single();
     if (data) {
-      setSettings(data);
+      setSettings({
+        daily_job_limits: data.daily_job_limits || {},
+        holidays: data.holidays || [],
+      });
     } else if (error) {
       console.error('Error fetching settings:', error.message);
       // If settings don't exist, create them
