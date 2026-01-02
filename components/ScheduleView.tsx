@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Job, JobStatus, LoadingType, UserProfile, MainCategory, SubCategory, Personnel, Vehicle, UserRole, ShipmentDetailsType } from '../types';
-import { Plus, Search, MapPin, Package, Clock, User, X, Layers, Calendar as CalendarIcon, List, CheckCircle2, Truck, Settings2, Edit3, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, MapPin, Package, Clock, User, X, Layers, Calendar as CalendarIcon, List, CheckCircle2, Truck, Settings2, Edit3, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize } from 'lucide-react';
 import { JobDetailModal } from './JobDetailModal';
 
 interface ScheduleViewProps {
@@ -32,6 +32,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   jobs, onAddJob, onDeleteJob, onUpdateAllocation, onToggleLock, currentUser, personnel, vehicles, users 
 }) => {
   const [showModal, setShowModal] = useState(false);
+  const [isModalExpanded, setIsModalExpanded] = useState(false);
   const [showAllocationModal, setShowAllocationModal] = useState<Job | null>(null);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [filter, setFilter] = useState('');
@@ -48,7 +49,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
   const today = new Date().toISOString().split('T')[0];
   
-  const [newJob, setNewJob] = useState<Partial<Job>>({
+  const initialNewJobState: Partial<Job> = {
     id: '', 
     shipper_name: '',
     shipper_phone: '+971 ',
@@ -70,11 +71,19 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     job_time: '08:00',
     job_date: today,
     assigned_to: 'Unassigned'
-  });
+  };
+
+  const [newJob, setNewJob] = useState<Partial<Job>>(initialNewJobState);
 
   const getSubCategories = (main: MainCategory): SubCategory[] => {
     if (main === 'Commercial') return ['Fine arts Installation', 'Export', 'Import'];
     return ['Export', 'Import'];
+  };
+  
+  const handleCloseModal = () => {
+    setShowModal(false);
+    setIsModalExpanded(false);
+    setNewJob(initialNewJobState);
   };
 
   const filteredJobs = jobs.filter(j => 
@@ -92,7 +101,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
       return;
     }
     onAddJob({ ...newJob, title: newJob.id });
-    setShowModal(false);
+    handleCloseModal();
   };
 
   const openAllocationEditor = (job: Job, e: React.MouseEvent) => {
@@ -615,7 +624,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
       {/* New Job Modal */}
       {showModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-[2rem] w-full max-w-3xl shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col max-h-[95vh] border border-slate-200 overflow-hidden">
+          <div className={`bg-white rounded-[2rem] w-full shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col max-h-[95vh] border border-slate-200 overflow-hidden transition-all ease-in-out ${isModalExpanded ? 'max-w-6xl' : 'max-w-3xl'}`}>
             <div className="p-8 border-b flex justify-between items-center bg-white shrink-0">
                <div className="flex items-center gap-4">
                   <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center rotate-45 transform">
@@ -623,7 +632,12 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                   </div>
                   <h3 className="text-xl font-bold text-slate-800 tracking-tight uppercase">Submit Allocation Request</h3>
                </div>
-               <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-100 rounded-xl transition-all text-slate-400"><X className="w-6 h-6" /></button>
+               <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setIsModalExpanded(!isModalExpanded)} className="p-2 hover:bg-slate-100 rounded-xl transition-all text-slate-400" title={isModalExpanded ? "Collapse" : "Expand"}>
+                  {isModalExpanded ? <Minimize className="w-6 h-6" /> : <Maximize className="w-6 h-6" />}
+                </button>
+                <button type="button" onClick={handleCloseModal} className="p-2 hover:bg-slate-100 rounded-xl transition-all text-slate-400"><X className="w-6 h-6" /></button>
+               </div>
             </div>
             
             <form onSubmit={handleSubmit} className="p-8 overflow-y-auto custom-scrollbar space-y-10">
@@ -759,7 +773,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
               </section>
 
               <div className="pt-6 flex gap-4 shrink-0">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-4 font-bold text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all uppercase text-[10px] tracking-widest">Discard</button>
+                <button type="button" onClick={handleCloseModal} className="flex-1 py-4 font-bold text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all uppercase text-[10px] tracking-widest">Discard</button>
                 <button type="submit" className="flex-1 py-4 font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 uppercase text-[10px] tracking-widest">Authorize Request</button>
               </div>
             </form>
