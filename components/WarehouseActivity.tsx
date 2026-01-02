@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { Job, JobStatus, UserProfile } from '../types';
-import { Plus, X, Box, User, Clock, AlertCircle, Info, Download } from 'lucide-react';
+import { Plus, X, Box, User, Clock, AlertCircle, Info, Download, Calendar } from 'lucide-react';
 
 interface WarehouseActivityProps {
   jobs: Job[];
@@ -109,13 +108,22 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({ jobs, onAd
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 block">Operation Date</label>
-            <input 
-              type="date" 
-              value={selectedDate} 
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer"
-            />
+            <label htmlFor="warehouse-date-picker" className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 block">Operation Date</label>
+            <div className="relative">
+                <div className="flex items-center justify-between w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-pointer hover:bg-slate-100 transition-colors">
+                    <span>
+                        {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                    </span>
+                    <Calendar className="w-5 h-5 text-slate-400" />
+                </div>
+                <input 
+                    id="warehouse-date-picker"
+                    type="date" 
+                    value={selectedDate} 
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer"
+                />
+            </div>
           </div>
 
           <div className="space-y-3">
