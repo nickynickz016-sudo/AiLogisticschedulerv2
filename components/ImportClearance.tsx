@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Job, JobStatus, UserProfile, CustomsStatus, UserRole } from '../types';
-import { Plus, X, FileCheck, User, Clock, AlertCircle, Info, ShieldCheck, Edit3, Calendar, Download } from 'lucide-react';
+import { Plus, X, FileCheck, User, Clock, AlertCircle, Info, ShieldCheck, Edit3, Calendar } from 'lucide-react';
 
 interface ImportClearanceProps {
   jobs: Job[];
@@ -9,34 +9,6 @@ interface ImportClearanceProps {
   currentUser: UserProfile;
   onUpdateCustomsStatus: (jobId: string, status: CustomsStatus) => void;
 }
-
-// Helper functions for CSV export
-const convertToCSV = (data: any[], headers: string[]) => {
-  const headerRow = headers.join(',');
-  const rows = data.map(obj => {
-      return headers.map(header => {
-          let value = obj[header as keyof typeof obj] ?? '';
-          if (typeof value === 'string' && value.includes(',')) {
-              value = `"${value}"`;
-          }
-          return value;
-      }).join(',');
-  });
-  return [headerRow, ...rows].join('\n');
-};
-
-const downloadCSV = (csvString: string, filename: string) => {
-  const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  link.setAttribute('href', url);
-  link.setAttribute('download', filename);
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
-
 
 export const ImportClearance: React.FC<ImportClearanceProps> = ({ jobs, onAddJob, onDeleteJob, currentUser, onUpdateCustomsStatus }) => {
   const [showModal, setShowModal] = useState(false);
@@ -97,25 +69,6 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({ jobs, onAddJob
     }
   };
 
-  const handleExport = () => {
-    if (allClearanceJobs.length === 0) {
-      alert("No clearance data to export.");
-      return;
-    }
-    const headers = ['job_id', 'shipper_name', 'agent_name', 'bol_number', 'container_number', 'job_date', 'customs_status'];
-    const dataToExport = allClearanceJobs.map(job => ({
-      job_id: job.id,
-      shipper_name: job.shipper_name,
-      agent_name: job.agent_name || 'N/A',
-      bol_number: job.bol_number || 'N/A',
-      container_number: job.container_number || 'N/A',
-      job_date: job.job_date,
-      customs_status: job.customs_status || 'N/A'
-    }));
-    const csv = convertToCSV(dataToExport, headers);
-    downloadCSV(csv, 'import-clearance-report.csv');
-  };
-
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="bg-white p-10 rounded-3xl shadow-sm border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-10">
@@ -167,13 +120,6 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({ jobs, onAddJob
             >
               <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
               New Clearance Task
-            </button>
-            <button
-              onClick={handleExport}
-              className="w-full flex items-center justify-center gap-3 bg-white text-slate-600 border border-slate-200 p-4 rounded-3xl font-bold hover:bg-slate-50 transition-all uppercase text-xs tracking-widest"
-            >
-              <Download className="w-4 h-4" />
-              Export Report
             </button>
           </div>
 

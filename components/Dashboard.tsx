@@ -1,8 +1,16 @@
-
-import React from 'react';
+import React, { useState } from 'react';
 import { Job, JobStatus, SystemSettings } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight } from 'lucide-react';
+import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, Download, Loader2 } from 'lucide-react';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
+
+// Extend jsPDF with the autoTable plugin
+// FIX: Replaced interface with a type intersection to correctly add the autoTable method to the jsPDF instance type.
+// This resolves errors where jsPDF methods were not found on the extended type.
+type jsPDFWithAutoTable = jsPDF & {
+  autoTable: (options: any) => jsPDF;
+};
 
 interface DashboardProps {
   jobs: Job[];
@@ -12,6 +20,7 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin }) => {
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const today = new Date().toISOString().split('T')[0];
   const currentLimit = settings.daily_job_limits[today] || 10;
   const currentJobsCount = jobs.filter(j => j.job_date === today && j.status !== JobStatus.REJECTED).length;
@@ -22,10 +31,99 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
     { label: 'Operations Final', value: jobs.filter(j => j.status === JobStatus.COMPLETED).length, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50/50' },
     { label: 'Critical Alerts', value: jobs.filter(j => j.priority === 'HIGH' && j.status === JobStatus.ACTIVE).length, icon: AlertCircle, color: 'text-rose-600', bg: 'bg-rose-50/50' },
   ];
+  
+  const handleGeneratePdf = () => {
+    setIsGeneratingPdf(true);
+    try {
+      const doc = new jsPDF() as jsPDFWithAutoTable;
+      const generationDate = new Date().toLocaleDateString();
+
+      // Define header and footer for each page
+      const pageContent = (data: any) => {
+        // Header
+        doc.setFontSize(20);
+        doc.setTextColor(40);
+        doc.setFont('helvetica', 'bold');
+        doc.text('WRITER Relocations - Operations Report', data.settings.margin.left, 22);
+        
+        // Footer
+        const pageCount = doc.internal.getNumberOfPages();
+        doc.setFontSize(10);
+        doc.setTextColor(150);
+        doc.text(`Page ${data.pageNumber} of ${pageCount}`, data.settings.margin.left, doc.internal.pageSize.height - 10);
+        doc.text(`Generated on: ${generationDate}`, doc.internal.pageSize.width - data.settings.margin.right, doc.internal.pageSize.height - 10, { align: 'right' });
+      };
+
+      // Filter jobs into categories
+      const scheduleJobs = jobs.filter(j => !j.is_warehouse_activity && !j.is_import_clearance);
+      const warehouseJobs = jobs.filter(j => j.is_warehouse_activity);
+      const importJobs = jobs.filter(j => j.is_import_clearance);
+
+      // 1. Job Schedule Table
+      doc.autoTable({
+        startY: 30,
+        head: [['Job No.', 'Shipper', 'Date', 'Time', 'Location', 'CBM', 'Team Leader', 'Vehicle', 'Status']],
+        body: scheduleJobs.map(j => [j.id, j.shipper_name, j.job_date, j.job_time || 'N/A', j.location || 'N/A', j.volume_cbm || 0, j.team_leader || 'N/A', j.vehicle || 'N/A', j.status]),
+        didDrawPage: pageContent,
+        headStyles: { fillColor: [22, 163, 74] },
+        margin: { top: 30 },
+        tableWidth: 'auto',
+        styles: { fontSize: 8, cellPadding: 2 },
+        columnStyles: { 4: { cellWidth: 40 } },
+        didParseCell: function(data) {
+          if (data.section === 'head' && data.column.index === 0) {
+            data.cell.text = ['Job Schedule'];
+          }
+        },
+      });
+
+      // 2. Warehouse Activity Table
+      if (warehouseJobs.length > 0) {
+        doc.autoTable({
+          head: [['Job No.', 'Shipper', 'Date', 'Requester ID', 'Status']],
+          body: warehouseJobs.map(j => [j.id, j.shipper_name, j.job_date, j.requester_id, j.status]),
+          didDrawPage: pageContent,
+          headStyles: { fillColor: [37, 99, 235] },
+          margin: { top: 30 },
+          styles: { fontSize: 8, cellPadding: 2 },
+          didParseCell: function(data) {
+            if (data.section === 'head' && data.column.index === 0) {
+              data.cell.text = ['Warehouse Activity'];
+            }
+          },
+        });
+      }
+
+      // 3. Import Clearance Table
+      if (importJobs.length > 0) {
+        doc.autoTable({
+          head: [['Job No.', 'Shipper', 'Agent', 'Date', 'BOL No.', 'Container No.', 'Customs Status']],
+          body: importJobs.map(j => [j.id, j.shipper_name, j.agent_name || 'N/A', j.job_date, j.bol_number || 'N/A', j.container_number || 'N/A', j.customs_status || 'N/A']),
+          didDrawPage: pageContent,
+          headStyles: { fillColor: [79, 70, 229] },
+          margin: { top: 30 },
+          styles: { fontSize: 8, cellPadding: 2 },
+          didParseCell: function(data) {
+            if (data.section === 'head' && data.column.index === 0) {
+              data.cell.text = ['Import Clearance'];
+            }
+          },
+        });
+      }
+
+      doc.save(`operations_report_${today}.pdf`);
+    } catch (error) {
+      console.error("Failed to generate PDF:", error);
+      alert("There was an error generating the PDF report.");
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
 
   return (
     <div className="space-y-10 animate-in fade-in duration-700">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+      <div className="flex flex-col md:flex-row md:items-start justify-between gap-8">
         <div>
           <h2 className="text-4xl font-black text-slate-800 tracking-tight">Terminal Hub</h2>
           <p className="text-slate-500 font-medium text-lg mt-2 flex items-center gap-2">
@@ -37,22 +135,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
           </p>
         </div>
         
-        <div className="flex items-center gap-6 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200">
-           <div className="text-right">
-             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">Facility Load Factor</p>
-             <div className="flex items-center gap-3">
-                <span className="text-3xl font-black text-slate-900">{currentJobsCount} <span className="text-slate-300 font-medium">/</span> {currentLimit}</span>
-                <div className="w-12 h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div 
-                    className="h-full bg-blue-500 transition-all duration-1000" 
-                    style={{ width: `${Math.min(100, (currentJobsCount / currentLimit) * 100)}%` }}
-                  ></div>
-                </div>
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <button
+            onClick={handleGeneratePdf}
+            disabled={isGeneratingPdf}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl hover:bg-slate-800 transition-all font-bold uppercase text-[10px] tracking-widest shadow-md disabled:opacity-60"
+          >
+            {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+            {isGeneratingPdf ? 'Generating...' : 'Download Full Report'}
+          </button>
+          
+          <div className="flex items-center gap-6 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 w-full sm:w-auto">
+             <div className="text-right">
+               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">Facility Load Factor</p>
+               <div className="flex items-center gap-3">
+                  <span className="text-3xl font-black text-slate-900">{currentJobsCount} <span className="text-slate-300 font-medium">/</span> {currentLimit}</span>
+                  <div className="w-12 h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-500 transition-all duration-1000" 
+                      style={{ width: `${Math.min(100, (currentJobsCount / currentLimit) * 100)}%` }}
+                    ></div>
+                  </div>
+               </div>
              </div>
-           </div>
-           <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100">
-              <BarChart3 className="w-7 h-7 text-slate-300" />
-           </div>
+             <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center border border-slate-100 shrink-0">
+                <BarChart3 className="w-7 h-7 text-slate-300" />
+             </div>
+          </div>
         </div>
       </div>
 

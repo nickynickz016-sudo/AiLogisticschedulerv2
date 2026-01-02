@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Job, JobStatus, LoadingType, UserProfile, MainCategory, SubCategory, Personnel, Vehicle, UserRole, ShipmentDetailsType } from '../types';
-import { Plus, Search, MapPin, Package, Clock, User, X, Layers, Calendar as CalendarIcon, List, CheckCircle2, Truck, Settings2, Edit3, Lock, Unlock, Trash2, Users, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, MapPin, Package, Clock, User, X, Layers, Calendar as CalendarIcon, List, CheckCircle2, Truck, Settings2, Edit3, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { JobDetailModal } from './JobDetailModal';
 
 interface ScheduleViewProps {
@@ -27,34 +27,6 @@ const countryCodes = [
   { name: 'KSA', code: '+966' },
   { name: 'Qatar', code: '+974' },
 ];
-
-// Helper functions for CSV export
-const convertToCSV = (data: any[], headers: string[]) => {
-  const headerRow = headers.join(',');
-  const rows = data.map(obj => {
-      return headers.map(header => {
-          let value = obj[header as keyof typeof obj] ?? '';
-          if (typeof value === 'string' && value.includes(',')) {
-              value = `"${value}"`;
-          }
-          return value;
-      }).join(',');
-  });
-  return [headerRow, ...rows].join('\n');
-};
-
-const downloadCSV = (csvString: string, filename: string) => {
-  const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  link.setAttribute('href', url);
-  link.setAttribute('download', filename);
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
-
 
 export const ScheduleView: React.FC<ScheduleViewProps> = ({ 
   jobs, onAddJob, onDeleteJob, onUpdateAllocation, onToggleLock, currentUser, personnel, vehicles, users 
@@ -121,33 +93,6 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     }
     onAddJob({ ...newJob, title: newJob.id });
     setShowModal(false);
-  };
-
-  const handleExport = () => {
-    const jobsToExport = viewMode === 'month' 
-      ? jobs.filter(j => new Date(j.job_date).getMonth() === currentDate.getMonth() && new Date(j.job_date).getFullYear() === currentDate.getFullYear())
-      : filteredJobs;
-
-    if (jobsToExport.length === 0) {
-      alert("No data to export for the selected period.");
-      return;
-    }
-    const headers = ['job_id', 'shipper_name', 'location', 'job_date', 'job_time', 'job_type', 'status', 'team_leader', 'writer_crew', 'vehicle'];
-    const dataToExport = jobsToExport.map(job => ({
-        job_id: job.id,
-        shipper_name: job.shipper_name,
-        location: job.location,
-        job_date: job.job_date,
-        job_time: job.job_time,
-        job_type: job.main_category,
-        status: job.status,
-        team_leader: job.team_leader || 'N/A',
-        writer_crew: job.writer_crew ? job.writer_crew.join('; ') : 'N/A',
-        vehicle: job.vehicle || 'N/A'
-    }));
-    const csv = convertToCSV(dataToExport, headers);
-    const filename = viewMode === 'month' ? `job-schedule-${currentDate.getFullYear()}-${currentDate.getMonth() + 1}.csv` : `job-schedule-${selectedDate}.csv`;
-    downloadCSV(csv, filename);
   };
 
   const openAllocationEditor = (job: Job, e: React.MouseEvent) => {
@@ -360,13 +305,6 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
               />
             </div>
           )}
-          <button
-            onClick={handleExport}
-            className="flex items-center gap-2 bg-slate-100 text-slate-600 px-8 py-3.5 rounded-xl hover:bg-slate-200 transition-all font-bold uppercase text-[11px] tracking-widest"
-          >
-            <Download className="w-4 h-4" />
-            Export
-          </button>
           <button 
             onClick={() => setShowModal(true)}
             className="flex items-center gap-2 bg-slate-900 text-white px-8 py-3.5 rounded-xl hover:bg-slate-800 transition-all font-bold uppercase text-[11px] tracking-widest shadow-md"

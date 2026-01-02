@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Job, JobStatus, UserProfile } from '../types';
-import { Plus, X, Box, User, Clock, AlertCircle, Info, Download, Calendar } from 'lucide-react';
+import { Plus, X, Box, User, Clock, AlertCircle, Info, Calendar } from 'lucide-react';
 
 interface WarehouseActivityProps {
   jobs: Job[];
@@ -8,33 +8,6 @@ interface WarehouseActivityProps {
   onDeleteJob: (jobId: string) => void;
   currentUser: UserProfile;
 }
-
-// Helper functions for CSV export
-const convertToCSV = (data: any[], headers: string[]) => {
-  const headerRow = headers.join(',');
-  const rows = data.map(obj => {
-      return headers.map(header => {
-          let value = obj[header as keyof typeof obj] ?? '';
-          if (typeof value === 'string' && value.includes(',')) {
-              value = `"${value}"`;
-          }
-          return value;
-      }).join(',');
-  });
-  return [headerRow, ...rows].join('\n');
-};
-
-const downloadCSV = (csvString: string, filename: string) => {
-  const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(blob);
-  link.setAttribute('href', url);
-  link.setAttribute('download', filename);
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
 
 export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({ jobs, onAddJob, onDeleteJob, currentUser }) => {
   const [showModal, setShowModal] = useState(false);
@@ -64,23 +37,6 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({ jobs, onAd
     });
     setShowModal(false);
     setNewActivity({ id: '', shipper_name: '', job_date: selectedDate });
-  };
-
-  const handleExport = () => {
-    if (dailyActivities.length === 0) {
-      alert("No data to export for the selected date.");
-      return;
-    }
-    const headers = ['job_id', 'shipper_name', 'job_date', 'status', 'requester_id'];
-    const dataToExport = dailyActivities.map(job => ({
-        job_id: job.id,
-        shipper_name: job.shipper_name,
-        job_date: job.job_date,
-        status: job.status,
-        requester_id: job.requester_id
-    }));
-    const csv = convertToCSV(dataToExport, headers);
-    downloadCSV(csv, `warehouse-activity-${selectedDate}.csv`);
   };
 
   return (
@@ -134,13 +90,6 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({ jobs, onAd
             >
               <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
               Book Facility Slot
-            </button>
-            <button
-              onClick={handleExport}
-              className="w-full flex items-center justify-center gap-3 bg-white text-slate-600 border border-slate-200 p-4 rounded-3xl font-bold hover:bg-slate-50 transition-all uppercase text-xs tracking-widest"
-            >
-              <Download className="w-4 h-4" />
-              Export Report
             </button>
           </div>
 
