@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Job, JobStatus, LoadingType, UserProfile, MainCategory, SubCategory, Personnel, Vehicle, UserRole, ShipmentDetailsType } from '../types';
-import { Plus, Search, MapPin, Package, Clock, User, X, Layers, Calendar as CalendarIcon, List, CheckCircle2, Truck, Settings2, Edit3, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize } from 'lucide-react';
+import { Plus, Search, MapPin, Package, Clock, User, X, Layers, Calendar as CalendarIcon, List, CheckCircle2, Truck, Settings2, Edit3, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Loader2 } from 'lucide-react';
 import { JobDetailModal } from './JobDetailModal';
+import { GoogleGenAI } from '@google/genai';
 
 interface ScheduleViewProps {
   jobs: Job[];
@@ -49,6 +50,14 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
   const today = new Date().toISOString().split('T')[0];
   
+  // Location suggestions state
+  const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
+  const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number; } | null>(null);
+  const [suggestionsVisible, setSuggestionsVisible] = useState(false);
+  const debounceTimeoutRef = useRef<number | null>(null);
+  const suggestionsContainerRef = useRef<HTMLDivElement>(null);
+
   const initialNewJobState: Partial<Job> = {
     id: '', 
     shipper_name: '',
@@ -75,6 +84,90 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
   const [newJob, setNewJob] = useState<Partial<Job>>(initialNewJobState);
 
+  // Request user's location when modal opens
+  useEffect(() => {
+    if (showModal) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        (error) => {
+          console.error("Geolocation error:", error);
+        }
+      );
+    }
+  }, [showModal]);
+
+  // Handle clicks outside suggestions to close the dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (suggestionsContainerRef.current && !suggestionsContainerRef.current.contains(event.target as Node)) {
+        setSuggestionsVisible(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const fetchLocationSuggestions = useCallback(async (query: string) => {
+    if (query.length < 3) {
+      setLocationSuggestions([]);
+      return;
+    }
+    setIsFetchingSuggestions(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: `Provide up to 5 location suggestions in the UAE for: "${query}". Format the response as a simple list, with each suggestion on a new line. Do not include numbering or bullet points.`,
+        config: {
+          tools: [{googleMaps: {}}],
+          toolConfig: userLocation ? {
+            retrievalConfig: {
+              latLng: {
+                latitude: userLocation.latitude,
+                longitude: userLocation.longitude
+              }
+            }
+          } : undefined
+        },
+      });
+      const text = response.text;
+      const suggestions = text ? text.split('\n').filter(s => s.trim() !== '') : [];
+      setLocationSuggestions(suggestions);
+    } catch (error) {
+      console.error("Error fetching location suggestions:", error);
+      setLocationSuggestions([]);
+    } finally {
+      setIsFetchingSuggestions(false);
+    }
+  }, [userLocation]);
+
+  const handleLocationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setNewJob({ ...newJob, location: value });
+    setSuggestionsVisible(true);
+    
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+
+    debounceTimeoutRef.current = window.setTimeout(() => {
+      fetchLocationSuggestions(value);
+    }, 500);
+  };
+  
+  const handleSuggestionClick = (suggestion: string) => {
+    setNewJob({ ...newJob, location: suggestion });
+    setLocationSuggestions([]);
+    setSuggestionsVisible(false);
+  };
+
   const getSubCategories = (main: MainCategory): SubCategory[] => {
     if (main === 'Commercial') return ['Fine arts Installation', 'Export', 'Import'];
     return ['Export', 'Import'];
@@ -84,6 +177,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     setShowModal(false);
     setIsModalExpanded(false);
     setNewJob(initialNewJobState);
+    setLocationSuggestions([]);
+    setSuggestionsVisible(false);
   };
 
   const filteredJobs = jobs.filter(j => 
@@ -682,9 +777,41 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Allocation Date</label>
                     <input required type="date" min={today} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.job_date} onChange={e => setNewJob({...newJob, job_date: e.target.value})} />
                   </div>
-                  <div className="md:col-span-2 space-y-1.5">
+                  <div className="md:col-span-2 space-y-1.5 relative" ref={suggestionsContainerRef}>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Location</label>
-                    <input required type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.location} onChange={e => setNewJob({...newJob, location: e.target.value})} />
+                    <input 
+                      required 
+                      type="text" 
+                      className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" 
+                      value={newJob.location} 
+                      onChange={handleLocationChange}
+                      onFocus={() => setSuggestionsVisible(true)}
+                      autoComplete="off"
+                    />
+                    {suggestionsVisible && (newJob.location?.length ?? 0) > 2 && (
+                      <div className="absolute top-full left-0 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                        {isFetchingSuggestions ? (
+                          <div className="p-4 flex items-center justify-center text-slate-500">
+                            <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                            <span>Searching...</span>
+                          </div>
+                        ) : locationSuggestions.length > 0 ? (
+                          <ul className="divide-y divide-slate-100">
+                            {locationSuggestions.map((suggestion, index) => (
+                              <li 
+                                key={index}
+                                onClick={() => handleSuggestionClick(suggestion)}
+                                className="px-5 py-3 text-sm font-medium text-slate-700 cursor-pointer hover:bg-slate-50"
+                              >
+                                {suggestion}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className="p-4 text-center text-sm text-slate-500">No suggestions found.</div>
+                        )}
+                      </div>
+                    )}
                   </div>
                    <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Timing</label>

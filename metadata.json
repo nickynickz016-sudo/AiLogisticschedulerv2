@@ -1,5 +1,7 @@
 {
   "name": "Deployed Project Ai Logisticscheduler",
   "description": "A collaborative warehouse and logistics job scheduling application featuring real-time updates, admin approval workflows, and AI-powered logistics optimization.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "geolocation"
+  ]
 }
