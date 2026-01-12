@@ -1,5 +1,6 @@
+
 import { createClient } from '@supabase/supabase-js';
-import { Job, Personnel, SystemSettings, UserProfile, Vehicle } from './types';
+import { Job, Personnel, SystemSettings, UserProfile, Vehicle, InventoryItem, JobCostSheet } from './types';
 
 // Provided Supabase project details
 const supabaseUrl = 'https://dtlpmlwvfsebirzzmniq.supabase.co';
@@ -38,11 +39,17 @@ export type Database = {
         Insert: SystemSettings & { id: number };
         Update: Partial<SystemSettings>;
       };
+      inventory_items: {
+        Row: InventoryItem;
+        Insert: Omit<InventoryItem, 'id'>;
+        Update: Partial<InventoryItem>;
+      };
+      job_cost_sheets: {
+        Row: JobCostSheet;
+        Insert: JobCostSheet;
+        Update: Partial<JobCostSheet>;
+      };
     };
-    // FIX: Add missing Views, Functions, Enums, and CompositeTypes to the Database type.
-    // This ensures the Supabase client can correctly infer types for all operations,
-    // resolving the 'not assignable to never' errors for insert and update calls.
-    // FIX: Replaced `[_ in never]: never` with `{}` to correctly type empty schema parts, resolving type inference issues with the Supabase client.
     Views: {};
     Functions: {};
     Enums: {};

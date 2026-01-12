@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { Job, JobStatus, UserProfile } from '../types';
-import { Plus, X, Box, User, Clock, AlertCircle, Info, Calendar } from 'lucide-react';
+import { Plus, X, Box, User, Clock, AlertCircle, Info, Calendar, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface WarehouseActivityProps {
   jobs: Job[];
@@ -9,11 +10,20 @@ interface WarehouseActivityProps {
   currentUser: UserProfile;
 }
 
+// Helper to get local date string YYYY-MM-DD to avoid timezone issues
+const getLocalToday = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({ jobs, onAddJob, onDeleteJob, currentUser }) => {
   const [showModal, setShowModal] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getLocalToday());
   const [newActivity, setNewActivity] = useState({
-    id: '', // Job No.
+    id: 'WH-', // Job No.
     shipper_name: '',
     job_date: selectedDate
   });
@@ -36,7 +46,25 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({ jobs, onAd
       }
     });
     setShowModal(false);
-    setNewActivity({ id: '', shipper_name: '', job_date: selectedDate });
+    setNewActivity({ id: 'WH-', shipper_name: '', job_date: selectedDate });
+  };
+
+  const generateUniqueId = () => {
+    const random = Math.floor(1000 + Math.random() * 9000);
+    const suffix = new Date().getFullYear().toString().slice(-2);
+    setNewActivity(prev => ({ ...prev, id: `WH-${random}-${suffix}` }));
+  };
+
+  const handlePrevDate = () => {
+    const date = new Date(selectedDate);
+    date.setDate(date.getDate() - 1);
+    setSelectedDate(date.toISOString().split('T')[0]);
+  };
+
+  const handleNextDate = () => {
+    const date = new Date(selectedDate);
+    date.setDate(date.getDate() + 1);
+    setSelectedDate(date.toISOString().split('T')[0]);
   };
 
   return (
@@ -65,20 +93,28 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({ jobs, onAd
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
             <label htmlFor="warehouse-date-picker" className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 block">Operation Date</label>
-            <div className="relative">
-                <div className="flex items-center justify-between w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-pointer hover:bg-slate-100 transition-colors">
-                    <span>
-                        {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                    </span>
-                    <Calendar className="w-5 h-5 text-slate-400" />
+            <div className="flex items-center gap-2">
+                <button onClick={handlePrevDate} className="p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors text-slate-500">
+                    <ChevronLeft className="w-5 h-5" />
+                </button>
+                <div className="relative flex-1">
+                    <div className="flex items-center justify-between w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-pointer hover:bg-slate-100 transition-colors">
+                        <span>
+                            {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                        </span>
+                        <Calendar className="w-5 h-5 text-slate-400" />
+                    </div>
+                    <input 
+                        id="warehouse-date-picker"
+                        type="date" 
+                        value={selectedDate} 
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer"
+                    />
                 </div>
-                <input 
-                    id="warehouse-date-picker"
-                    type="date" 
-                    value={selectedDate} 
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer"
-                />
+                <button onClick={handleNextDate} className="p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors text-slate-500">
+                    <ChevronRight className="w-5 h-5" />
+                </button>
             </div>
           </div>
 
@@ -160,7 +196,17 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({ jobs, onAd
             <form onSubmit={handleSubmit} className="p-8 space-y-6">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Job No. *</label>
-                <input required type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newActivity.id} onChange={e => setNewActivity({...newActivity, id: e.target.value})} placeholder="e.g. WH-AE-101" />
+                <div className="relative">
+                    <input required type="text" className="w-full px-5 py-3.5 pr-12 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newActivity.id} onChange={e => setNewActivity({...newActivity, id: e.target.value})} placeholder="e.g. WH-AE-101" />
+                    <button 
+                        type="button" 
+                        onClick={generateUniqueId}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                        title="Generate Unique ID"
+                    >
+                        <RefreshCw className="w-4 h-4" />
+                    </button>
+                </div>
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Shipper Name *</label>

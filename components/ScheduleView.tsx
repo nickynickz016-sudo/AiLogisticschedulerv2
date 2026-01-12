@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Job, JobStatus, LoadingType, UserProfile, MainCategory, SubCategory, Personnel, Vehicle, UserRole, ShipmentDetailsType } from '../types';
-import { Plus, Search, MapPin, Package, Clock, User, X, Layers, Calendar as CalendarIcon, List, CheckCircle2, Truck, Settings2, Edit3, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Loader2 } from 'lucide-react';
+
+import React, { useState, useEffect } from 'react';
+import { Job, JobStatus, LoadingType, UserProfile, Personnel, Vehicle, UserRole, ShipmentDetailsType } from '../types';
+import { Plus, Search, Package, Clock, User, X, Calendar as CalendarIcon, CheckCircle2, Truck, Settings2, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Phone, Mail, Briefcase, FileText, AlertCircle, MapPin, RefreshCw } from 'lucide-react';
 import { JobDetailModal } from './JobDetailModal';
-import { GoogleGenAI } from '@google/genai';
 
 interface ScheduleViewProps {
   jobs: Job[];
   onAddJob: (job: Partial<Job>) => void;
   onDeleteJob: (jobId: string) => void;
-  onUpdateAllocation: (jobId: string, allocation: { team_leader: string, vehicle: string, writer_crew: string[] }) => void;
+  onUpdateAllocation: (jobId: string, allocation: { team_leader: string, vehicles: string[], writer_crew: string[] }) => void;
   onToggleLock: (jobId: string) => void;
   currentUser: UserProfile;
   personnel: Personnel[];
@@ -17,17 +17,24 @@ interface ScheduleViewProps {
 }
 
 const HOURS = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
-const CATEGORIES: MainCategory[] = ['Commercial', 'Agent', 'Private', 'Corporate'];
 const SHIPMENT_TYPES: ShipmentDetailsType[] = ['Local Move', 'Sea FCL', 'AIR', 'AIR LCL', 'SEA LCL', 'Groupage', 'Road'];
 const LOADING_TYPES: LoadingType[] = ['Warehouse Removal', 'Direct Loading', 'Storage', 'Local Storage', 'Delivery'];
+
+// Updated country codes with validation rules
 const countryCodes = [
-  { name: 'UAE', code: '+971' },
-  { name: 'USA', code: '+1' },
-  { name: 'UK', code: '+44' },
-  { name: 'India', code: '+91' },
-  { name: 'KSA', code: '+966' },
-  { name: 'Qatar', code: '+974' },
+  { name: 'UAE', code: '+971', digits: 9 },
+  { name: 'USA', code: '+1', digits: 10 },
+  { name: 'UK', code: '+44', digits: 10 },
+  { name: 'India', code: '+91', digits: 10 },
+  { name: 'KSA', code: '+966', digits: 9 },
+  { name: 'Qatar', code: '+974', digits: 8 },
 ];
+
+// Helper to get local date string YYYY-MM-DD
+const getLocalDateString = (date: Date = new Date()) => {
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().split('T')[0];
+};
 
 export const ScheduleView: React.FC<ScheduleViewProps> = ({ 
   jobs, onAddJob, onDeleteJob, onUpdateAllocation, onToggleLock, currentUser, personnel, vehicles, users 
@@ -40,28 +47,21 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   const [viewMode, setViewMode] = useState<'calendar' | 'list' | 'month'>('list');
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  const selectedDate = currentDate.toISOString().split('T')[0];
+  const selectedDate = getLocalDateString(currentDate);
 
-  const [editAllocation, setEditAllocation] = useState<{ team_leader: string, vehicle: string, writer_crew: string[] }>({
+  const [editAllocation, setEditAllocation] = useState<{ team_leader: string, vehicles: string[], writer_crew: string[] }>({
     team_leader: '',
-    vehicle: '',
+    vehicles: [],
     writer_crew: []
   });
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString();
   
-  // Location suggestions state
-  const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
-  const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number; } | null>(null);
-  const [suggestionsVisible, setSuggestionsVisible] = useState(false);
-  const debounceTimeoutRef = useRef<number | null>(null);
-  const suggestionsContainerRef = useRef<HTMLDivElement>(null);
-
   const initialNewJobState: Partial<Job> = {
-    id: '', 
+    id: 'AE-', 
     shipper_name: '',
     shipper_phone: '+971 ',
+    client_email: '',
     location: '',
     shipment_details: 'Local Move',
     description: '',
@@ -79,110 +79,45 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     volume_cbm: 0,
     job_time: '08:00',
     job_date: today,
+    duration: 1,
     assigned_to: 'Unassigned'
   };
 
   const [newJob, setNewJob] = useState<Partial<Job>>(initialNewJobState);
 
-  // Request user's location when modal opens
+  // Sync newJob date with currently selected view date when modal opens
   useEffect(() => {
     if (showModal) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          });
-        },
-        (error) => {
-          console.error("Geolocation error:", error);
-        }
-      );
+        setNewJob(prev => ({ ...prev, job_date: selectedDate }));
     }
-  }, [showModal]);
+  }, [showModal, selectedDate]);
 
-  // Handle clicks outside suggestions to close the dropdown
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (suggestionsContainerRef.current && !suggestionsContainerRef.current.contains(event.target as Node)) {
-        setSuggestionsVisible(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  const fetchLocationSuggestions = useCallback(async (query: string) => {
-    if (query.length < 3) {
-      setLocationSuggestions([]);
-      return;
-    }
-    setIsFetchingSuggestions(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `Provide up to 5 location suggestions in the UAE for: "${query}". Format the response as a simple list, with each suggestion on a new line. Do not include numbering or bullet points.`,
-        config: {
-          tools: [{googleMaps: {}}],
-          toolConfig: userLocation ? {
-            retrievalConfig: {
-              latLng: {
-                latitude: userLocation.latitude,
-                longitude: userLocation.longitude
-              }
-            }
-          } : undefined
-        },
-      });
-      const text = response.text;
-      const suggestions = text ? text.split('\n').filter(s => s.trim() !== '') : [];
-      setLocationSuggestions(suggestions);
-    } catch (error) {
-      console.error("Error fetching location suggestions:", error);
-      setLocationSuggestions([]);
-    } finally {
-      setIsFetchingSuggestions(false);
-    }
-  }, [userLocation]);
-
-  const handleLocationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setNewJob({ ...newJob, location: value });
-    setSuggestionsVisible(true);
-    
-    if (debounceTimeoutRef.current) {
-      clearTimeout(debounceTimeoutRef.current);
-    }
-
-    debounceTimeoutRef.current = window.setTimeout(() => {
-      fetchLocationSuggestions(value);
-    }, 500);
-  };
-  
-  const handleSuggestionClick = (suggestion: string) => {
-    setNewJob({ ...newJob, location: suggestion });
-    setLocationSuggestions([]);
-    setSuggestionsVisible(false);
-  };
-
-  const getSubCategories = (main: MainCategory): SubCategory[] => {
-    if (main === 'Commercial') return ['Fine arts Installation', 'Export', 'Import'];
-    return ['Export', 'Import'];
-  };
-  
   const handleCloseModal = () => {
     setShowModal(false);
     setIsModalExpanded(false);
     setNewJob(initialNewJobState);
-    setLocationSuggestions([]);
-    setSuggestionsVisible(false);
+  };
+
+  const generateUniqueId = () => {
+    const random = Math.floor(1000 + Math.random() * 9000);
+    const suffix = new Date().getFullYear().toString().slice(-2);
+    setNewJob(prev => ({ ...prev, id: `AE-${random}-${suffix}` }));
+  };
+
+  const getJobDayLabel = (job: Job) => {
+    const match = job.id.match(/-D(\d+)$/);
+    if (match) {
+      return `Day ${match[1]}`;
+    }
+    if (job.duration && job.duration > 1) {
+      return 'Day 1';
+    }
+    return null;
   };
 
   const filteredJobs = jobs.filter(j => 
     !j.is_warehouse_activity &&
+    !j.is_import_clearance &&
     j.job_date === selectedDate &&
     (j.id.toLowerCase().includes(filter.toLowerCase()) || 
      j.shipper_name.toLowerCase().includes(filter.toLowerCase())) &&
@@ -195,6 +130,23 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
       alert("Job No., Shipper Name, and Type of Job are mandatory.");
       return;
     }
+
+    // Phone Validation
+    if (newJob.shipper_phone) {
+        const [code, ...numParts] = newJob.shipper_phone.split(' ');
+        const number = numParts.join('');
+        const country = countryCodes.find(c => c.code === code);
+        
+        if (country) {
+            // Remove any non-digits to check actual length
+            const cleanNumber = number.replace(/\D/g, '');
+            if (cleanNumber.length !== country.digits) {
+                alert(`Invalid phone number for ${country.name} (${country.code}). Number must be exactly ${country.digits} digits.`);
+                return;
+            }
+        }
+    }
+
     onAddJob({ ...newJob, title: newJob.id });
     handleCloseModal();
   };
@@ -205,7 +157,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     setShowAllocationModal(job);
     setEditAllocation({ 
       team_leader: job.team_leader || '', 
-      vehicle: job.vehicle || '',
+      vehicles: job.vehicles || [],
       writer_crew: job.writer_crew || []
     });
   };
@@ -239,10 +191,23 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     });
   };
 
+  const toggleVehicle = (name: string) => {
+    setEditAllocation(prev => {
+      const exists = prev.vehicles.includes(name);
+      if (exists) {
+        return { ...prev, vehicles: prev.vehicles.filter(v => v !== name) };
+      } else {
+        return { ...prev, vehicles: [...prev.vehicles, name] };
+      }
+    });
+  };
+
   const handleDateInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const date = new Date(e.target.value);
-    const tzOffset = date.getTimezoneOffset() * 60000;
-    setCurrentDate(new Date(date.getTime() + tzOffset));
+    const dateValue = e.target.value;
+    if (dateValue) {
+        const [year, month, day] = dateValue.split('-').map(Number);
+        setCurrentDate(new Date(year, month - 1, day));
+    }
   };
   
   const handlePrev = () => {
@@ -297,6 +262,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     }
 
     const jobsForMonth = jobs.filter(job => {
+        if (job.is_warehouse_activity || job.is_import_clearance) return false;
         const jobDate = new Date(job.job_date);
         return jobDate.getFullYear() === year && jobDate.getMonth() === month;
     });
@@ -305,6 +271,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         setCurrentDate(new Date(year, month, day));
         setViewMode('list');
     };
+
+    const localTodayStr = getLocalDateString();
 
     return (
       <div className="flex flex-col">
@@ -316,12 +284,13 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         <div className="grid grid-cols-7 grid-rows-5 gap-px bg-slate-200 border-t-0">
           {calendarDays.map((day, index) => {
             const jobsForThisDay = day.isCurrentMonth ? jobsForMonth.filter(job => new Date(job.job_date).getDate() === day.day) : [];
-            const isToday = day.isCurrentMonth && day.date?.toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+            const dayDateStr = day.date ? getLocalDateString(day.date) : '';
+            const isToday = day.isCurrentMonth && dayDateStr === localTodayStr;
 
             return (
               <div
                 key={index}
-                className={`p-2 h-36 flex flex-col relative group transition-all ${day.isCurrentMonth ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/50'}`}
+                className={`p-2 h-20 md:h-36 flex flex-col relative group transition-all ${day.isCurrentMonth ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/50'}`}
                 onClick={() => day.isCurrentMonth && handleDayClick(day.day)}
               >
                 <span className={`text-sm font-bold ${
@@ -331,7 +300,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                   {day.day}
                 </span>
                 {day.isCurrentMonth && (
-                  <div className="mt-1 space-y-1 overflow-y-auto custom-scrollbar flex-1">
+                  <div className="mt-1 space-y-1 overflow-y-auto custom-scrollbar flex-1 hidden md:block">
                     {jobsForThisDay.map(job => (
                       <div 
                         key={job.id} 
@@ -343,6 +312,11 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                     ))}
                   </div>
                 )}
+                {day.isCurrentMonth && jobsForThisDay.length > 0 && (
+                   <div className="md:hidden mt-1 flex justify-center">
+                     <span className="bg-blue-100 text-blue-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full">{jobsForThisDay.length}</span>
+                   </div>
+                )}
               </div>
             );
           })}
@@ -353,57 +327,62 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-        <div className="flex-1">
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
+        <div className="flex-1 w-full">
           <h2 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-3">
             <Truck className="w-8 h-8 text-blue-600" />
             Job Allocation Board
           </h2>
-          <div className="flex flex-wrap items-center gap-4 mt-3">
-             <button onClick={() => setCurrentDate(new Date())} className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors">
-                Today
-              </button>
-             <div className="flex items-center gap-1">
-                <button onClick={handlePrev} className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors text-slate-500"><ChevronLeft className="w-4 h-4" /></button>
-                <button onClick={handleNext} className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors text-slate-500"><ChevronRight className="w-4 h-4" /></button>
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-4 mt-3">
+             <div className="flex gap-2">
+                 <button onClick={() => setCurrentDate(new Date())} className="flex-1 sm:flex-none px-4 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors">
+                    Today
+                  </button>
+                 <div className="flex items-center gap-1">
+                    <button onClick={handlePrev} className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors text-slate-500"><ChevronLeft className="w-4 h-4" /></button>
+                    <button onClick={handleNext} className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors text-slate-500"><ChevronRight className="w-4 h-4" /></button>
+                 </div>
              </div>
-             {viewMode === 'month' ? (
-                <h3 className="text-sm font-bold text-slate-700 w-40 text-center">
-                  {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                </h3>
-              ) : (
-                <div className="relative">
-                    <div className="flex items-center gap-3 cursor-pointer bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 hover:bg-slate-100 transition-colors">
-                        <CalendarIcon className="w-4 h-4 text-slate-500" />
-                        <span className="text-sm font-bold text-slate-700">
-                            {currentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
-                        </span>
+             
+             <div className="flex flex-col sm:flex-row gap-4">
+                 {viewMode === 'month' ? (
+                    <h3 className="text-sm font-bold text-slate-700 w-full sm:w-40 text-left sm:text-center self-center">
+                      {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                    </h3>
+                  ) : (
+                    <div className="relative w-full sm:w-auto">
+                        <div className="flex items-center gap-3 cursor-pointer bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 hover:bg-slate-100 transition-colors w-full sm:w-auto">
+                            <CalendarIcon className="w-4 h-4 text-slate-500" />
+                            <span className="text-sm font-bold text-slate-700">
+                                {currentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                            </span>
+                        </div>
+                        <input 
+                            id="schedule-date-picker"
+                            type="date" 
+                            value={selectedDate} 
+                            onChange={handleDateInputChange}
+                            className="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer"
+                        />
                     </div>
-                    <input 
-                        id="schedule-date-picker"
-                        type="date" 
-                        value={selectedDate} 
-                        onChange={handleDateInputChange}
-                        className="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer"
-                    />
+                  )}
+                <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
+                  <button onClick={() => setViewMode('list')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>List</button>
+                  <button onClick={() => setViewMode('calendar')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${viewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Day</button>
+                  <button onClick={() => setViewMode('month')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${viewMode === 'month' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Month</button>
                 </div>
-              )}
-            <div className="flex bg-slate-100 p-1 rounded-xl">
-              <button onClick={() => setViewMode('list')} className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>List</button>
-              <button onClick={() => setViewMode('calendar')} className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${viewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Day</button>
-              <button onClick={() => setViewMode('month')} className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${viewMode === 'month' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Month</button>
-            </div>
+             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full xl:w-auto">
           {viewMode !== 'month' && (
-            <div className="relative">
+            <div className="relative w-full sm:w-64">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input 
                 type="text" 
                 placeholder="Search ID or Shipper..."
-                className="pl-11 pr-6 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-1 focus:ring-blue-500 outline-none w-64"
+                className="pl-11 pr-6 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-1 focus:ring-blue-500 outline-none w-full"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
               />
@@ -411,7 +390,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
           )}
           <button 
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 bg-slate-900 text-white px-8 py-3.5 rounded-xl hover:bg-slate-800 transition-all font-bold uppercase text-[11px] tracking-widest shadow-md"
+            className="flex items-center justify-center gap-2 bg-slate-900 text-white px-8 py-3.5 rounded-xl hover:bg-slate-800 transition-all font-bold uppercase text-[11px] tracking-widest shadow-md whitespace-nowrap"
           >
             <Plus className="w-5 h-5" />
             Submit Request
@@ -419,23 +398,24 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         </div>
       </div>
 
+      {/* Main Content (Table/Calendar) */}
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
         {viewMode === 'month' ? (
           <MonthView />
         ) : viewMode === 'calendar' ? (
           <div className="max-h-[70vh] overflow-y-auto custom-scrollbar">
-             <div className="grid grid-cols-[120px_1fr] border-b bg-slate-50 text-slate-400 sticky top-0 z-10">
+             <div className="grid grid-cols-[80px_1fr] md:grid-cols-[120px_1fr] border-b bg-slate-50 text-slate-400 sticky top-0 z-10">
                 <div className="p-4 text-[10px] font-bold uppercase tracking-widest text-center">Timing</div>
                 <div className="p-4 text-[10px] font-bold uppercase tracking-widest px-8">Dispatch Operations</div>
              </div>
              {HOURS.map((hour) => {
                const hourJobs = filteredJobs.filter(j => j.job_time === hour);
                return (
-                 <div key={hour} className="grid grid-cols-[120px_1fr] border-b last:border-0 group min-h-[160px]">
+                 <div key={hour} className="grid grid-cols-[80px_1fr] md:grid-cols-[120px_1fr] border-b last:border-0 group min-h-[160px]">
                     <div className="p-6 text-sm font-bold text-slate-300 text-center bg-slate-50/20 border-r border-slate-100">
                       {hour}
                     </div>
-                    <div className="p-6 flex flex-wrap gap-6 items-start">
+                    <div className="p-4 md:p-6 flex flex-wrap gap-6 items-start">
                        {hourJobs.length === 0 && (
                          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center text-slate-300 text-[10px] font-bold uppercase py-6">
                             Available Slot
@@ -443,21 +423,28 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                        )}
                        {hourJobs.map((job) => {
                          const requester = users.find(u => u.employee_id === job.requester_id);
+                         const dayLabel = getJobDayLabel(job);
                          return (
-                           <div key={job.id} onClick={() => setSelectedJob(job)} className={`min-w-[340px] max-w-sm rounded-2xl p-6 border shadow-sm hover:shadow-md transition-all bg-white relative group/job cursor-pointer ${job.is_locked ? 'border-amber-200 bg-amber-50/10' : 'border-slate-200'}`}>
+                           <div key={job.id} onClick={() => setSelectedJob(job)} className={`w-full md:min-w-[340px] md:max-w-sm rounded-2xl p-6 border shadow-sm hover:shadow-md transition-all bg-white relative group/job cursor-pointer ${job.is_locked ? 'border-amber-200 bg-amber-50/10' : 'border-slate-200'}`}>
                               <div className="flex justify-between items-start mb-4">
                                  <div>
                                     <div className="flex items-center gap-2 mb-1">
                                       <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">ID: {job.id}</p>
+                                      {dayLabel && (
+                                        <span className="text-[9px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded border border-violet-200">
+                                            {dayLabel}
+                                        </span>
+                                      )}
                                       {job.is_locked && <Lock className="w-3 h-3 text-amber-500" />}
                                     </div>
-                                    <h4 className="font-bold text-base text-slate-800 leading-tight truncate">{job.shipper_name}</h4>
+                                    <h4 className="font-bold text-base text-slate-800 leading-tight truncate max-w-[150px] md:max-w-none">{job.shipper_name}</h4>
                                     <div className="flex items-center gap-1.5 mt-1">
                                       <User className="w-3 h-3 text-slate-400" />
                                       <span className="text-[10px] text-slate-500 font-bold">{requester ? requester.name : job.requester_id}</span>
                                     </div>
                                  </div>
                                  <div className="flex gap-2">
+                                    {/* Action Buttons */}
                                     {currentUser.role === UserRole.ADMIN && (
                                       <>
                                         <button 
@@ -476,13 +463,14 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                     )}
                                     <button 
                                       onClick={(e) => handleDeleteJobClick(job.id, e)} 
-                                      className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-300 hover:text-rose-500 transition-all opacity-0 group-hover/job:opacity-100"
+                                      className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-300 hover:text-rose-500 transition-all opacity-100 lg:opacity-0 lg:group-hover/job:opacity-100"
                                     >
                                       <Trash2 className="w-4 h-4" />
                                     </button>
                                  </div>
                               </div>
                               <div className="space-y-3 mb-4">
+                                 {/* Job Details */}
                                  <div className="flex flex-col gap-1">
                                     <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
                                       <Users className="w-3 h-3" /> Crew Allocation
@@ -498,29 +486,6 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                       )}
                                     </div>
                                  </div>
-                                 <div className="flex flex-col gap-1">
-                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                      <Truck className="w-3 h-3" /> Vehicle Details
-                                    </span>
-                                    <span className="text-xs font-bold text-slate-700">{job.vehicle || 'No vehicle dispatched'}</span>
-                                 </div>
-                                 <div className="flex flex-col gap-1 border-t border-slate-100 pt-3">
-                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                                      <Package className="w-3 h-3" /> Shipment Specs
-                                    </span>
-                                    <div className="flex flex-col gap-0.5">
-                                        <span className="text-xs font-bold text-slate-700">
-                                            {job.shipment_details || 'N/A'} / {job.loading_type}
-                                        </span>
-                                        <span className="text-[10px] text-slate-500 font-medium">
-                                            Volume: {job.volume_cbm || 0} CBM
-                                        </span>
-                                        <div className="flex gap-2 mt-1">
-                                            {job.shuttle === 'Yes' && <span className="text-[8px] font-bold bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded border border-amber-100">Shuttle</span>}
-                                            {job.long_carry === 'Yes' && <span className="text-[8px] font-bold bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded border border-amber-100">Long Carry</span>}
-                                        </div>
-                                    </div>
-                                 </div>
                               </div>
                            </div>
                          )
@@ -532,7 +497,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
           </div>
         ) : (
           <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left border-collapse min-w-[1000px]">
+            {/* List View Table */}
+            <table className="w-full text-left border-collapse min-w-[800px] lg:min-w-[1000px]">
                <thead>
                   <tr className="bg-slate-50 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
                      <th className="p-6">Job No.</th>
@@ -546,12 +512,20 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                <tbody className="divide-y divide-slate-100">
                   {filteredJobs.map(job => {
                     const requester = users.find(u => u.employee_id === job.requester_id);
+                    const dayLabel = getJobDayLabel(job);
                     return (
                       <tr key={job.id} onClick={() => setSelectedJob(job)} className={`hover:bg-slate-50/50 transition-colors group cursor-pointer ${job.is_locked ? 'bg-amber-50/5' : ''}`}>
                          <td className="p-6 text-sm font-bold text-blue-600">
-                            <div className="flex items-center gap-2">
-                              {job.id}
-                              {job.is_locked && <Lock className="w-3 h-3 text-amber-500" />}
+                            <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2">
+                                    {job.id}
+                                    {job.is_locked && <Lock className="w-3 h-3 text-amber-500" />}
+                                </div>
+                                {dayLabel && (
+                                    <span className="text-[9px] font-bold bg-violet-100 text-violet-700 px-2 py-0.5 rounded border border-violet-200 w-fit">
+                                        {dayLabel}
+                                    </span>
+                                )}
                             </div>
                          </td>
                          <td className="p-6">
@@ -600,7 +574,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                               </div>
                               <div className="flex items-center gap-1.5 border-t border-slate-50 pt-1 mt-1">
                                 <Truck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                <span className="text-[10px] text-slate-500 font-bold">{job.vehicle || 'No vehicle'}</span>
+                                <span className="text-[10px] text-slate-500 font-bold">{job.vehicles?.join(', ') || 'No vehicle'}</span>
                               </div>
                            </div>
                          </td>
@@ -699,12 +673,28 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                     </div>
                  </div>
 
-                 <div className="space-y-2">
+                 <div className="space-y-3">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Fleet Assignment</label>
-                    <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={editAllocation.vehicle} onChange={e => setEditAllocation({...editAllocation, vehicle: e.target.value})}>
-                       <option value="">Choose Vehicle...</option>
-                       {vehicles.map(v => <option key={v.id} value={v.name}>{v.name} ({v.plate})</option>)}
-                    </select>
+                    <div className="grid grid-cols-2 gap-2">
+                      {vehicles.map(v => (
+                        <button
+                          key={v.id}
+                          type="button"
+                          onClick={() => toggleVehicle(v.name)}
+                          className={`px-4 py-3 rounded-xl border text-[11px] font-bold transition-all text-left flex justify-between items-center ${
+                            editAllocation.vehicles.includes(v.name)
+                              ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="flex flex-col">
+                             <span>{v.name}</span>
+                             <span className={`text-[8px] uppercase tracking-tighter ${editAllocation.vehicles.includes(v.name) ? 'text-blue-100' : 'text-slate-400'}`}>{v.plate}</span>
+                          </div>
+                          {editAllocation.vehicles.includes(v.name) && <CheckCircle2 className="w-4 h-4" />}
+                        </button>
+                      ))}
+                    </div>
                  </div>
                  
                  <div className="pt-6 flex gap-4 shrink-0 mt-auto">
@@ -719,37 +709,91 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
       {/* New Job Modal */}
       {showModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className={`bg-white rounded-[2rem] w-full shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col max-h-[95vh] border border-slate-200 overflow-hidden transition-all ease-in-out ${isModalExpanded ? 'max-w-6xl' : 'max-w-3xl'}`}>
-            <div className="p-8 border-b flex justify-between items-center bg-white shrink-0">
+          <div className={`bg-white rounded-[2rem] w-full shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col max-h-[95vh] h-full md:h-auto border border-slate-200 overflow-hidden transition-all ease-in-out ${isModalExpanded ? 'max-w-6xl' : 'max-w-3xl'}`}>
+            <div className="p-6 md:p-8 border-b flex justify-between items-center bg-white shrink-0">
                <div className="flex items-center gap-4">
                   <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center rotate-45 transform">
                     <span className="text-white font-black text-lg -rotate-45">W</span>
                   </div>
-                  <h3 className="text-xl font-bold text-slate-800 tracking-tight uppercase">Submit Allocation Request</h3>
+                  <h3 className="text-lg md:text-xl font-bold text-slate-800 tracking-tight uppercase">Submit Allocation Request</h3>
                </div>
                <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setIsModalExpanded(!isModalExpanded)} className="p-2 hover:bg-slate-100 rounded-xl transition-all text-slate-400" title={isModalExpanded ? "Collapse" : "Expand"}>
+                <button type="button" onClick={() => setIsModalExpanded(!isModalExpanded)} className="hidden md:block p-2 hover:bg-slate-100 rounded-xl transition-all text-slate-400" title={isModalExpanded ? "Collapse" : "Expand"}>
                   {isModalExpanded ? <Minimize className="w-6 h-6" /> : <Maximize className="w-6 h-6" />}
                 </button>
                 <button type="button" onClick={handleCloseModal} className="p-2 hover:bg-slate-100 rounded-xl transition-all text-slate-400"><X className="w-6 h-6" /></button>
                </div>
             </div>
             
-            <form onSubmit={handleSubmit} className="p-8 overflow-y-auto custom-scrollbar space-y-10">
-              {/* Section 1: Core Details */}
+            <form onSubmit={handleSubmit} className="p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-10">
+              
+              {/* Section 1: Operational Basics */}
               <section>
-                <h4 className="text-sm font-bold text-slate-800 mb-6 pb-4 border-b border-slate-100">Core Details</h4>
+                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 border border-blue-100">
+                        <Briefcase className="w-4 h-4" /> 
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Operational Basics</h4>
+                </div>
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Job No. *</label>
-                    <input required type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.id} onChange={e => setNewJob({...newJob, id: e.target.value})} placeholder="AE-XXXX" />
+                    <div className="relative">
+                        <input required type="text" className="w-full px-5 py-3.5 pr-12 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.id} onChange={e => setNewJob({...newJob, id: e.target.value})} placeholder="AE-XXXX" />
+                        <button 
+                            type="button" 
+                            onClick={generateUniqueId}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                            title="Generate Unique ID"
+                        >
+                            <RefreshCw className="w-4 h-4" />
+                        </button>
+                    </div>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Shipper Name *</label>
                     <input required type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.shipper_name} onChange={e => setNewJob({...newJob, shipper_name: e.target.value})} />
                   </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Start Date *</label>
+                    <input required type="date" min={today} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.job_date} onChange={e => setNewJob({...newJob, job_date: e.target.value})} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Duration (Days)</label>
+                      <input 
+                        required 
+                        type="number" 
+                        min="1" 
+                        max="30"
+                        className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" 
+                        value={newJob.duration || 1} 
+                        onChange={e => setNewJob({...newJob, duration: parseInt(e.target.value) || 1})} 
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Timing</label>
+                        <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.job_time} onChange={e => setNewJob({...newJob, job_time: e.target.value})}>
+                        {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              {/* Section 2: Contact & Location */}
+              <section>
+                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600 border border-emerald-100">
+                        <MapPin className="w-4 h-4" /> 
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Contact & Location</h4>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                    <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Shipper Phone</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Phone className="w-3 h-3"/> Shipper Phone</label>
                     <div className="flex">
                       <select 
                         className="w-1/3 px-3 py-3.5 bg-slate-50 border border-r-0 border-slate-200 rounded-l-xl text-xs font-bold focus:ring-1 focus:ring-blue-500 outline-none appearance-none"
@@ -767,64 +811,41 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                         value={newJob.shipper_phone?.split(' ')[1] || ''}
                         onChange={e => {
                           const prefixPart = newJob.shipper_phone?.split(' ')[0] || '+971';
-                          setNewJob({ ...newJob, shipper_phone: `${prefixPart} ${e.target.value}` });
+                          const val = e.target.value.replace(/\D/g, '');
+                          setNewJob({ ...newJob, shipper_phone: `${prefixPart} ${val}` });
                         }}
-                        placeholder="50 123 4567"
+                        placeholder={`Req: ${countryCodes.find(c => c.code === (newJob.shipper_phone?.split(' ')[0] || '+971'))?.digits} digits`}
                       />
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Allocation Date</label>
-                    <input required type="date" min={today} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.job_date} onChange={e => setNewJob({...newJob, job_date: e.target.value})} />
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Mail className="w-3 h-3"/> Client Email</label>
+                    <input type="email" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.client_email} onChange={e => setNewJob({...newJob, client_email: e.target.value})} placeholder="client@example.com" />
                   </div>
-                  <div className="md:col-span-2 space-y-1.5 relative" ref={suggestionsContainerRef}>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Location</label>
+                  <div className="md:col-span-2 space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Location Address</label>
                     <input 
                       required 
                       type="text" 
                       className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" 
                       value={newJob.location} 
-                      onChange={handleLocationChange}
-                      onFocus={() => setSuggestionsVisible(true)}
+                      onChange={(e) => setNewJob({ ...newJob, location: e.target.value })}
                       autoComplete="off"
+                      placeholder="e.g. Villa 12, Springs 4, Dubai"
                     />
-                    {suggestionsVisible && (newJob.location?.length ?? 0) > 2 && (
-                      <div className="absolute top-full left-0 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-lg z-50 overflow-hidden">
-                        {isFetchingSuggestions ? (
-                          <div className="p-4 flex items-center justify-center text-slate-500">
-                            <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                            <span>Searching...</span>
-                          </div>
-                        ) : locationSuggestions.length > 0 ? (
-                          <ul className="divide-y divide-slate-100">
-                            {locationSuggestions.map((suggestion, index) => (
-                              <li 
-                                key={index}
-                                onClick={() => handleSuggestionClick(suggestion)}
-                                className="px-5 py-3 text-sm font-medium text-slate-700 cursor-pointer hover:bg-slate-50"
-                              >
-                                {suggestion}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <div className="p-4 text-center text-sm text-slate-500">No suggestions found.</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Timing</label>
-                    <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.job_time} onChange={e => setNewJob({...newJob, job_time: e.target.value})}>
-                      {HOURS.map(h => <option key={h} value={h}>{h}</option>)}
-                    </select>
                   </div>
                 </div>
               </section>
 
-              {/* Section 2: Shipment Specifications */}
+              {/* Section 3: Shipment Specs */}
               <section>
-                 <h4 className="text-sm font-bold text-slate-800 mb-6 pb-4 border-b border-slate-100">Shipment Specifications</h4>
+                 <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100">
+                        <Truck className="w-4 h-4" /> 
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Shipment Specifications</h4>
+                </div>
+
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-6">
                       <div className="space-y-1.5">
@@ -858,12 +879,29 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                           <button type="button" onClick={() => setNewJob({...newJob, long_carry: 'Yes'})} className={`flex-1 py-2 text-center rounded-lg text-xs font-bold transition-all ${newJob.long_carry === 'Yes' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`}>Yes</button>
                       </div>
                     </div>
+                    
+                    <div className="md:col-span-2 space-y-1.5">
+                       <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><FileText className="w-3 h-3"/> Description / Notes</label>
+                       <textarea 
+                         rows={2}
+                         className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-1 focus:ring-blue-500 outline-none resize-none"
+                         value={newJob.description}
+                         onChange={e => setNewJob({...newJob, description: e.target.value})}
+                         placeholder="Additional details..."
+                       />
+                    </div>
                  </div>
               </section>
 
-              {/* Section 3: Special Requests */}
+              {/* Section 4: Special Requests */}
               <section>
-                <h4 className="text-sm font-bold text-slate-800 mb-6 pb-4 border-b border-slate-100">Special Requests</h4>
+                <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+                    <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600 border border-amber-100">
+                        <AlertCircle className="w-4 h-4" /> 
+                    </div>
+                    <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide">Special Requests</h4>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-4">
                       <h5 className="text-[10px] font-bold text-slate-900 uppercase tracking-widest">Resource Requests</h5>
@@ -872,10 +910,10 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                           { label: 'Handyman Service', key: 'handyman' },
                           { label: 'Extra Manpower', key: 'manpower' },
                           { label: 'Overtime Policy', key: 'overtime' },
-                        ].map(({ label, key }) => (
+                        ].map(({ label: reqLabel, key }) => (
                           <label key={key} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-white border border-transparent hover:border-slate-200 transition-all">
                             <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" checked={(newJob.special_requests as any)?.[key]} onChange={e => setNewJob({...newJob, special_requests: { ...newJob.special_requests!, [key]: e.target.checked }})} />
-                            <span className="text-[11px] font-bold text-slate-700">{label}</span>
+                            <span className="text-[11px] font-bold text-slate-700">{reqLabel}</span>
                           </label>
                         ))}
                       </div>
@@ -888,10 +926,10 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                           { label: 'Inventory / Packing List', key: 'packingList' },
                           { label: 'Export Crate Certificate', key: 'crateCertificate' },
                           { label: 'Walk-through Review', key: 'walkThrough' },
-                        ].map(({ label, key }) => (
+                        ].map(({ label: reqLabel, key }) => (
                           <label key={key} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-white border border-transparent hover:border-slate-200 transition-all">
                             <input type="checkbox" className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" checked={(newJob.special_requests as any)?.[key]} onChange={e => setNewJob({...newJob, special_requests: { ...newJob.special_requests!, [key]: e.target.checked }})} />
-                            <span className="text-[11px] font-bold text-slate-700">{label}</span>
+                            <span className="text-[11px] font-bold text-slate-700">{reqLabel}</span>
                           </label>
                         ))}
                       </div>

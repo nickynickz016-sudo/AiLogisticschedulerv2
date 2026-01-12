@@ -1,13 +1,15 @@
+
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
-import { USERS } from '../mockData';
+import { MockUser } from '../mockData';
 import { User, Lock, Loader2 } from 'lucide-react';
 
 interface LoginScreenProps {
   onLogin: (user: UserProfile) => void;
+  users: MockUser[];
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -20,10 +22,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
 
     // Simulate network delay for better UX
     setTimeout(() => {
-      const user = USERS.find(u => u.username === username && u.password === password);
+      const user = users.find(u => u.username === username && u.password === password);
       
       if (user) {
-        onLogin(user.profile);
+        if (user.profile.status === 'Disabled') {
+            setError('This account has been disabled. Please contact an administrator.');
+        } else {
+            onLogin(user.profile);
+        }
       } else {
         setError('Invalid username or password.');
       }
@@ -69,7 +75,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
               />
             </div>
             
-            {error && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">{error}</p>}
+            {error && <p className="text-sm text-red-600 bg-red-50 p-3 rounded-lg font-medium">{error}</p>}
 
             <button
               type="submit"

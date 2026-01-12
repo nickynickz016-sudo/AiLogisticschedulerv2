@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Job, JobStatus, Personnel, Vehicle, UserProfile } from '../types';
-import { Check, X, User, AlertTriangle, Truck, Users, Layout } from 'lucide-react';
+import { Check, X, User, AlertTriangle, Truck, Users, Layout, CheckCircle2 } from 'lucide-react';
 
 interface ApprovalQueueProps {
   jobs: Job[];
@@ -14,9 +14,9 @@ interface ApprovalQueueProps {
 
 export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ jobs, onApproval, isAdmin, personnel, vehicles, users }) => {
   const [allocatingJobId, setAllocatingJobId] = useState<string | null>(null);
-  const [allocation, setAllocation] = useState({
+  const [allocation, setAllocation] = useState<{ team_leader: string, vehicles: string[] }>({
     team_leader: '',
-    vehicle: ''
+    vehicles: []
   });
 
   const pendingJobs = jobs.filter(j => 
@@ -35,13 +35,24 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ jobs, onApproval, 
   };
 
   const confirmApproval = (skipAllocation: boolean = false) => {
-    if (!skipAllocation && (!allocation.team_leader || !allocation.vehicle)) {
-      alert("Please allocate a Team Leader and Vehicle or choose 'Skip Allocation'.");
+    if (!skipAllocation && (!allocation.team_leader || allocation.vehicles.length === 0)) {
+      alert("Please allocate a Team Leader and at least one Vehicle, or choose 'Skip Allocation'.");
       return;
     }
     onApproval(allocatingJobId!, true, skipAllocation ? undefined : allocation);
     setAllocatingJobId(null);
-    setAllocation({ team_leader: '', vehicle: '' });
+    setAllocation({ team_leader: '', vehicles: [] });
+  };
+
+  const toggleVehicle = (name: string) => {
+    setAllocation(prev => {
+      const exists = prev.vehicles.includes(name);
+      if (exists) {
+        return { ...prev, vehicles: prev.vehicles.filter(v => v !== name) };
+      } else {
+        return { ...prev, vehicles: [...prev.vehicles, name] };
+      }
+    });
   };
 
   if (!isAdmin) {
@@ -113,12 +124,12 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ jobs, onApproval, 
 
       {allocatingJobId && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-           <div className="bg-white rounded-[2.5rem] w-full max-w-xl shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden">
-              <div className="p-10 border-b bg-blue-600 text-white rounded-t-[2.5rem]">
+           <div className="bg-white rounded-[2.5rem] w-full max-w-xl shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="p-10 border-b bg-blue-600 text-white rounded-t-[2.5rem] shrink-0">
                  <h3 className="text-2xl font-bold tracking-tight uppercase">Resource Dispatch</h3>
                  <p className="text-xs font-medium uppercase tracking-widest opacity-80 mt-1">Final Authorization Step</p>
               </div>
-              <div className="p-10 space-y-8">
+              <div className="p-10 space-y-8 overflow-y-auto custom-scrollbar">
                  <div className="space-y-2.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                       <Users className="w-4 h-4 text-slate-400" /> Assign Team Leader
@@ -129,14 +140,29 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ jobs, onApproval, 
                     </select>
                  </div>
 
-                 <div className="space-y-2.5">
+                 <div className="space-y-3">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      <Truck className="w-4 h-4 text-slate-400" /> Dispatch Vehicle
+                      <Truck className="w-4 h-4 text-slate-400" /> Dispatch Vehicles
                     </label>
-                    <select className="w-full px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={allocation.vehicle} onChange={e => setAllocation({...allocation, vehicle: e.target.value})}>
-                       <option value="">Choose Fleet Unit...</option>
-                       {availableVehicles.map(v => <option key={v.id} value={v.name}>{v.name} ({v.plate})</option>)}
-                    </select>
+                    <div className="grid grid-cols-2 gap-2">
+                      {availableVehicles.map(v => (
+                        <button
+                          key={v.id}
+                          onClick={() => toggleVehicle(v.name)}
+                          className={`px-4 py-3 rounded-2xl border text-[11px] font-bold transition-all text-left flex justify-between items-center ${
+                            allocation.vehicles.includes(v.name)
+                              ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="flex flex-col">
+                             <span>{v.name}</span>
+                             <span className={`text-[8px] uppercase tracking-tighter ${allocation.vehicles.includes(v.name) ? 'text-blue-100' : 'text-slate-400'}`}>{v.plate}</span>
+                          </div>
+                          {allocation.vehicles.includes(v.name) && <CheckCircle2 className="w-4 h-4" />}
+                        </button>
+                      ))}
+                    </div>
                  </div>
 
                  <div className="pt-8 flex flex-col gap-3">

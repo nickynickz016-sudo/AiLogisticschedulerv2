@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { Job, JobStatus, UserProfile, CustomsStatus, UserRole } from '../types';
-import { Plus, X, FileCheck, User, Clock, AlertCircle, Info, ShieldCheck, Edit3, Calendar } from 'lucide-react';
+import { Plus, X, FileCheck, User, Clock, AlertCircle, Info, ShieldCheck, Edit3, Calendar, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface ImportClearanceProps {
   jobs: Job[];
@@ -10,11 +11,20 @@ interface ImportClearanceProps {
   onUpdateCustomsStatus: (jobId: string, status: CustomsStatus) => void;
 }
 
+// Helper to get local date string YYYY-MM-DD
+const getLocalToday = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 export const ImportClearance: React.FC<ImportClearanceProps> = ({ jobs, onAddJob, onDeleteJob, currentUser, onUpdateCustomsStatus }) => {
   const [showModal, setShowModal] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getLocalToday());
   const [newActivity, setNewActivity] = useState({
-    id: '', // Job No.
+    id: 'IMP-', // Job No.
     shipper_name: '',
     agent_name: '',
     bol_number: '',
@@ -56,9 +66,27 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({ jobs, onAddJob
       }
     });
     setShowModal(false);
-    setNewActivity({ id: '', shipper_name: '', agent_name: '', bol_number: '', container_number: '', job_date: selectedDate });
+    setNewActivity({ id: 'IMP-', shipper_name: '', agent_name: '', bol_number: '', container_number: '', job_date: selectedDate });
   };
   
+  const generateUniqueId = () => {
+    const random = Math.floor(1000 + Math.random() * 9000);
+    const suffix = new Date().getFullYear().toString().slice(-2);
+    setNewActivity(prev => ({ ...prev, id: `IMP-${random}-${suffix}` }));
+  };
+
+  const handlePrevDate = () => {
+    const date = new Date(selectedDate);
+    date.setDate(date.getDate() - 1);
+    setSelectedDate(date.toISOString().split('T')[0]);
+  };
+
+  const handleNextDate = () => {
+    const date = new Date(selectedDate);
+    date.setDate(date.getDate() + 1);
+    setSelectedDate(date.toISOString().split('T')[0]);
+  };
+
   const getStatusColor = (status: CustomsStatus | undefined) => {
     switch (status) {
       case CustomsStatus.CLEARED: return 'bg-emerald-100 text-emerald-800';
@@ -68,6 +96,9 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({ jobs, onAddJob
       default: return 'bg-amber-100 text-amber-800';
     }
   };
+
+  // Check if user has permission to update status (Admin OR User with importClearance permission)
+  const canUpdateStatus = currentUser.role === UserRole.ADMIN || currentUser.permissions.importClearance;
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -95,20 +126,28 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({ jobs, onAddJob
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
             <label htmlFor="import-date-picker" className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 block">Target Date for New Tasks</label>
-            <div className="relative">
-                <div className="flex items-center justify-between w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-pointer hover:bg-slate-100 transition-colors">
-                    <span>
-                        {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-                    </span>
-                    <Calendar className="w-5 h-5 text-slate-400" />
+            <div className="flex items-center gap-2">
+                <button onClick={handlePrevDate} className="p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors text-slate-500">
+                    <ChevronLeft className="w-5 h-5" />
+                </button>
+                <div className="relative flex-1">
+                    <div className="flex items-center justify-between w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-pointer hover:bg-slate-100 transition-colors">
+                        <span>
+                            {new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                        </span>
+                        <Calendar className="w-5 h-5 text-slate-400" />
+                    </div>
+                    <input 
+                        id="import-date-picker"
+                        type="date" 
+                        value={selectedDate} 
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer"
+                    />
                 </div>
-                <input 
-                    id="import-date-picker"
-                    type="date" 
-                    value={selectedDate} 
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer"
-                />
+                <button onClick={handleNextDate} className="p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors text-slate-500">
+                    <ChevronRight className="w-5 h-5" />
+                </button>
             </div>
           </div>
 
@@ -175,8 +214,8 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({ jobs, onAddJob
                     <select
                       value={activity.customs_status || ''}
                       onChange={(e) => onUpdateCustomsStatus(activity.id, e.target.value as CustomsStatus)}
-                      disabled={currentUser.role !== UserRole.ADMIN}
-                      className={`w-full p-2 rounded-lg text-xs font-bold border-2 transition-all ${getStatusColor(activity.customs_status)} ${currentUser.role === UserRole.ADMIN ? 'cursor-pointer' : 'cursor-not-allowed appearance-none'}`}
+                      disabled={!canUpdateStatus}
+                      className={`w-full p-2 rounded-lg text-xs font-bold border-2 transition-all ${getStatusColor(activity.customs_status)} ${canUpdateStatus ? 'cursor-pointer' : 'cursor-not-allowed appearance-none'}`}
                     >
                       {Object.values(CustomsStatus).map(s => <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>)}
                     </select>
@@ -209,7 +248,17 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({ jobs, onAddJob
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Manifest / Job No. *</label>
-                  <input required type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-indigo-500 outline-none" value={newActivity.id} onChange={e => setNewActivity({...newActivity, id: e.target.value})} placeholder="e.g. IMP-DXB-9922" />
+                  <div className="relative">
+                      <input required type="text" className="w-full px-5 py-3.5 pr-12 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-indigo-500 outline-none" value={newActivity.id} onChange={e => setNewActivity({...newActivity, id: e.target.value})} placeholder="e.g. IMP-DXB-9922" />
+                      <button 
+                          type="button" 
+                          onClick={generateUniqueId}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                          title="Generate Unique ID"
+                      >
+                          <RefreshCw className="w-4 h-4" />
+                      </button>
+                  </div>
                 </div>
                  <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Agent Name</label>

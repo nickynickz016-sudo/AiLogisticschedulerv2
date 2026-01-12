@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Job, JobStatus, SystemSettings } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -6,8 +7,6 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
 // Extend jsPDF with the autoTable plugin
-// FIX: Replaced interface with a type intersection to correctly add the autoTable method to the jsPDF instance type.
-// This resolves errors where jsPDF methods were not found on the extended type.
 type jsPDFWithAutoTable = jsPDF & {
   autoTable: (options: any) => jsPDF;
 };
@@ -47,7 +46,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
         doc.text('WRITER Relocations - Operations Report', data.settings.margin.left, 22);
         
         // Footer
-        const pageCount = doc.internal.getNumberOfPages();
+        // FIX: doc.internal.getNumberOfPages() is not valid in newer typings. Use doc.getNumberOfPages() or fallback.
+        const pageCount = doc.getNumberOfPages ? doc.getNumberOfPages() : (doc.internal.pages.length - 1);
         doc.setFontSize(10);
         doc.setTextColor(150);
         doc.text(`Page ${data.pageNumber} of ${pageCount}`, data.settings.margin.left, doc.internal.pageSize.height - 10);
@@ -62,8 +62,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
       // 1. Job Schedule Table
       doc.autoTable({
         startY: 30,
-        head: [['Job No.', 'Shipper', 'Date', 'Time', 'Location', 'CBM', 'Team Leader', 'Vehicle', 'Status']],
-        body: scheduleJobs.map(j => [j.id, j.shipper_name, j.job_date, j.job_time || 'N/A', j.location || 'N/A', j.volume_cbm || 0, j.team_leader || 'N/A', j.vehicle || 'N/A', j.status]),
+        head: [['Job No.', 'Shipper', 'Date', 'Time', 'Location', 'CBM', 'Team Leader', 'Vehicles', 'Status']],
+        body: scheduleJobs.map(j => [j.id, j.shipper_name, j.job_date, j.job_time || 'N/A', j.location || 'N/A', j.volume_cbm || 0, j.team_leader || 'N/A', j.vehicles?.join(', ') || 'N/A', j.status]),
         didDrawPage: pageContent,
         headStyles: { fillColor: [22, 163, 74] },
         margin: { top: 30 },
@@ -123,10 +123,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
 
   return (
     <div className="space-y-10 animate-in fade-in duration-700">
-      <div className="flex flex-col md:flex-row md:items-start justify-between gap-8">
+      <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-8">
         <div>
-          <h2 className="text-4xl font-black text-slate-800 tracking-tight">Terminal Hub</h2>
-          <p className="text-slate-500 font-medium text-lg mt-2 flex items-center gap-2">
+          <h2 className="text-3xl md:text-4xl font-black text-slate-800 tracking-tight">Terminal Hub</h2>
+          <p className="text-slate-500 font-medium text-lg mt-2 flex flex-wrap items-center gap-2">
             Real-time throughput index
             <span className="inline-flex items-center gap-1 text-emerald-600 text-xs font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
               <ArrowUpRight className="w-3 h-3" />
@@ -135,7 +135,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
           </p>
         </div>
         
-        <div className="flex flex-col sm:flex-row items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
           <button
             onClick={handleGeneratePdf}
             disabled={isGeneratingPdf}
@@ -146,9 +146,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
           </button>
           
           <div className="flex items-center gap-6 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 w-full sm:w-auto">
-             <div className="text-right">
+             <div className="text-right flex-1 sm:flex-none">
                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">Facility Load Factor</p>
-               <div className="flex items-center gap-3">
+               <div className="flex items-center gap-3 justify-end">
                   <span className="text-3xl font-black text-slate-900">{currentJobsCount} <span className="text-slate-300 font-medium">/</span> {currentLimit}</span>
                   <div className="w-12 h-2 bg-slate-100 rounded-full overflow-hidden">
                     <div 
@@ -165,31 +165,31 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-8">
         {stats.map((stat, i) => (
-          <div key={i} className="bg-white p-8 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl transition-all group cursor-default">
-            <div className="flex items-center gap-8">
-              <div className={`${stat.bg} p-5 rounded-2xl transition-all group-hover:scale-110 border border-transparent group-hover:border-slate-100 shadow-sm`}>
-                <stat.icon className={`w-8 h-8 ${stat.color}`} />
+          <div key={i} className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl transition-all group cursor-default">
+            <div className="flex items-center gap-6 md:gap-8">
+              <div className={`${stat.bg} p-4 md:p-5 rounded-2xl transition-all group-hover:scale-110 border border-transparent group-hover:border-slate-100 shadow-sm`}>
+                <stat.icon className={`w-6 h-6 md:w-8 md:h-8 ${stat.color}`} />
               </div>
               <div>
-                <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{stat.label}</p>
-                <p className="text-3xl font-black text-slate-900 tracking-tight">{stat.value}</p>
+                <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{stat.label}</p>
+                <p className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">{stat.value}</p>
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2 bg-white rounded-[2.5rem] p-10 border border-slate-200 shadow-sm relative overflow-hidden group">
-          <div className="flex items-center justify-between mb-12">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-10">
+        <div className="lg:col-span-2 bg-white rounded-[2.5rem] p-6 md:p-10 border border-slate-200 shadow-sm relative overflow-hidden group">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 md:mb-12 gap-4">
             <h3 className="font-black text-xl text-slate-800 uppercase tracking-tight">Throughput Velocity Index</h3>
-            <div className="px-4 py-2 bg-slate-50 rounded-2xl border border-slate-100 group-hover:bg-blue-50 transition-colors">
+            <div className="px-4 py-2 bg-slate-50 rounded-2xl border border-slate-100 group-hover:bg-blue-50 transition-colors self-start sm:self-auto">
               <span className="text-slate-500 font-bold text-[10px] uppercase tracking-widest group-hover:text-blue-600">Daily Efficiency Index</span>
             </div>
           </div>
-          <div className="h-[320px] w-full">
+          <div className="w-full" style={{ height: '320px', minHeight: '320px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={[
                 { name: 'Sun', v: 35 }, { name: 'Mon', v: 65 }, { name: 'Tue', v: 50 }, 
@@ -204,15 +204,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 blur-[100px] rounded-full"></div>
         </div>
 
-        <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-slate-200 flex flex-col">
-           <h3 className="font-black text-xl text-slate-800 mb-10 flex items-center gap-4 uppercase tracking-tight">
+        <div className="bg-white p-6 md:p-10 rounded-[2.5rem] shadow-sm border border-slate-200 flex flex-col">
+           <h3 className="font-black text-xl text-slate-800 mb-8 md:mb-10 flex items-center gap-4 uppercase tracking-tight">
              <Clock className="w-6 h-6 text-blue-500" />
              Pipeline Units
            </h3>
-           <div className="space-y-8 flex-1">
+           <div className="space-y-6 md:space-y-8 flex-1">
              {jobs.slice(0, 6).map((job) => (
-               <div key={job.id} className="flex gap-6 relative group cursor-pointer hover:bg-slate-50 p-3 -mx-3 rounded-2xl transition-all duration-300">
-                  <div className="w-14 h-14 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center font-black text-sm text-slate-400 group-hover:bg-white group-hover:shadow-md transition-all shrink-0">
+               <div key={job.id} className="flex gap-4 md:gap-6 relative group cursor-pointer hover:bg-slate-50 p-3 -mx-3 rounded-2xl transition-all duration-300">
+                  <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center font-black text-xs md:text-sm text-slate-400 group-hover:bg-white group-hover:shadow-md transition-all shrink-0">
                     {job.job_time}
                   </div>
                   <div className="overflow-hidden">

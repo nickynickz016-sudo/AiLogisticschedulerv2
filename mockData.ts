@@ -1,3 +1,4 @@
+
 import { UserProfile, UserRole } from './types';
 
 export interface MockUser {
@@ -5,6 +6,102 @@ export interface MockUser {
   password?: string;
   profile: UserProfile;
 }
+
+const FULL_ACCESS = {
+  dashboard: true,
+  schedule: true,
+  jobBoard: true,
+  warehouse: true,
+  importClearance: true,
+  approvals: true,
+  writerDocs: true,
+  inventory: true,
+  tracking: true, // Added
+  resources: true,
+  capacity: true,
+  users: true,
+  ai: true,
+};
+
+const STANDARD_ACCESS = {
+  dashboard: true,
+  schedule: true,
+  jobBoard: true,
+  warehouse: true,
+  importClearance: true,
+  approvals: false,
+  writerDocs: true,
+  inventory: true, 
+  tracking: true, // Added
+  resources: false,
+  capacity: false,
+  users: false,
+  ai: false,
+};
+
+const WRITER_ACCESS = {
+  dashboard: false,
+  schedule: true,
+  jobBoard: false,
+  warehouse: false,
+  importClearance: false,
+  approvals: false,
+  writerDocs: true,
+  inventory: false,
+  tracking: false,
+  resources: false,
+  capacity: false,
+  users: false,
+  ai: false,
+};
+
+const SENIOR_OPS_ACCESS = {
+  dashboard: true,
+  schedule: true,
+  jobBoard: false,
+  warehouse: true,
+  importClearance: true,
+  approvals: false,
+  writerDocs: true,
+  inventory: true,
+  tracking: true, // Added
+  resources: true, // Fleet & Crew
+  capacity: false,
+  users: false,
+  ai: false,
+};
+
+const SANTOSH_ACCESS = {
+  dashboard: false,
+  schedule: true,
+  jobBoard: false,
+  warehouse: true,
+  importClearance: true,
+  approvals: false,
+  writerDocs: false,
+  inventory: false,
+  tracking: false,
+  resources: false,
+  capacity: false,
+  users: false,
+  ai: false,
+};
+
+const SEMI_ADMIN_ACCESS = {
+  dashboard: true,
+  schedule: true,
+  jobBoard: true,
+  warehouse: true,
+  importClearance: true,
+  approvals: true, 
+  writerDocs: true,
+  inventory: true,
+  tracking: true, // Added
+  resources: true,
+  capacity: false,
+  users: false,
+  ai: true,
+};
 
 export const USERS: MockUser[] = [
   {
@@ -15,6 +112,7 @@ export const USERS: MockUser[] = [
       employee_id: 'ADMIN-001',
       name: 'Administrator',
       role: UserRole.ADMIN,
+      permissions: FULL_ACCESS,
       avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Admin',
       status: 'Active',
     },
@@ -27,6 +125,7 @@ export const USERS: MockUser[] = [
       employee_id: 'OPS-101',
       name: 'Roxanne',
       role: UserRole.USER,
+      permissions: STANDARD_ACCESS,
       avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Roxanne',
       status: 'Active',
     },
@@ -39,6 +138,7 @@ export const USERS: MockUser[] = [
       employee_id: 'OPS-102',
       name: 'Poonam',
       role: UserRole.USER,
+      permissions: STANDARD_ACCESS,
       avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Poonam',
       status: 'Active',
     },
@@ -51,6 +151,7 @@ export const USERS: MockUser[] = [
       employee_id: 'OPS-103',
       name: 'Divya',
       role: UserRole.USER,
+      permissions: STANDARD_ACCESS,
       avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Divya',
       status: 'Active',
     },
@@ -63,6 +164,7 @@ export const USERS: MockUser[] = [
       employee_id: 'OPS-104',
       name: 'Param',
       role: UserRole.USER,
+      permissions: STANDARD_ACCESS,
       avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Param',
       status: 'Active',
     },
@@ -75,19 +177,73 @@ export const USERS: MockUser[] = [
       employee_id: 'OPS-105',
       name: 'Anoop',
       role: UserRole.USER,
+      permissions: STANDARD_ACCESS,
       avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Anoop',
       status: 'Active',
     },
   },
   {
-    username: 'User6',
-    password: 'User6',
+    username: 'Warehouse',
+    password: 'Writer@123',
     profile: {
       id: 'g7a8b9c0-d1e2-3456-7890-1abcdef123456',
       employee_id: 'OPS-106',
-      name: 'Anoop',
+      name: 'Writer Team',
       role: UserRole.USER,
-      avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Anoop',
+      permissions: WRITER_ACCESS,
+      avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Writer',
+      status: 'Active',
+    },
+  },
+  {
+    username: 'Rijas',
+    password: 'Writer@123',
+    profile: {
+      id: 'h8b9c0d1-e2f3-4567-8901-2bcdef1234567',
+      employee_id: 'OPS-201',
+      name: 'Rijas',
+      role: UserRole.USER,
+      permissions: SENIOR_OPS_ACCESS,
+      avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Rijas',
+      status: 'Active',
+    },
+  },
+  {
+    username: 'Safeer',
+    password: 'Writer@123',
+    profile: {
+      id: 'i9c0d1e2-f3a4-5678-9012-3cdef12345678',
+      employee_id: 'OPS-202',
+      name: 'Safeer',
+      role: UserRole.USER,
+      permissions: SENIOR_OPS_ACCESS,
+      avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Safeer',
+      status: 'Active',
+    },
+  },
+  {
+    username: 'Santosh',
+    password: 'Writer@123',
+    profile: {
+      id: 'j0d1e2f3-a4b5-6789-0123-4cdef12345678',
+      employee_id: 'OPS-203',
+      name: 'Santosh',
+      role: UserRole.USER,
+      permissions: SANTOSH_ACCESS,
+      avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Santosh',
+      status: 'Active',
+    },
+  },
+  {
+    username: 'Karthik',
+    password: 'Writer@123',
+    profile: {
+      id: 'k1a2r3t4-h5i6-7890-1234-567890abcdef',
+      employee_id: 'OPS-ADMIN-01',
+      name: 'Karthik',
+      role: UserRole.USER,
+      permissions: SEMI_ADMIN_ACCESS,
+      avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Karthik',
       status: 'Active',
     },
   },

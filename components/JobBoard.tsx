@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Job, JobStatus, UserProfile, UserRole } from '../types';
-import { Plus, Search, Filter, Trash2, MapPin, MoreVertical, Clock, User } from 'lucide-react';
+import { Plus, Search, Filter, Trash2, MapPin, MoreVertical, Clock, User, Mail } from 'lucide-react';
 import { JobDetailModal } from './JobDetailModal';
 
 interface JobBoardProps {
@@ -12,6 +12,15 @@ interface JobBoardProps {
   users: UserProfile[];
 }
 
+// Helper to get local date string YYYY-MM-DD
+const getLocalToday = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 export const JobBoard: React.FC<JobBoardProps> = ({ jobs, onAddJob, onDeleteJob, currentUser, users }) => {
   const [showModal, setShowModal] = useState(false);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
@@ -19,10 +28,13 @@ export const JobBoard: React.FC<JobBoardProps> = ({ jobs, onAddJob, onDeleteJob,
   const [newJob, setNewJob] = useState({ 
     id: '', 
     shipper_name: '', 
+    shipper_phone: '',
+    client_email: '',
     description: '', 
     priority: 'LOW' as any, 
     location: '',
-    job_date: new Date().toISOString().split('T')[0]
+    job_date: getLocalToday(),
+    duration: 1
   });
 
   const filteredJobs = jobs.filter(j => 
@@ -44,9 +56,10 @@ export const JobBoard: React.FC<JobBoardProps> = ({ jobs, onAddJob, onDeleteJob,
       loading_type: 'Warehouse Removal',
       job_date: newJob.job_date,
       job_time: '09:00', // Default time
+      duration: newJob.duration
     });
     setShowModal(false);
-    setNewJob({ id: '', shipper_name: '', description: '', priority: 'LOW', location: '', job_date: new Date().toISOString().split('T')[0] });
+    setNewJob({ id: '', shipper_name: '', shipper_phone: '', client_email: '', description: '', priority: 'LOW', location: '', job_date: getLocalToday(), duration: 1 });
   };
   
   const handleDelete = (e: React.MouseEvent, jobId: string) => {
@@ -63,14 +76,14 @@ export const JobBoard: React.FC<JobBoardProps> = ({ jobs, onAddJob, onDeleteJob,
         </div>
         <button 
           onClick={() => setShowModal(true)}
-          className="flex items-center justify-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200"
+          className="flex items-center justify-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 w-full sm:w-auto"
         >
           <Plus className="w-5 h-5" />
           <span className="font-semibold">Request Job</span>
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-4 items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+      <div className="flex flex-col sm:flex-row flex-wrap gap-4 items-stretch sm:items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
         <div className="flex-1 relative min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
           <input 
@@ -81,7 +94,7 @@ export const JobBoard: React.FC<JobBoardProps> = ({ jobs, onAddJob, onDeleteJob,
             onChange={(e) => setFilter(e.target.value)}
           />
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 text-slate-600 text-sm font-medium hover:bg-slate-50 rounded-xl transition-colors">
+        <button className="flex items-center justify-center gap-2 px-4 py-2 text-slate-600 text-sm font-medium hover:bg-slate-50 rounded-xl transition-colors">
           <Filter className="w-4 h-4" />
           Filters
         </button>
@@ -167,12 +180,12 @@ export const JobBoard: React.FC<JobBoardProps> = ({ jobs, onAddJob, onDeleteJob,
       {/* New Job Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
-            <div className="p-8 border-b">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-8 border-b shrink-0">
               <h3 className="text-xl font-bold text-slate-800">Request New Job</h3>
               <p className="text-sm text-slate-500">Admin approval is required for all new jobs.</p>
             </div>
-            <form onSubmit={handleSubmit} className="p-8 space-y-8">
+            <form onSubmit={handleSubmit} className="p-8 space-y-8 overflow-y-auto custom-scrollbar">
               <section>
                 <h4 className="text-sm font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">Core Details</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -185,8 +198,20 @@ export const JobBoard: React.FC<JobBoardProps> = ({ jobs, onAddJob, onDeleteJob,
                     <input required type="text" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g., John Doe" value={newJob.shipper_name} onChange={e => setNewJob({...newJob, shipper_name: e.target.value})} />
                   </div>
                    <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Date *</label>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Start Date *</label>
                     <input required type="date" min={new Date().toISOString().split('T')[0]} className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={newJob.job_date} onChange={e => setNewJob({...newJob, job_date: e.target.value})} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Duration (Days)</label>
+                    <input 
+                        required 
+                        type="number" 
+                        min="1" 
+                        max="30"
+                        className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" 
+                        value={newJob.duration} 
+                        onChange={e => setNewJob({...newJob, duration: parseInt(e.target.value) || 1})} 
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Priority</label>
@@ -202,6 +227,16 @@ export const JobBoard: React.FC<JobBoardProps> = ({ jobs, onAddJob, onDeleteJob,
               <section>
                 <h4 className="text-sm font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">Additional Information</h4>
                 <div className="space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Client Mobile</label>
+                            <input type="tel" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" placeholder="+971..." value={newJob.shipper_phone} onChange={e => setNewJob({...newJob, shipper_phone: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Client Email</label>
+                            <input type="email" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" placeholder="client@example.com" value={newJob.client_email} onChange={e => setNewJob({...newJob, client_email: e.target.value})} />
+                        </div>
+                    </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Location</label>
                       <input type="text" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Bay 4" value={newJob.location} onChange={e => setNewJob({...newJob, location: e.target.value})} />
@@ -213,7 +248,7 @@ export const JobBoard: React.FC<JobBoardProps> = ({ jobs, onAddJob, onDeleteJob,
                 </div>
               </section>
 
-              <div className="flex gap-4 pt-4">
+              <div className="flex gap-4 pt-4 shrink-0">
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-3 font-semibold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors">
                   Cancel
                 </button>

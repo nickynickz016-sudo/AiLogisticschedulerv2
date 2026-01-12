@@ -1,3 +1,4 @@
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   USER = 'USER'
@@ -36,11 +37,28 @@ export interface SpecialRequests {
   walkThrough: boolean;
 }
 
+export interface UserPermissions {
+  dashboard: boolean;
+  schedule: boolean;
+  jobBoard: boolean;
+  warehouse: boolean;
+  importClearance: boolean;
+  approvals: boolean;
+  writerDocs: boolean;
+  inventory: boolean; 
+  tracking: boolean; // Added Tracking permission
+  resources: boolean;
+  capacity: boolean;
+  users: boolean;
+  ai: boolean;
+}
+
 export interface UserProfile {
   id: string;
   employee_id: string; // Mandatory
   name: string;
   role: UserRole;
+  permissions: UserPermissions;
   avatar: string;
   status: 'Active' | 'Disabled';
 }
@@ -49,9 +67,10 @@ export interface Personnel {
   id:string;
   employee_id: string; // Mandatory
   name: string;
-  type: 'Team Leader' | 'Writer Crew';
+  type: 'Team Leader' | 'Writer Crew' | 'Driver';
   status: 'Available' | 'Annual Leave' | 'Sick Leave' | 'Personal Leave';
   emirates_id: string; // Mandatory
+  license_number?: string; // Optional, specific for Drivers
 }
 
 export interface Vehicle {
@@ -61,6 +80,15 @@ export interface Vehicle {
   status: 'Available' | 'Out of Service' | 'Maintenance';
 }
 
+export interface TrackingStepDetails {
+  partner_name?: string;
+  contact_person?: string;
+  phone?: string;
+  notes?: string;
+  updated_at?: string;
+  completed?: boolean;
+}
+
 // FIX: Made several properties optional to support different job creation contexts (e.g., Warehouse vs. Schedule).
 // This prevents type errors where not all job details are available upon creation.
 export interface Job {
@@ -68,6 +96,7 @@ export interface Job {
   title: string;
   shipper_name: string;
   shipper_phone?: string;
+  client_email?: string; // Added for notifications
   location?: string;
   shipment_details?: ShipmentDetailsType;
   description?: string;
@@ -82,6 +111,7 @@ export interface Job {
   volume_cbm?: number;
   job_time?: string;
   job_date: string;
+  duration?: number; // New field for multi-day jobs
   status: JobStatus;
   created_at: number;
   requester_id: string;
@@ -93,15 +123,48 @@ export interface Job {
   // Admin allocations
   team_leader?: string;
   writer_crew?: string[];
-  vehicle?: string;
+  vehicle?: string; // Legacy field for single vehicle/backward compat
+  vehicles?: string[]; // Updated to support multiple vehicles
 
   // Fields for Import Clearance
   bol_number?: string;
   container_number?: string;
   customs_status?: CustomsStatus;
+
+  // Fields for Tracking
+  tracking_current_step?: number;
+  tracking_data?: Record<string, TrackingStepDetails>; // Key is the step ID (e.g. "1", "2")
+}
+
+export interface InventoryItem {
+  id: number;
+  code: string;
+  description: string;
+  unit: string;
+  price: number;
+  stock: number;
+  critical_stock: number;
+}
+
+export interface CostSheetItem {
+  inventory_id: number;
+  code: string;
+  description: string;
+  unit: string;
+  price: number;
+  issued_qty: number;
+  returned_qty: number;
+}
+
+export interface JobCostSheet {
+  job_id: string;
+  items: CostSheetItem[];
+  status: 'Issued' | 'Returned' | 'Finalized';
+  total_cost: number;
 }
 
 export interface SystemSettings {
   daily_job_limits: Record<string, number>; // date -> max jobs
   holidays: string[]; // array of ISO date strings (YYYY-MM-DD)
+  company_logo?: string; // Base64 string of the logo
 }
