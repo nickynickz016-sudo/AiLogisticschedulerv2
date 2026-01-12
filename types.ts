@@ -134,6 +134,9 @@ export interface Job {
   // Fields for Tracking
   tracking_current_step?: number;
   tracking_data?: Record<string, TrackingStepDetails>; // Key is the step ID (e.g. "1", "2")
+
+  // Fields for Warehouse
+  activity_name?: string;
 }
 
 export interface InventoryItem {

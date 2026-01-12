@@ -94,14 +94,19 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // Fetch settings on initial load to ensure Logo is available for Login Screen
   useEffect(() => {
-    // Fetch data only when a user is logged in
+    fetchSettings();
+  }, [fetchSettings]);
+
+  useEffect(() => {
+    // Fetch operational data only when a user is logged in
     if (currentUser) {
       fetchJobs();
       fetchUsers();
       fetchPersonnel();
       fetchVehicles();
-      fetchSettings();
+      fetchSettings(); // Re-fetch to ensure sync
 
       // Poll for job updates (alerts)
       const interval = setInterval(fetchJobs, 10000);
@@ -168,6 +173,33 @@ const App: React.FC = () => {
   // Data Mutation Handlers
   const handleUpdateJob = (updatedJob: Job) => {
     setJobs(prevJobs => prevJobs.map(j => j.id === updatedJob.id ? updatedJob : j));
+  };
+
+  const handleEditJob = async (job: Job) => {
+    // Exclude restricted fields or ensure data consistency if needed
+    const { error } = await supabase.from('jobs').update({
+        shipper_name: job.shipper_name,
+        shipper_phone: job.shipper_phone,
+        client_email: job.client_email,
+        location: job.location,
+        shipment_details: job.shipment_details,
+        description: job.description,
+        priority: job.priority,
+        loading_type: job.loading_type,
+        volume_cbm: job.volume_cbm,
+        job_time: job.job_time,
+        job_date: job.job_date, 
+        duration: job.duration,
+        special_requests: job.special_requests,
+        shuttle: job.shuttle,
+        long_carry: job.long_carry
+    }).eq('id', job.id);
+
+    if (error) {
+        alert(`Error updating job: ${error.message}`);
+    } else {
+        await fetchJobs();
+    }
   };
 
   const handleAddJob = async (job: Partial<Job>) => {
@@ -480,7 +512,7 @@ const App: React.FC = () => {
 
   if (!currentUser) {
     return (
-      <LoginScreen onLogin={handleLogin} users={allCredentials} />
+      <LoginScreen onLogin={handleLogin} users={allCredentials} logo={settings.company_logo} />
     );
   }
 
@@ -617,6 +649,7 @@ const App: React.FC = () => {
               <ScheduleView 
                 jobs={jobs} 
                 onAddJob={handleAddJob} 
+                onEditJob={handleEditJob}
                 onDeleteJob={handleDeleteJob}
                 onUpdateAllocation={handleUpdateJobAllocation}
                 onToggleLock={handleToggleLock}

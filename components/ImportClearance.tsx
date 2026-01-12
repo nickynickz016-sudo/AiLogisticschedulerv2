@@ -196,14 +196,14 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({ jobs, onAddJob
                     )}
                   </div>
                   <h4 className="font-bold text-xl text-slate-800">{activity.shipper_name}</h4>
-                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Agent: {activity.agent_name || 'N/A'}</p>
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">SD Name: {activity.agent_name || 'N/A'}</p>
                   
                   <div className="mt-6 flex flex-wrap gap-4 text-xs font-medium">
                     <div className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-lg">
-                      <span className="font-bold text-slate-400">BOL:</span> <span className="text-slate-700 font-bold">{activity.bol_number || 'TBA'}</span>
+                      <span className="font-bold text-slate-400">BOL / AWB:</span> <span className="text-slate-700 font-bold">{activity.bol_number || 'TBA'}</span>
                     </div>
                     <div className="px-4 py-2 bg-slate-50 border border-slate-100 rounded-lg">
-                      <span className="font-bold text-slate-400">Container:</span> <span className="text-slate-700 font-bold">{activity.container_number || 'TBA'}</span>
+                      <span className="font-bold text-slate-400">Container / Flight:</span> <span className="text-slate-700 font-bold">{activity.container_number || 'TBA'}</span>
                     </div>
                   </div>
                 </div>
@@ -261,7 +261,7 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({ jobs, onAddJob
                   </div>
                 </div>
                  <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Agent Name</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">SD Name</label>
                   <input type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-indigo-500 outline-none" value={newActivity.agent_name} onChange={e => setNewActivity({...newActivity, agent_name: e.target.value})} placeholder="e.g. Swift Logistics" />
                 </div>
               </div>
@@ -271,11 +271,11 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({ jobs, onAddJob
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Bill of Lading (BOL) No.</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">BOL Or AWB</label>
                   <input type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-indigo-500 outline-none" value={newActivity.bol_number} onChange={e => setNewActivity({...newActivity, bol_number: e.target.value})} />
                 </div>
                  <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Container No.</label>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Container No. Or Flight No.</label>
                   <input type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-indigo-500 outline-none" value={newActivity.container_number} onChange={e => setNewActivity({...newActivity, container_number: e.target.value})} />
                 </div>
               </div>

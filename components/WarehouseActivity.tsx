@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Job, JobStatus, UserProfile } from '../types';
-import { Plus, X, Box, User, Clock, AlertCircle, Info, Calendar, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, X, Box, User, Clock, AlertCircle, Info, Calendar, RefreshCw, ChevronLeft, ChevronRight, FileText, Activity } from 'lucide-react';
 
 interface WarehouseActivityProps {
   jobs: Job[];
@@ -25,7 +25,9 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({ jobs, onAd
   const [newActivity, setNewActivity] = useState({
     id: 'WH-', // Job No.
     shipper_name: '',
-    job_date: selectedDate
+    job_date: selectedDate,
+    activity_name: '',
+    description: ''
   });
 
   const dailyActivities = jobs.filter(j => j.is_warehouse_activity && j.job_date === selectedDate);
@@ -46,7 +48,7 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({ jobs, onAd
       }
     });
     setShowModal(false);
-    setNewActivity({ id: 'WH-', shipper_name: '', job_date: selectedDate });
+    setNewActivity({ id: 'WH-', shipper_name: '', job_date: selectedDate, activity_name: '', description: '' });
   };
 
   const generateUniqueId = () => {
@@ -150,9 +152,9 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({ jobs, onAd
             </div>
           ) : (
             dailyActivities.map((activity, index) => (
-              <div key={activity.id} className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex items-center justify-between group hover:border-blue-200 transition-all">
+              <div key={activity.id} className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6 group hover:border-blue-200 transition-all">
                 <div className="flex items-center gap-8">
-                  <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 font-bold text-xl border border-slate-100">
+                  <div className="w-14 h-14 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 font-bold text-xl border border-slate-100 shrink-0">
                     {index + 1}
                   </div>
                   <div>
@@ -163,16 +165,28 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({ jobs, onAd
                       )}
                     </div>
                     <h4 className="font-bold text-2xl text-slate-800">{activity.shipper_name}</h4>
+                    {activity.activity_name && (
+                      <div className="flex items-center gap-2 mt-1 text-sm font-bold text-slate-600">
+                        <Activity className="w-4 h-4 text-slate-400" />
+                        {activity.activity_name}
+                      </div>
+                    )}
                     <div className="flex items-center gap-6 mt-3 text-xs text-slate-400 font-bold uppercase tracking-tighter">
                        <span className="flex items-center gap-2"><Clock className="w-4 h-4" /> Facility Reserved</span>
                        <span className="flex items-center gap-2"><User className="w-4 h-4" /> Request # {activity.requester_id}</span>
                     </div>
+                    {activity.description && (
+                      <p className="mt-3 text-sm text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-100 max-w-lg">
+                        <span className="font-bold text-slate-700 text-xs block mb-1">NOTES:</span>
+                        {activity.description}
+                      </p>
+                    )}
                   </div>
                 </div>
                 
                 <button 
                   onClick={() => onDeleteJob(activity.id)}
-                  className="p-4 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-2xl transition-all opacity-0 group-hover:opacity-100"
+                  className="p-4 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-2xl transition-all opacity-0 group-hover:opacity-100 self-center"
                 >
                   <X className="w-7 h-7" />
                 </button>
@@ -184,8 +198,8 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({ jobs, onAd
 
       {showModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
-            <div className="p-8 border-b bg-white flex justify-between items-center rounded-t-3xl">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-8 border-b bg-white flex justify-between items-center shrink-0">
               <div>
                 <h3 className="text-xl font-bold text-slate-800 uppercase tracking-widest">Warehouse Reservation</h3>
                 <p className="text-sm text-slate-400 font-medium">Booking for {selectedDate}</p>
@@ -193,7 +207,7 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({ jobs, onAd
               <button onClick={() => setShowModal(false)} className="p-2 hover:bg-slate-50 rounded-xl transition-all text-slate-400"><X className="w-6 h-6" /></button>
             </div>
             
-            <form onSubmit={handleSubmit} className="p-8 space-y-6">
+            <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Job No. *</label>
                 <div className="relative">
@@ -211,6 +225,28 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({ jobs, onAd
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Shipper Name *</label>
                 <input required type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newActivity.shipper_name} onChange={e => setNewActivity({...newActivity, shipper_name: e.target.value})} placeholder="e.g. Global Trade LLC" />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Warehouse Activity</label>
+                <input 
+                  type="text" 
+                  className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" 
+                  value={newActivity.activity_name} 
+                  onChange={e => setNewActivity({...newActivity, activity_name: e.target.value})} 
+                  placeholder="e.g. Loading / Unloading / Inspection" 
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Notes</label>
+                <textarea 
+                  rows={3} 
+                  className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none resize-none" 
+                  value={newActivity.description} 
+                  onChange={e => setNewActivity({...newActivity, description: e.target.value})} 
+                  placeholder="Additional operational details..." 
+                />
               </div>
 
               <div className="flex items-center gap-4 p-5 bg-blue-50 rounded-2xl border border-blue-100">

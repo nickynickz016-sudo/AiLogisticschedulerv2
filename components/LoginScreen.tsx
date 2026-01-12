@@ -7,9 +7,10 @@ import { User, Lock, Loader2 } from 'lucide-react';
 interface LoginScreenProps {
   onLogin: (user: UserProfile) => void;
   users: MockUser[];
+  logo?: string;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users, logo }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -41,11 +42,17 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users }) => {
     <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-block mb-4">
-            <div className="w-16 h-16 bg-slate-900 rounded-3xl flex items-center justify-center rotate-45 transform">
-              <span className="text-white font-black text-4xl -rotate-45">W</span>
+          {logo ? (
+             <div className="mb-6 flex justify-center">
+                <img src={logo} alt="Logo" className="h-20 w-auto object-contain" />
+             </div>
+          ) : (
+            <div className="inline-block mb-4">
+              <div className="w-16 h-16 bg-slate-900 rounded-3xl flex items-center justify-center rotate-45 transform">
+                <span className="text-white font-black text-4xl -rotate-45">W</span>
+              </div>
             </div>
-          </div>
+          )}
           <h1 className="text-3xl font-bold text-slate-900">Operations Login</h1>
           <p className="text-slate-700 mt-1">Please enter your credentials.</p>
         </div>

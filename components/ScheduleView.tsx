@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { Job, JobStatus, LoadingType, UserProfile, Personnel, Vehicle, UserRole, ShipmentDetailsType } from '../types';
-import { Plus, Search, Package, Clock, User, X, Calendar as CalendarIcon, CheckCircle2, Truck, Settings2, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Phone, Mail, Briefcase, FileText, AlertCircle, MapPin, RefreshCw } from 'lucide-react';
+import { Plus, Search, Package, Clock, User, X, Calendar as CalendarIcon, CheckCircle2, Truck, Settings2, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Phone, Mail, Briefcase, FileText, AlertCircle, MapPin, RefreshCw, Edit2 } from 'lucide-react';
 import { JobDetailModal } from './JobDetailModal';
 
 interface ScheduleViewProps {
   jobs: Job[];
   onAddJob: (job: Partial<Job>) => void;
+  onEditJob: (job: Job) => void;
   onDeleteJob: (jobId: string) => void;
   onUpdateAllocation: (jobId: string, allocation: { team_leader: string, vehicles: string[], writer_crew: string[] }) => void;
   onToggleLock: (jobId: string) => void;
@@ -37,7 +38,7 @@ const getLocalDateString = (date: Date = new Date()) => {
 };
 
 export const ScheduleView: React.FC<ScheduleViewProps> = ({ 
-  jobs, onAddJob, onDeleteJob, onUpdateAllocation, onToggleLock, currentUser, personnel, vehicles, users 
+  jobs, onAddJob, onEditJob, onDeleteJob, onUpdateAllocation, onToggleLock, currentUser, personnel, vehicles, users 
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [isModalExpanded, setIsModalExpanded] = useState(false);
@@ -46,6 +47,12 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   const [filter, setFilter] = useState('');
   const [viewMode, setViewMode] = useState<'calendar' | 'list' | 'month'>('list');
   const [currentDate, setCurrentDate] = useState(new Date());
+  
+  // Edit Mode State
+  const [isEditingMode, setIsEditingMode] = useState(false);
+
+  // Define permissions: Admin OR OPS-ADMIN-01 can manage schedule details (allocation/locks)
+  const canManageSchedule = currentUser.role === UserRole.ADMIN || currentUser.employee_id === 'OPS-ADMIN-01';
 
   const selectedDate = getLocalDateString(currentDate);
 
@@ -85,17 +92,18 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
   const [newJob, setNewJob] = useState<Partial<Job>>(initialNewJobState);
 
-  // Sync newJob date with currently selected view date when modal opens
+  // Sync newJob date with currently selected view date when modal opens (only for new jobs)
   useEffect(() => {
-    if (showModal) {
+    if (showModal && !isEditingMode) {
         setNewJob(prev => ({ ...prev, job_date: selectedDate }));
     }
-  }, [showModal, selectedDate]);
+  }, [showModal, selectedDate, isEditingMode]);
 
   const handleCloseModal = () => {
     setShowModal(false);
     setIsModalExpanded(false);
     setNewJob(initialNewJobState);
+    setIsEditingMode(false);
   };
 
   const generateUniqueId = () => {
@@ -124,6 +132,13 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     j.status !== JobStatus.REJECTED
   );
 
+  const handleEditClick = (e: React.MouseEvent, job: Job) => {
+    e.stopPropagation();
+    setNewJob(job);
+    setIsEditingMode(true);
+    setShowModal(true);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newJob.id || !newJob.shipper_name || !newJob.main_category) {
@@ -147,13 +162,17 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         }
     }
 
-    onAddJob({ ...newJob, title: newJob.id });
+    if (isEditingMode) {
+        onEditJob(newJob as Job);
+    } else {
+        onAddJob({ ...newJob, title: newJob.id });
+    }
     handleCloseModal();
   };
 
   const openAllocationEditor = (job: Job, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (currentUser.role !== UserRole.ADMIN) return;
+    if (!canManageSchedule) return;
     setShowAllocationModal(job);
     setEditAllocation({ 
       team_leader: job.team_leader || '', 
@@ -389,7 +408,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
             </div>
           )}
           <button 
-            onClick={() => setShowModal(true)}
+            onClick={() => { setIsEditingMode(false); setShowModal(true); }}
             className="flex items-center justify-center gap-2 bg-slate-900 text-white px-8 py-3.5 rounded-xl hover:bg-slate-800 transition-all font-bold uppercase text-[11px] tracking-widest shadow-md whitespace-nowrap"
           >
             <Plus className="w-5 h-5" />
@@ -445,7 +464,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                  </div>
                                  <div className="flex gap-2">
                                     {/* Action Buttons */}
-                                    {currentUser.role === UserRole.ADMIN && (
+                                    {canManageSchedule && (
                                       <>
                                         <button 
                                           onClick={(e) => handleToggleJobLock(job.id, e)}
@@ -460,6 +479,15 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                           <Settings2 className="w-4 h-4" />
                                         </button>
                                       </>
+                                    )}
+                                    {job.status === JobStatus.ACTIVE && (
+                                      <button 
+                                        onClick={(e) => handleEditClick(e, job)}
+                                        className="p-1.5 hover:bg-blue-50 rounded-lg text-slate-400 hover:text-blue-600 transition-all"
+                                        title="Edit Job Details"
+                                      >
+                                        <Edit2 className="w-4 h-4" />
+                                      </button>
                                     )}
                                     <button 
                                       onClick={(e) => handleDeleteJobClick(job.id, e)} 
@@ -587,7 +615,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                          </td>
                          <td className="p-6">
                            <div className="flex items-center justify-center gap-2">
-                             {currentUser.role === UserRole.ADMIN && (
+                             {canManageSchedule && (
                                <>
                                  <button 
                                    onClick={(e) => handleToggleJobLock(job.id, e)}
@@ -603,10 +631,19 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                  </button>
                                </>
                              )}
+                             {job.status === JobStatus.ACTIVE && (
+                                <button 
+                                  onClick={(e) => handleEditClick(e, job)}
+                                  className="p-2 bg-slate-100 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all shadow-sm"
+                                  title="Edit Job Details"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                             )}
                              <button 
                                onClick={(e) => handleDeleteJobClick(job.id, e)}
-                               disabled={job.is_locked && currentUser.role !== UserRole.ADMIN}
-                               className={`p-2 rounded-xl transition-all ${job.is_locked && currentUser.role !== UserRole.ADMIN ? 'opacity-20 cursor-not-allowed' : 'bg-rose-50 text-rose-300 hover:text-rose-600 hover:bg-rose-100'}`}
+                               disabled={job.is_locked && !canManageSchedule}
+                               className={`p-2 rounded-xl transition-all ${job.is_locked && !canManageSchedule ? 'opacity-20 cursor-not-allowed' : 'bg-rose-50 text-rose-300 hover:text-rose-600 hover:bg-rose-100'}`}
                              >
                                 <Trash2 className="w-4 h-4" />
                              </button>
@@ -706,7 +743,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         </div>
       )}
 
-      {/* New Job Modal */}
+      {/* New/Edit Job Modal */}
       {showModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className={`bg-white rounded-[2rem] w-full shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col max-h-[95vh] h-full md:h-auto border border-slate-200 overflow-hidden transition-all ease-in-out ${isModalExpanded ? 'max-w-6xl' : 'max-w-3xl'}`}>
@@ -715,7 +752,9 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                   <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center rotate-45 transform">
                     <span className="text-white font-black text-lg -rotate-45">W</span>
                   </div>
-                  <h3 className="text-lg md:text-xl font-bold text-slate-800 tracking-tight uppercase">Submit Allocation Request</h3>
+                  <h3 className="text-lg md:text-xl font-bold text-slate-800 tracking-tight uppercase">
+                    {isEditingMode ? 'Edit Job Details' : 'Submit Allocation Request'}
+                  </h3>
                </div>
                <div className="flex items-center gap-2">
                 <button type="button" onClick={() => setIsModalExpanded(!isModalExpanded)} className="hidden md:block p-2 hover:bg-slate-100 rounded-xl transition-all text-slate-400" title={isModalExpanded ? "Collapse" : "Expand"}>
@@ -740,15 +779,25 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Job No. *</label>
                     <div className="relative">
-                        <input required type="text" className="w-full px-5 py-3.5 pr-12 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.id} onChange={e => setNewJob({...newJob, id: e.target.value})} placeholder="AE-XXXX" />
-                        <button 
-                            type="button" 
-                            onClick={generateUniqueId}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                            title="Generate Unique ID"
-                        >
-                            <RefreshCw className="w-4 h-4" />
-                        </button>
+                        <input 
+                            required 
+                            type="text" 
+                            disabled={isEditingMode} // Disable ID editing in edit mode
+                            className={`w-full px-5 py-3.5 pr-12 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none ${isEditingMode ? 'opacity-60 cursor-not-allowed' : ''}`}
+                            value={newJob.id} 
+                            onChange={e => setNewJob({...newJob, id: e.target.value})} 
+                            placeholder="AE-XXXX" 
+                        />
+                        {!isEditingMode && (
+                            <button 
+                                type="button" 
+                                onClick={generateUniqueId}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                title="Generate Unique ID"
+                            >
+                                <RefreshCw className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
                   </div>
                   <div className="space-y-1.5">
@@ -939,7 +988,9 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
               <div className="pt-6 flex gap-4 shrink-0">
                 <button type="button" onClick={handleCloseModal} className="flex-1 py-4 font-bold text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-xl transition-all uppercase text-[10px] tracking-widest">Discard</button>
-                <button type="submit" className="flex-1 py-4 font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 uppercase text-[10px] tracking-widest">Authorize Request</button>
+                <button type="submit" className="flex-1 py-4 font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 uppercase text-[10px] tracking-widest">
+                    {isEditingMode ? 'Save Changes' : 'Authorize Request'}
+                </button>
               </div>
             </form>
           </div>
