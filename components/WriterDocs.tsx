@@ -85,6 +85,7 @@ interface AccessorialForm {
     handymanType: string;
     otherDescription: string;
   };
+  remarks: string;
 }
 
 interface WarehouseReceiptForm {
@@ -156,6 +157,7 @@ interface HandymanForm {
     packingClothes: boolean;
     closetArrangements: boolean;
   };
+  remarks: string;
 }
 
 interface ContainerInspectionForm {
@@ -223,6 +225,7 @@ interface VehicleConditionForm {
   carKey: 'Yes' | 'No';
   carDocs: 'Yes' | 'No';
   date: string;
+  remarks: string;
 }
 
 interface WriterDocsProps {
@@ -255,12 +258,12 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
   const [deliveryItems, setDeliveryItems] = useState<DeliveryItem[]>([]);
 
   const [cratingData, setCratingData] = useState({
-    clientName: '', jobId: '', date: new Date().toISOString().split('T')[0], notes: ''
+    clientName: '', jobId: '', date: new Date().toISOString().split('T')[0], notes: '' // notes acts as remarks
   });
   const [crates, setCrates] = useState<CratingItem[]>([]);
 
   const [electronicData, setElectronicData] = useState({
-    clientName: '', jobId: '', date: new Date().toISOString().split('T')[0]
+    clientName: '', jobId: '', date: new Date().toISOString().split('T')[0], remarks: ''
   });
   const [electronicItems, setElectronicItems] = useState<ElectronicItem[]>([]);
 
@@ -273,7 +276,8 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
       overtime: false, preDelivery: false, extraMileage: false, debrisPickup: false,
       handyman: false, maidService: false, other: false
     },
-    details: { stairCarryFloors: '', longCarryDistance: '', handymanType: '', otherDescription: '' }
+    details: { stairCarryFloors: '', longCarryDistance: '', handymanType: '', otherDescription: '' },
+    remarks: ''
   });
 
   const [warehouseReceiptData, setWarehouseReceiptData] = useState<WarehouseReceiptForm>({
@@ -297,7 +301,8 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
         assembly: false, disassembly: false, wardrobes: false,
         trampoline: false, gazebo: false, hammock: false, playHouse: false, swing: false,
         houseCleaning: false, laundry: false, packingClothes: false, closetArrangements: false
-    }
+    },
+    remarks: ''
   });
 
   const [containerData, setContainerData] = useState<ContainerInspectionForm>({
@@ -342,7 +347,8 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
     },
     tires: { rightFront: '', leftFront: '', rightRear: '', leftRear: '', spare: '' },
     spareMissing: false,
-    carKey: 'Yes', carDocs: 'Yes', date: new Date().toISOString().split('T')[0]
+    carKey: 'Yes', carDocs: 'Yes', date: new Date().toISOString().split('T')[0],
+    remarks: ''
   });
   
   // Warehouse UI State
@@ -496,11 +502,11 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
         setCrates([]);
         break;
       case 'electronicList':
-        setElectronicData({ clientName: '', jobId: '', date: today });
+        setElectronicData({ clientName: '', jobId: '', date: today, remarks: '' });
         setElectronicItems([]);
         break;
       case 'accessorial':
-        setAccessorialData({ clientName: '', jobId: '', date: today, serviceType: { packing: false, delivery: false }, services: { shuttle: false, stairCarry: false, elevator: false, hoisting: false, longCarry: false, piano: false, crating: false, extraLabor: false, overtime: false, preDelivery: false, extraMileage: false, debrisPickup: false, handyman: false, maidService: false, other: false }, details: { stairCarryFloors: '', longCarryDistance: '', handymanType: '', otherDescription: '' } });
+        setAccessorialData({ clientName: '', jobId: '', date: today, serviceType: { packing: false, delivery: false }, services: { shuttle: false, stairCarry: false, elevator: false, hoisting: false, longCarry: false, piano: false, crating: false, extraLabor: false, overtime: false, preDelivery: false, extraMileage: false, debrisPickup: false, handyman: false, maidService: false, other: false }, details: { stairCarryFloors: '', longCarryDistance: '', handymanType: '', otherDescription: '' }, remarks: '' });
         break;
       case 'warehouseReceipt':
         setWarehouseReceiptData({ clientName: '', fileNo: '', date: today, type: 'Export', mode: 'Sea', whLocation: '', totalPkgs: '', volume: '', containerNo: '', sealNo: '', truckDetails: '', missingNumbers: '', unnumbered: '', doubleNumber: '', totalCrates: '', crateNos: '', totalReceived: '', totalDelivered: '', checkedBy: '', selectedPackages: [] });
@@ -509,7 +515,8 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
       case 'handyman':
         setHandymanData({
             fileNo: '', date: today, clientName: '', address: '', handymanAssigned: '', dayAssigned: '', timeIn: '', timeOut: '',
-            services: { pictureFrames: false, wallMountOrnaments: false, mirrors: false, shelvingUnits: false, tvStandMounting: false, curtainRods: false, refrigerator: false, tv: false, hiFiSystem: false, chandelier: false, lights: false, washingMachine: false, dishwasher: false, electricalCooker: false, dishAntennae: false, windowAC: false, splitAC: false, waterbed: false, childSafetyGates: false, wallPainting: false, furnitureRestoration: false, floorRepairs: false, poolTable: false, assembly: false, disassembly: false, wardrobes: false, trampoline: false, gazebo: false, hammock: false, playHouse: false, swing: false, houseCleaning: false, laundry: false, packingClothes: false, closetArrangements: false }
+            services: { pictureFrames: false, wallMountOrnaments: false, mirrors: false, shelvingUnits: false, tvStandMounting: false, curtainRods: false, refrigerator: false, tv: false, hiFiSystem: false, chandelier: false, lights: false, washingMachine: false, dishwasher: false, electricalCooker: false, dishAntennae: false, windowAC: false, splitAC: false, waterbed: false, childSafetyGates: false, wallPainting: false, furnitureRestoration: false, floorRepairs: false, poolTable: false, assembly: false, disassembly: false, wardrobes: false, trampoline: false, gazebo: false, hammock: false, playHouse: false, swing: false, houseCleaning: false, laundry: false, packingClothes: false, closetArrangements: false },
+            remarks: ''
         });
         break;
       case 'containerInspection':
@@ -528,7 +535,7 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
             interiorSpecific: { frontCarpet: { good: false, worn: false, burns: false, rips: false, stain: false }, rearCarpet: { good: false, worn: false, burns: false, rips: false, stain: false }, frontSeat: { good: false, worn: false, burns: false, rips: false, stain: false }, rearSeat: { good: false, worn: false, burns: false, rips: false, stain: false }, headliner: { good: false, worn: false, burns: false, rips: false, stain: false }, doorPanels: { good: false, worn: false, burns: false, rips: false, stain: false } },
             interiorDash: { dent: false, crack: false, holes: false },
             mechanical: { engine: '', trans: '', airBlowsHot: false, brakes: '', exhaust: '', powerMalfunction: { windows: false, seats: false, locks: false, roof: false }, soundInoperative: false },
-            tires: { rightFront: '', leftFront: '', rightRear: '', leftRear: '', spare: '' }, spareMissing: false, carKey: 'Yes', carDocs: 'Yes', date: today
+            tires: { rightFront: '', leftFront: '', rightRear: '', leftRear: '', spare: '' }, spareMissing: false, carKey: 'Yes', carDocs: 'Yes', date: today, remarks: ''
         });
         break;
     }
@@ -685,12 +692,27 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
             colX += 60;
         });
 
-        yPos = colY + maxHeight + 30;
+        yPos = colY + maxHeight + 10;
         
         // Footer Inputs
         addField("Time In", handymanData.timeIn, margin, yPos);
         addField("Time Out", handymanData.timeOut, margin, yPos + 15);
+        
+        yPos += 25;
+        // Remarks
+        if (handymanData.remarks) {
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "bold");
+            doc.text("Remarks:", margin, yPos);
+            yPos += 5;
+            doc.setFont("helvetica", "normal");
+            const splitRemarks = doc.splitTextToSize(handymanData.remarks, pageWidth - margin * 2);
+            doc.text(splitRemarks, margin, yPos);
+            yPos += splitRemarks.length * 5 + 5;
+        }
+
     } else if (activeForm === 'containerInspection') {
+        // ... (Existing container inspection logic)
         addTitle("7- POINT CONTAINER INSPECTION CHECKLIST");
         addField("Date", containerData.date, margin, yPos);
         addField("Container Number", containerData.containerNo, margin + 60, yPos);
@@ -953,14 +975,27 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
             tableWidth: pageWidth - margin * 2,
             styles: { fontSize: 8 }
         });
-        yPos = (doc as any).lastAutoTable.finalY + 15;
+        yPos = (doc as any).lastAutoTable.finalY + 10;
 
         // Footer
         doc.text(`Car Key: ${vehicleConditionData.carKey}`, margin, yPos);
         doc.text(`Documents Received: ${vehicleConditionData.carDocs}`, margin + 60, yPos);
+        yPos += 10;
+
+        // Remarks
+        if (vehicleConditionData.remarks) {
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "bold");
+            doc.text("Remarks:", margin, yPos);
+            yPos += 5;
+            doc.setFont("helvetica", "normal");
+            const splitRemarks = doc.splitTextToSize(vehicleConditionData.remarks, pageWidth - margin * 2);
+            doc.text(splitRemarks, margin, yPos);
+            yPos += splitRemarks.length * 5 + 5;
+        }
         
     } else {
-        // --- Original Forms ---
+        // ... (Existing logic for other forms)
         if (activeForm === 'packing' || activeForm === 'unpacking') {
              const isPacking = activeForm === 'packing';
              const data = isPacking ? packingData : unpackingData;
@@ -1015,6 +1050,16 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
              });
              yPos = (doc as any).lastAutoTable.finalY + 10;
              doc.text(`Total Volume: ${calculateTotalVolume()} CBM`, margin, yPos);
+             yPos += 10;
+             if (cratingData.notes) {
+                doc.setFont("helvetica", "bold");
+                doc.text("Remarks:", margin, yPos);
+                yPos += 5;
+                doc.setFont("helvetica", "normal");
+                const splitRemarks = doc.splitTextToSize(cratingData.notes, pageWidth - margin * 2);
+                doc.text(splitRemarks, margin, yPos);
+                yPos += splitRemarks.length * 5 + 5;
+             }
         } else if (activeForm === 'electronicList') {
              addTitle("Electronic Items Inventory");
              addField("Client Name", electronicData.clientName, margin, yPos);
@@ -1026,6 +1071,16 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                 theme: 'grid',
                 styles: { fontSize: 8 },
              });
+             yPos = (doc as any).lastAutoTable.finalY + 10;
+             if (electronicData.remarks) {
+                doc.setFont("helvetica", "bold");
+                doc.text("Remarks:", margin, yPos);
+                yPos += 5;
+                doc.setFont("helvetica", "normal");
+                const splitRemarks = doc.splitTextToSize(electronicData.remarks, pageWidth - margin * 2);
+                doc.text(splitRemarks, margin, yPos);
+                yPos += splitRemarks.length * 5 + 5;
+             }
         } else if (activeForm === 'accessorial') {
              addTitle("Accessorial Services Sheet");
              addField("Client Name", accessorialData.clientName, margin, yPos);
@@ -1038,6 +1093,17 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
              yPos += 10;
              if (accessorialData.details.stairCarryFloors) doc.text(`Stair Carry: ${accessorialData.details.stairCarryFloors} Floors`, margin, yPos += 6);
              if (accessorialData.details.longCarryDistance) doc.text(`Long Carry: ${accessorialData.details.longCarryDistance} Meters`, margin, yPos += 6);
+             
+             yPos += 10;
+             if (accessorialData.remarks) {
+                doc.setFont("helvetica", "bold");
+                doc.text("Remarks:", margin, yPos);
+                yPos += 5;
+                doc.setFont("helvetica", "normal");
+                const splitRemarks = doc.splitTextToSize(accessorialData.remarks, pageWidth - margin * 2);
+                doc.text(splitRemarks, margin, yPos);
+                yPos += splitRemarks.length * 5 + 5;
+             }
         } else if (activeForm === 'warehouseReceipt') {
              // Handled by landscape logic if needed, but for now standard portrait fallback or landscape if set
              addTitle("Warehouse Receipt", false);
@@ -1054,6 +1120,48 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
              const selectedStr = r.selectedPackages.sort((a,b)=>a-b).join(', ');
              const splitSel = doc.splitTextToSize(selectedStr, pageWidth - margin*2);
              doc.text(splitSel, margin, yPos);
+             yPos += splitSel.length * 5 + 20;
+
+             // Footer Details
+             if (yPos > pageHeight - 60) { doc.addPage(); yPos = 40; }
+             const startY = yPos;
+             
+             // Column 1
+             doc.setFont("helvetica", "bold"); doc.text("Missing Numbers:", margin, yPos);
+             doc.setFont("helvetica", "normal"); doc.text(r.missingNumbers || '-', margin + 35, yPos); yPos += 6;
+             
+             doc.setFont("helvetica", "bold"); doc.text("Unnumbered:", margin, yPos);
+             doc.setFont("helvetica", "normal"); doc.text(r.unnumbered || '-', margin + 35, yPos); yPos += 6;
+             
+             doc.setFont("helvetica", "bold"); doc.text("Double Number:", margin, yPos);
+             doc.setFont("helvetica", "normal"); doc.text(r.doubleNumber || '-', margin + 35, yPos); yPos += 6;
+             
+             doc.setFont("helvetica", "bold"); doc.text("Checked By:", margin, yPos);
+             doc.setFont("helvetica", "normal"); doc.text(r.checkedBy || '-', margin + 35, yPos);
+
+             yPos = startY;
+             const col2X = margin + 90;
+             
+             // Column 2
+             doc.setFont("helvetica", "bold"); doc.text("Total Crates:", col2X, yPos);
+             doc.setFont("helvetica", "normal"); doc.text(r.totalCrates || '-', col2X + 35, yPos); yPos += 6;
+             
+             doc.setFont("helvetica", "bold"); doc.text("Crate Nos:", col2X, yPos);
+             doc.setFont("helvetica", "normal"); doc.text(r.crateNos || '-', col2X + 35, yPos); yPos += 6;
+             
+             doc.setFont("helvetica", "bold"); doc.text("Total Received:", col2X, yPos);
+             doc.setFont("helvetica", "normal"); doc.text(r.totalReceived || '-', col2X + 35, yPos); yPos += 6;
+             
+             doc.setFont("helvetica", "bold"); doc.text("Total Delivered:", col2X, yPos);
+             doc.setFont("helvetica", "normal"); doc.text(r.totalDelivered || '-', col2X + 35, yPos);
+
+             yPos = startY;
+             const col3X = margin + 180;
+             
+             // Column 3
+             doc.setFont("helvetica", "bold"); doc.text("Truck Details:", col3X, yPos);
+             doc.setFont("helvetica", "normal"); doc.text(r.truckDetails || '-', col3X + 30, yPos);
+             yPos += 30; // Push yPos down for signature area
         }
     }
 
@@ -1247,6 +1355,15 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                                Total Volume: {calculateTotalVolume()} CBM
                            </div>
                        </div>
+                       
+                       <div className="space-y-1 mt-6">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Remarks</label>
+                          <textarea 
+                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm h-20" 
+                            value={cratingData.notes} 
+                            onChange={e => setCratingData({...cratingData, notes: e.target.value})} 
+                          />
+                       </div>
                    </div>
                )}
 
@@ -1271,6 +1388,15 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                                ))}
                            </div>
                         </div>
+                        
+                        <div className="space-y-1 mt-6">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Remarks</label>
+                          <textarea 
+                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm h-20" 
+                            value={electronicData.remarks} 
+                            onChange={e => setElectronicData({...electronicData, remarks: e.target.value})} 
+                          />
+                        </div>
                    </div>
                )}
 
@@ -1293,6 +1419,15 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                                     </div>
                                 </label>
                             ))}
+                        </div>
+                        
+                        <div className="space-y-1 mt-6">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Remarks</label>
+                          <textarea 
+                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm h-20" 
+                            value={accessorialData.remarks} 
+                            onChange={e => setAccessorialData({...accessorialData, remarks: e.target.value})} 
+                          />
                         </div>
                    </div>
                )}
@@ -1339,6 +1474,25 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                            <div className="p-3 bg-slate-50 flex justify-end">
                                 <button onClick={handleSelectAllCurrentPage} className="text-[10px] font-bold text-blue-600 uppercase tracking-widest hover:underline">Select All on Page</button>
                            </div>
+                       </div>
+
+                       {/* Footer Details Inputs */}
+                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-slate-100">
+                            <div className="space-y-4">
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Missing Numbers</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.missingNumbers} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, missingNumbers: e.target.value})} /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Unnumbered</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.unnumbered} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, unnumbered: e.target.value})} /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Double Number</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.doubleNumber} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, doubleNumber: e.target.value})} /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Checked By</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.checkedBy} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, checkedBy: e.target.value})} /></div>
+                            </div>
+                            <div className="space-y-4">
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Crates</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.totalCrates} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, totalCrates: e.target.value})} /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Crate Nos</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.crateNos} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, crateNos: e.target.value})} /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Received</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.totalReceived} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, totalReceived: e.target.value})} /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Delivered</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.totalDelivered} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, totalDelivered: e.target.value})} /></div>
+                            </div>
+                            <div className="space-y-4">
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Truck Details</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.truckDetails} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, truckDetails: e.target.value})} /></div>
+                            </div>
                        </div>
                    </div>
                )}
@@ -1389,6 +1543,15 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                     <div className="grid grid-cols-2 gap-6 mt-6">
                         <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time In</label><input type="time" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={handymanData.timeIn} onChange={e => setHandymanData({...handymanData, timeIn: e.target.value})} /></div>
                         <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time Out</label><input type="time" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={handymanData.timeOut} onChange={e => setHandymanData({...handymanData, timeOut: e.target.value})} /></div>
+                    </div>
+                    
+                    <div className="space-y-1 mt-6">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Remarks</label>
+                      <textarea 
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm h-20" 
+                        value={handymanData.remarks} 
+                        onChange={e => setHandymanData({...handymanData, remarks: e.target.value})} 
+                      />
                     </div>
                  </div>
                )}
@@ -1623,6 +1786,15 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Remarks</label>
+                      <textarea 
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm h-20" 
+                        value={vehicleConditionData.remarks} 
+                        onChange={e => setVehicleConditionData({...vehicleConditionData, remarks: e.target.value})} 
+                      />
                     </div>
                  </div>
                )}

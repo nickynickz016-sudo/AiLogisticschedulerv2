@@ -190,7 +190,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
             </div>
           </div>
           <div className="w-full" style={{ height: '320px', minHeight: '320px' }}>
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={[
                 { name: 'Sun', v: 35 }, { name: 'Mon', v: 65 }, { name: 'Tue', v: 50 }, 
                 { name: 'Wed', v: 80 }, { name: 'Thu', v: 55 }, { name: 'Fri', v: 25 }, { name: 'Sat', v: 40 }
