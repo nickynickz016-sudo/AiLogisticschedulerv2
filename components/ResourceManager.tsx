@@ -32,7 +32,7 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
   });
   const [newVehicle, setNewVehicle] = useState({ name: '', plate: '' });
   
-  // Reset form when modal opens or tab changes to prevent stale state
+  // Reset form when modal opens or tab changes
   useEffect(() => {
     setNewPerson({ 
       name: '', 
@@ -46,25 +46,38 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
 
   const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (activeResTab === 'personnel') {
-      if (!newPerson.name || !newPerson.employee_id || !newPerson.emirates_id) {
-        alert("Name, Employee ID, and Emirates ID are required.");
-        return;
-      }
-      if (newPerson.type === 'Driver' && !newPerson.license_number) {
-        alert("Driver's License Number is required for drivers.");
+      const missingFields = [];
+      if (!newPerson.name) missingFields.push("Full Name");
+      if (!newPerson.employee_id) missingFields.push("Employee ID");
+      if (!newPerson.emirates_id) missingFields.push("Emirates ID");
+      if (newPerson.type === 'Driver' && !newPerson.license_number) missingFields.push("Drivers License Number");
+
+      if (missingFields.length > 0) {
+        alert(`Missing Requirements:\n\nPlease fill in the following mandatory fields:\n• ${missingFields.join('\n• ')}`);
         return;
       }
 
-      onAddPersonnel({
+      // Prepare payload: Remove license_number if not a driver to keep DB clean
+      const personnelPayload = {
         ...newPerson,
-        status: 'Available'
-      });
+        status: 'Available' as const,
+        // Only include license_number if type is Driver, otherwise undefined
+        license_number: newPerson.type === 'Driver' ? newPerson.license_number : undefined
+      };
+
+      onAddPersonnel(personnelPayload);
     } else {
-      if (!newVehicle.name || !newVehicle.plate) {
-        alert("Vehicle Name and Plate Number are required.");
+      const missingFields = [];
+      if (!newVehicle.name) missingFields.push("Vehicle Name/Model");
+      if (!newVehicle.plate) missingFields.push("Plate Number");
+
+      if (missingFields.length > 0) {
+        alert(`Missing Requirements:\n\nPlease fill in the following mandatory fields:\n• ${missingFields.join('\n• ')}`);
         return;
       }
+
       onAddVehicle({
         ...newVehicle,
         status: 'Available'
@@ -224,7 +237,11 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
                      
                      <div className="space-y-1.5">
                         <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Role *</label>
-                        <select className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-medium" value={newPerson.type} onChange={e => setNewPerson({...newPerson, type: e.target.value as any})}>
+                        <select 
+                            className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-medium" 
+                            value={newPerson.type} 
+                            onChange={e => setNewPerson({...newPerson, type: e.target.value as any})}
+                        >
                            <option value="Writer Crew">Writer Crew</option>
                            <option value="Team Leader">Team Leader</option>
                            <option value="Driver">Driver</option>

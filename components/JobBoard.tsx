@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Job, JobStatus, UserProfile, UserRole } from '../types';
 import { Plus, Search, Filter, Trash2, MapPin, MoreVertical, Clock, User, Mail, FileText, Phone, Briefcase, AlertCircle, Truck, RefreshCw, Minimize, Maximize, X } from 'lucide-react';
@@ -45,10 +46,19 @@ export const JobBoard: React.FC<JobBoardProps> = ({ jobs, onAddJob, onDeleteJob,
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newJob.id || !newJob.shipper_name) {
-      alert("Job No. and Shipper Name are required.");
+    
+    // Strict Validation
+    const missingFields = [];
+    if (!newJob.id) missingFields.push("Job No.");
+    if (!newJob.shipper_name) missingFields.push("Shipper Name");
+    if (!newJob.job_date) missingFields.push("Start Date");
+    if (!newJob.duration || newJob.duration < 1) missingFields.push("Valid Duration (min 1 day)");
+
+    if (missingFields.length > 0) {
+      alert(`Please fill in the following mandatory fields:\n\n• ${missingFields.join('\n• ')}`);
       return;
     }
+
     onAddJob({
       ...newJob,
       title: newJob.id,

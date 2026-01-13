@@ -141,8 +141,19 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newJob.id || !newJob.shipper_name || !newJob.main_category) {
-      alert("Job No., Shipper Name, and Type of Job are mandatory.");
+    
+    // Detailed Validation Logic
+    const missingFields: string[] = [];
+
+    if (!newJob.id || newJob.id.trim() === 'AE-') missingFields.push("Job No.");
+    if (!newJob.shipper_name || !newJob.shipper_name.trim()) missingFields.push("Shipper Name");
+    if (!newJob.job_date) missingFields.push("Start Date");
+    if (!newJob.location || !newJob.location.trim()) missingFields.push("Location Address");
+    if (!newJob.duration || newJob.duration < 1) missingFields.push("Valid Duration (Min 1 day)");
+
+    // Popup if mandatory fields are missing
+    if (missingFields.length > 0) {
+      alert(`Submission Failed. Please complete the following mandatory fields:\n\n• ${missingFields.join('\n• ')}`);
       return;
     }
 
@@ -872,7 +883,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                     <input type="email" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.client_email} onChange={e => setNewJob({...newJob, client_email: e.target.value})} placeholder="client@example.com" />
                   </div>
                   <div className="md:col-span-2 space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Location Address</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Location Address *</label>
                     <input 
                       required 
                       type="text" 
