@@ -13,6 +13,7 @@ import { UserManagement } from './components/UserManagement';
 import { JobBoard } from './components/JobBoard';
 import { LoginScreen } from './components/LoginScreen';
 import { HolidayAlertModal } from './components/HolidayAlertModal';
+import { SystemAlertModal } from './components/SystemAlertModal';
 import { WriterDocs } from './components/WriterDocs';
 import { Inventory } from './components/Inventory';
 import { TrackingView } from './components/TrackingView'; // Import TrackingView
@@ -37,6 +38,7 @@ const App: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // New state for mobile
   const [showHolidayAlert, setShowHolidayAlert] = useState(false);
+  const [showSystemAlert, setShowSystemAlert] = useState(false);
 
   // Notification State
   const [notifications, setNotifications] = useState<{id: string, text: string, time: string, read: boolean, type: 'success'|'error'}[]>([]);
@@ -95,19 +97,34 @@ const App: React.FC = () => {
 
   const fetchSettings = useCallback(async () => {
     try {
-        // Updated query to include company_logo
-        const { data, error } = await supabase.from('system_settings').select('daily_job_limits, holidays, company_logo').eq('id', 1).single();
+        // Use select('*') to gracefully handle missing columns in legacy schemas
+        // This prevents the app from crashing if 'system_alert' or other new columns don't exist yet
+        const { data, error } = await supabase.from('system_settings').select('*').eq('id', 1).single();
+        
         if (data) {
           setSettings({
             daily_job_limits: data.daily_job_limits || {},
             holidays: data.holidays || [],
-            company_logo: data.company_logo || undefined
+            company_logo: data.company_logo || undefined,
+            // Fallback for system_alert if column is missing
+            system_alert: data.system_alert || { active: false, title: '', message: '', type: 'info' }
           });
+          
+          // Trigger alert if active and valid
+          if (data.system_alert && data.system_alert.active) {
+            setShowSystemAlert(true);
+          }
         } else if (error) {
-          console.error('Error fetching settings:', error.message);
-          // If settings don't exist, create them
-          const { error: insertError } = await supabase.from('system_settings').insert([{ id: 1, daily_job_limits: {}, holidays: [] as string[] }]);
-          if (insertError) console.error('Error creating initial settings:', insertError.message);
+          // Only attempt to create if the row genuinely doesn't exist (PGRST116)
+          // This prevents "duplicate key value" errors if the fetch failed for other reasons (e.g. column missing)
+          if (error.code === 'PGRST116') {
+             console.log('Settings not found, creating default...');
+             const { error: insertError } = await supabase.from('system_settings').insert([{ id: 1, daily_job_limits: {}, holidays: [] as string[] }]);
+             if (insertError) console.error('Error creating initial settings:', insertError.message);
+             else await fetchSettings(); // Retry fetch
+          } else {
+             console.error('Error fetching settings:', error.message);
+          }
         }
     } catch (err) {
         console.error('Unexpected error fetching settings:', err);
@@ -126,7 +143,7 @@ const App: React.FC = () => {
       fetchUsers();
       fetchPersonnel();
       fetchVehicles();
-      fetchSettings(); // Re-fetch to ensure sync
+      fetchSettings(); // Re-fetch to ensure sync and show alert if needed
 
       // Poll for job updates (alerts)
       const interval = setInterval(fetchJobs, 10000);
@@ -423,6 +440,16 @@ const App: React.FC = () => {
     else await fetchSettings();
   };
 
+  const handleUpdateSystemAlert = async (alertData: SystemSettings['system_alert']) => {
+    const { error } = await supabase.from('system_settings').update({ system_alert: alertData }).eq('id', 1);
+    if (error) {
+      alert(`Error updating system alert: ${error.message}`);
+    } else {
+      await fetchSettings();
+      alert("System Alert Updated Successfully.");
+    }
+  };
+
   const handleUpdatePersonnelStatus = async (id: string, status: Personnel['status']) => {
     const { error } = await supabase.from('personnel').update({ status }).eq('id', id);
     if (error) alert(`Error: ${error.message}`);
@@ -545,6 +572,17 @@ const App: React.FC = () => {
   return (
     <div className="flex min-h-screen bg-[#f8fafc] text-slate-900 font-sans selection:bg-blue-100 selection:text-blue-900 overflow-hidden">
       <HolidayAlertModal isOpen={showHolidayAlert} onClose={() => setShowHolidayAlert(false)} />
+      
+      {/* Global System Alert Modal */}
+      {settings.system_alert && (
+        <SystemAlertModal 
+          isOpen={showSystemAlert && settings.system_alert.active}
+          title={settings.system_alert.title}
+          message={settings.system_alert.message}
+          type={settings.system_alert.type}
+          onClose={() => setShowSystemAlert(false)}
+        />
+      )}
       
       {/* Mobile Sidebar Overlay */}
       {isMobileMenuOpen && (
@@ -760,6 +798,8 @@ const App: React.FC = () => {
                 onUpdateStatus={handleUpdateUserStatus}
                 onUpdateUser={handleUpdateUser}
                 isAdmin={currentUser.role === UserRole.ADMIN}
+                systemAlert={settings.system_alert}
+                onUpdateSystemAlert={handleUpdateSystemAlert}
               />
             )}
             {activeTab === 'ai' && <AIPlanner jobs={jobs} />}

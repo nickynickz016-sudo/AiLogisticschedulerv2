@@ -170,4 +170,10 @@ export interface SystemSettings {
   daily_job_limits: Record<string, number>; // date -> max jobs
   holidays: string[]; // array of ISO date strings (YYYY-MM-DD)
   company_logo?: string; // Base64 string of the logo
+  system_alert?: {
+    active: boolean;
+    title: string;
+    message: string;
+    type: 'info' | 'warning' | 'error' | 'maintenance';
+  };
 }

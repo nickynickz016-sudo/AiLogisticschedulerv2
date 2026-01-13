@@ -1,14 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
-import { UserProfile, UserRole, UserPermissions } from '../types';
-import { UserPlus, ShieldAlert, ToggleLeft, ToggleRight, User, Fingerprint, Mail, CheckCircle, X, Lock, Key, Shield, Edit2, Save } from 'lucide-react';
+import { UserProfile, UserRole, UserPermissions, SystemSettings } from '../types';
+import { UserPlus, ShieldAlert, ToggleLeft, ToggleRight, User, Fingerprint, Mail, CheckCircle, X, Lock, Key, Shield, Edit2, Save, Radio, MessageSquare, AlertTriangle, Power } from 'lucide-react';
 
 interface UserManagementProps {
   users: UserProfile[];
   onAddUser: (user: any) => void;
   onUpdateStatus: (id: string, status: 'Active' | 'Disabled') => void;
-  onUpdateUser: (user: UserProfile) => void; // New prop for updating user
+  onUpdateUser: (user: UserProfile) => void; 
   isAdmin: boolean;
+  systemAlert?: SystemSettings['system_alert'];
+  onUpdateSystemAlert: (alert: SystemSettings['system_alert']) => void;
 }
 
 const DEFAULT_PERMISSIONS: UserPermissions = {
@@ -43,7 +45,9 @@ const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
   ai: 'AI Planner',
 };
 
-export const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser, onUpdateStatus, onUpdateUser, isAdmin }) => {
+export const UserManagement: React.FC<UserManagementProps> = ({ 
+  users, onAddUser, onUpdateStatus, onUpdateUser, isAdmin, systemAlert, onUpdateSystemAlert 
+}) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [newUser, setNewUser] = useState({
@@ -58,6 +62,29 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser
   });
 
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+
+  // System Alert State
+  const [alertForm, setAlertForm] = useState({
+    active: false,
+    title: 'System Maintenance',
+    message: 'The system is currently undergoing scheduled maintenance.',
+    type: 'maintenance' as 'info' | 'warning' | 'error' | 'maintenance'
+  });
+
+  useEffect(() => {
+    if (systemAlert) {
+      setAlertForm({
+        active: systemAlert.active,
+        title: systemAlert.title || 'System Alert',
+        message: systemAlert.message || '',
+        type: systemAlert.type || 'info'
+      });
+    }
+  }, [systemAlert]);
+
+  const handleAlertSave = () => {
+    onUpdateSystemAlert(alertForm);
+  };
 
   if (!isAdmin) {
     return (
@@ -148,6 +175,81 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onAddUser
           <UserPlus className="w-5 h-5" />
           Create Account
         </button>
+      </div>
+
+      {/* SYSTEM ALERT CONFIGURATION PANEL */}
+      <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-sm">
+        <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+           <div className="p-2 bg-amber-50 rounded-xl">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+           </div>
+           <div>
+              <h3 className="font-bold text-slate-800 uppercase tracking-widest">System Status Broadcast</h3>
+              <p className="text-xs text-slate-400 font-medium">Alert all users about maintenance or outages</p>
+           </div>
+           <div className="ml-auto flex items-center gap-2">
+              <span className={`text-[10px] font-bold uppercase tracking-widest ${alertForm.active ? 'text-emerald-600' : 'text-slate-400'}`}>
+                {alertForm.active ? 'Broadcasting' : 'Inactive'}
+              </span>
+              <button 
+                onClick={() => setAlertForm({...alertForm, active: !alertForm.active})}
+                className={`w-12 h-6 rounded-full transition-colors flex items-center px-1 ${alertForm.active ? 'bg-emerald-500' : 'bg-slate-300'}`}
+              >
+                <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${alertForm.active ? 'translate-x-6' : 'translate-x-0'}`} />
+              </button>
+           </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+           <div className="space-y-4">
+              <div className="space-y-1.5">
+                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Alert Title</label>
+                 <input 
+                    type="text" 
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:ring-1 focus:ring-blue-500"
+                    value={alertForm.title}
+                    onChange={(e) => setAlertForm({...alertForm, title: e.target.value})}
+                    placeholder="e.g. System Maintenance"
+                 />
+              </div>
+              <div className="space-y-2">
+                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Alert Type</label>
+                 <div className="grid grid-cols-2 gap-3">
+                    {['maintenance', 'error', 'warning', 'info'].map((type) => (
+                       <button
+                          key={type}
+                          onClick={() => setAlertForm({...alertForm, type: type as any})}
+                          className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest border transition-all ${
+                             alertForm.type === type 
+                             ? 'bg-slate-800 text-white border-slate-800' 
+                             : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                          }`}
+                       >
+                          {type}
+                       </button>
+                    ))}
+                 </div>
+              </div>
+           </div>
+           
+           <div className="space-y-4 flex flex-col">
+              <div className="space-y-1.5 flex-1">
+                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Message Content</label>
+                 <textarea 
+                    className="w-full h-full min-h-[100px] px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 outline-none focus:ring-1 focus:ring-blue-500 resize-none leading-relaxed"
+                    value={alertForm.message}
+                    onChange={(e) => setAlertForm({...alertForm, message: e.target.value})}
+                    placeholder="Enter the explanation for users..."
+                 />
+              </div>
+              <button 
+                onClick={handleAlertSave}
+                className="w-full py-3 bg-slate-900 text-white font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-slate-800 transition-all shadow-md flex items-center justify-center gap-2"
+              >
+                <Save className="w-4 h-4" /> Save Alert Settings
+              </button>
+           </div>
+        </div>
       </div>
 
       <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden">
