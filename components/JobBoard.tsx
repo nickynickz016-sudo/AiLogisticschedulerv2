@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { Job, JobStatus, UserProfile, UserRole } from '../types';
-import { Plus, Search, Filter, Trash2, MapPin, MoreVertical, Clock, User, Mail } from 'lucide-react';
+import { Plus, Search, Filter, Trash2, MapPin, MoreVertical, Clock, User, Mail, FileText, Phone, Briefcase, AlertCircle, Truck, RefreshCw, Minimize, Maximize, X } from 'lucide-react';
 import { JobDetailModal } from './JobDetailModal';
 
 interface JobBoardProps {
@@ -181,41 +180,41 @@ export const JobBoard: React.FC<JobBoardProps> = ({ jobs, onAddJob, onDeleteJob,
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-8 border-b shrink-0">
-              <h3 className="text-xl font-bold text-slate-800">Request New Job</h3>
-              <p className="text-sm text-slate-500">Admin approval is required for all new jobs.</p>
+            <div className="p-8 border-b shrink-0 bg-white">
+              <h3 className="text-xl font-bold text-blue-600 uppercase tracking-widest">Request New Job</h3>
+              <p className="text-sm text-slate-500 font-medium">Admin approval is required for all new jobs.</p>
             </div>
             <form onSubmit={handleSubmit} className="p-8 space-y-8 overflow-y-auto custom-scrollbar">
               <section>
                 <h4 className="text-sm font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">Core Details</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Job No. *</label>
-                    <input required type="text" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g., AE-1234" value={newJob.id} onChange={e => setNewJob({...newJob, id: e.target.value})} />
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Job No. *</label>
+                    <input required type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400" placeholder="e.g., AE-1234" value={newJob.id} onChange={e => setNewJob({...newJob, id: e.target.value})} />
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Shipper Name *</label>
-                    <input required type="text" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g., John Doe" value={newJob.shipper_name} onChange={e => setNewJob({...newJob, shipper_name: e.target.value})} />
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Shipper Name *</label>
+                    <input required type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400" placeholder="e.g., John Doe" value={newJob.shipper_name} onChange={e => setNewJob({...newJob, shipper_name: e.target.value})} />
                   </div>
-                   <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Start Date *</label>
-                    <input required type="date" min={new Date().toISOString().split('T')[0]} className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={newJob.job_date} onChange={e => setNewJob({...newJob, job_date: e.target.value})} />
+                   <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Start Date *</label>
+                    <input required type="date" min={new Date().toISOString().split('T')[0]} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400" value={newJob.job_date} onChange={e => setNewJob({...newJob, job_date: e.target.value})} />
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Duration (Days)</label>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Duration (Days)</label>
                     <input 
                         required 
                         type="number" 
                         min="1" 
                         max="30"
-                        className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" 
+                        className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400" 
                         value={newJob.duration} 
                         onChange={e => setNewJob({...newJob, duration: parseInt(e.target.value) || 1})} 
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Priority</label>
-                    <select className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" value={newJob.priority} onChange={e => setNewJob({...newJob, priority: e.target.value})}>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Priority</label>
+                    <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400" value={newJob.priority} onChange={e => setNewJob({...newJob, priority: e.target.value})}>
                       <option value="LOW">Low</option>
                       <option value="MEDIUM">Medium</option>
                       <option value="HIGH">High</option>
@@ -228,31 +227,31 @@ export const JobBoard: React.FC<JobBoardProps> = ({ jobs, onAddJob, onDeleteJob,
                 <h4 className="text-sm font-bold text-slate-800 mb-4 pb-2 border-b border-slate-100">Additional Information</h4>
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Client Mobile</label>
-                            <input type="tel" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" placeholder="+971..." value={newJob.shipper_phone} onChange={e => setNewJob({...newJob, shipper_phone: e.target.value})} />
+                        <div className="space-y-1.5">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Client Mobile</label>
+                            <input type="tel" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400" placeholder="+971..." value={newJob.shipper_phone} onChange={e => setNewJob({...newJob, shipper_phone: e.target.value})} />
                         </div>
-                        <div>
-                            <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Client Email</label>
-                            <input type="email" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" placeholder="client@example.com" value={newJob.client_email} onChange={e => setNewJob({...newJob, client_email: e.target.value})} />
+                        <div className="space-y-1.5">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Client Email</label>
+                            <input type="email" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400" placeholder="client@example.com" value={newJob.client_email} onChange={e => setNewJob({...newJob, client_email: e.target.value})} />
                         </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Location</label>
-                      <input type="text" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Bay 4" value={newJob.location} onChange={e => setNewJob({...newJob, location: e.target.value})} />
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Location</label>
+                      <input type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400" placeholder="Bay 4" value={newJob.location} onChange={e => setNewJob({...newJob, location: e.target.value})} />
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Description</label>
-                      <textarea rows={3} className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 outline-none resize-none" placeholder="Additional details..." value={newJob.description} onChange={e => setNewJob({...newJob, description: e.target.value})}></textarea>
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Description</label>
+                      <textarea rows={3} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none resize-none placeholder:text-slate-400" placeholder="Additional details..." value={newJob.description} onChange={e => setNewJob({...newJob, description: e.target.value})}></textarea>
                     </div>
                 </div>
               </section>
 
               <div className="flex gap-4 pt-4 shrink-0">
-                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-3 font-semibold text-slate-500 hover:bg-slate-50 rounded-xl transition-colors">
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-4 font-bold text-slate-400 hover:text-slate-600 rounded-xl transition-all uppercase text-[10px] tracking-widest">
                   Cancel
                 </button>
-                <button type="submit" className="flex-1 py-3 font-semibold text-white bg-blue-600 rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700 transition-colors">
+                <button type="submit" className="flex-1 py-4 font-bold text-white bg-blue-600 rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700 transition-colors uppercase text-[10px] tracking-widest">
                   Submit Request
                 </button>
               </div>

@@ -1,6 +1,5 @@
-
 import React, { useState, useRef, useEffect } from 'react';
-import { FileText, Package, Box, Truck, Eraser, PenTool, Plus, Trash2, Printer, ClipboardCheck, Layers, ArrowLeftRight, ChevronLeft, ChevronRight, CheckSquare, Square, Monitor, Upload, Image as ImageIcon, Wrench, ShieldCheck, PenSquare, Car } from 'lucide-react';
+import { FileText, Package, Box, Truck, Eraser, PenTool, Plus, Trash2, Printer, ClipboardCheck, Layers, ArrowLeftRight, ChevronLeft, ChevronRight, CheckSquare, Square, Monitor, Upload, Image as ImageIcon, Wrench, ShieldCheck } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import { UserProfile } from '../types';
@@ -32,13 +31,17 @@ interface UnpackingForm {
 
 interface DeliveryItem {
   id: string;
+  pkgNo: string;
   description: string;
   condition: string;
   quantity: number;
+  volume: number;
+  weight: number;
 }
 
 interface CratingItem {
   id: string;
+  pkgNo: string;
   description: string;
   l: number;
   w: number;
@@ -164,68 +167,48 @@ interface ContainerInspectionForm {
   date: string;
   containerNo: string;
   sealNo: string;
-  inspectedBy: string;
-  verifiedBy: string;
-  remarks: string;
-  points: {
-    p1_structuralDamage: boolean;
-    p1_supportBeams: boolean;
-    p1_foreignObjects: boolean;
-    p2_lockingMechanisms: boolean;
-    p2_looseBolts: boolean;
-    p2_hingesSecure: boolean;
-    p3_repairBeams: boolean;
-    p3_insideRepairs: boolean;
-    p4_repairBeams: boolean;
-    p4_insideRepairs: boolean;
-    p5_corrugated: boolean;
-    p5_interiorBlocks: boolean;
-    p5_ventsVisible: boolean;
-    p6_supportBeams: boolean;
-    p6_ventHoles: boolean;
-    p6_foreignObjects: boolean;
-    p7_floorFlat: boolean;
-    p7_floorUniform: boolean;
-    p7_floorRepairs: boolean;
-    p8_sealAffixed: boolean;
-    p8_sealISO: boolean;
-    p8_sealBroken: boolean;
-  }
-}
-
-interface VehicleConditionForm {
-  // Customer Info
-  customerName: string; address: string; phone: string;
-  dealerName: string; dealerAddress: string; dealerPhone: string;
-  // Vehicle Info
-  year: string; make: string; model: string; color: string;
-  style: string; body: string; vin: string; license: string; mileage: string;
-  // Options
-  options: Record<string, boolean>;
-  // Damage Zones 1-21
-  damageZones: Record<string, string>;
-  // Interior
-  interiorGeneral: 'Clean' | 'Average' | 'Dirty';
-  interiorSpecific: Record<string, { good: boolean; worn: boolean; burns: boolean; rips: boolean; stain: boolean }>;
-  interiorDash: { dent: boolean; crack: boolean; holes: boolean };
-  // Mechanical
-  mechanical: {
-    engine: 'Smooth' | 'Rough' | 'Knock' | '';
-    trans: 'Smooth OK' | 'Slips' | '';
-    airBlowsHot: boolean;
-    brakes: 'Seems OK' | 'Difficult' | '';
-    exhaust: 'Seems OK' | 'Needs Replacement' | '';
-    powerMalfunction: { windows: boolean; seats: boolean; locks: boolean; roof: boolean };
-    soundInoperative: boolean;
+  checkpoints: {
+    outsideUndercarriage: {
+      structuralDamage: boolean;
+      supportBeams: boolean;
+      foreignObjects: boolean;
+    };
+    insideOutsideDoors: {
+      locksSecure: boolean;
+      looseBolts: boolean;
+      hingesSecure: boolean;
+    };
+    rightSide: {
+      unusualRepairs: boolean;
+      repairsVisible: boolean;
+    };
+    leftSide: {
+      unusualRepairs: boolean;
+      repairsVisible: boolean;
+    };
+    frontWall: {
+      corrugated: boolean;
+      blocksVisible: boolean;
+      ventsVisible: boolean;
+    };
+    ceilingRoof: {
+      supportBeams: boolean;
+      ventilationHoles: boolean;
+      foreignObjects: boolean;
+    };
+    floor: {
+      flatFloor: boolean;
+      uniformHeight: boolean;
+      unusualRepairs: boolean;
+    };
+    sealVerification: {
+      properlyAffixed: boolean;
+      meetsISO: boolean;
+      notBroken: boolean;
+    };
   };
-  // Tires
-  tires: Record<string, 'Good' | 'Fair' | 'Poor' | ''>;
-  spareMissing: boolean;
-  // Footer
-  carKey: 'Yes' | 'No';
-  carDocs: 'Yes' | 'No';
-  date: string;
   remarks: string;
+  certified: boolean;
 }
 
 interface WriterDocsProps {
@@ -236,7 +219,7 @@ interface WriterDocsProps {
 }
 
 export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAdmin, currentUser }) => {
-  const [activeForm, setActiveForm] = useState<'packing' | 'unpacking' | 'delivery' | 'crating' | 'electronicList' | 'accessorial' | 'warehouseReceipt' | 'handyman' | 'containerInspection' | 'vehicleCondition'>('packing');
+  const [activeForm, setActiveForm] = useState<'packing' | 'unpacking' | 'delivery' | 'crating' | 'electronicList' | 'accessorial' | 'warehouseReceipt' | 'handyman' | 'containerInspection'>('packing');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Forms State ---
@@ -253,17 +236,38 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
   });
 
   const [deliveryData, setDeliveryData] = useState({
-    clientName: '', jobId: '', date: new Date().toISOString().split('T')[0], truckNo: '', notes: ''
+    clientName: '', 
+    jobId: '', 
+    date: new Date().toISOString().split('T')[0], 
+    truckNo: '', 
+    notes: '',
+    deliveryAddress: '',
+    modeOfShipment: 'Sea'
   });
   const [deliveryItems, setDeliveryItems] = useState<DeliveryItem[]>([]);
 
   const [cratingData, setCratingData] = useState({
-    clientName: '', jobId: '', date: new Date().toISOString().split('T')[0], notes: '' // notes acts as remarks
+    clientName: '', 
+    jobId: '', 
+    date: new Date().toISOString().split('T')[0], 
+    address: '',
+    packingDate: '',
+    loadingDate: '',
+    finalDestination: '',
+    modeOfShipment: 'Sea',
+    notes: '' 
   });
   const [crates, setCrates] = useState<CratingItem[]>([]);
 
   const [electronicData, setElectronicData] = useState({
-    clientName: '', jobId: '', date: new Date().toISOString().split('T')[0], remarks: ''
+    clientName: '', 
+    jobId: '', 
+    date: new Date().toISOString().split('T')[0], 
+    address: '',
+    packingDate: '',
+    loadingDate: '',
+    modeOfShipment: 'Sea',
+    remarks: ''
   });
   const [electronicItems, setElectronicItems] = useState<ElectronicItem[]>([]);
 
@@ -305,50 +309,22 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
     remarks: ''
   });
 
-  const [containerData, setContainerData] = useState<ContainerInspectionForm>({
-    date: new Date().toISOString().split('T')[0], containerNo: '', sealNo: '', inspectedBy: '', verifiedBy: '', remarks: '',
-    points: {
-      p1_structuralDamage: false, p1_supportBeams: false, p1_foreignObjects: false,
-      p2_lockingMechanisms: false, p2_looseBolts: false, p2_hingesSecure: false,
-      p3_repairBeams: false, p3_insideRepairs: false,
-      p4_repairBeams: false, p4_insideRepairs: false,
-      p5_corrugated: false, p5_interiorBlocks: false, p5_ventsVisible: false,
-      p6_supportBeams: false, p6_ventHoles: false, p6_foreignObjects: false,
-      p7_floorFlat: false, p7_floorUniform: false, p7_floorRepairs: false,
-      p8_sealAffixed: false, p8_sealISO: false, p8_sealBroken: false
-    }
-  });
-
-  const [vehicleConditionData, setVehicleConditionData] = useState<VehicleConditionForm>({
-    customerName: '', address: '', phone: '',
-    dealerName: '', dealerAddress: '', dealerPhone: '',
-    year: '', make: '', model: '', color: '', style: '', body: '', vin: '', license: '', mileage: '',
-    options: {
-        abs: false, bedliner: false, cruise: false, moonRoof: false, powerWin: false, wideTires: false,
-        airCond: false, camperShell: false, customBumper: false, powerLocks: false, roofRack: false, sportWheels: false,
-        radio: false, cd: false, leather: false, powerSeats: false, runningBoards: false, stereo: false,
-        autoTrans: false, cdChanger: false, luxuryPkg: false, powerSteering: false, rearWindow: false, towPkg: false, tiltWheel: false
+  const [containerInspectionData, setContainerInspectionData] = useState<ContainerInspectionForm>({
+    date: new Date().toISOString().split('T')[0],
+    containerNo: '',
+    sealNo: '',
+    checkpoints: {
+        outsideUndercarriage: { structuralDamage: false, supportBeams: false, foreignObjects: false },
+        insideOutsideDoors: { locksSecure: false, looseBolts: false, hingesSecure: false },
+        rightSide: { unusualRepairs: false, repairsVisible: false },
+        leftSide: { unusualRepairs: false, repairsVisible: false },
+        frontWall: { corrugated: false, blocksVisible: false, ventsVisible: false },
+        ceilingRoof: { supportBeams: false, ventilationHoles: false, foreignObjects: false },
+        floor: { flatFloor: false, uniformHeight: false, unusualRepairs: false },
+        sealVerification: { properlyAffixed: false, meetsISO: false, notBroken: false }
     },
-    damageZones: Object.fromEntries(Array.from({length: 21}, (_, i) => [(i+1).toString(), ''])),
-    interiorGeneral: 'Average',
-    interiorSpecific: {
-        frontCarpet: { good: false, worn: false, burns: false, rips: false, stain: false },
-        rearCarpet: { good: false, worn: false, burns: false, rips: false, stain: false },
-        frontSeat: { good: false, worn: false, burns: false, rips: false, stain: false },
-        rearSeat: { good: false, worn: false, burns: false, rips: false, stain: false },
-        headliner: { good: false, worn: false, burns: false, rips: false, stain: false },
-        doorPanels: { good: false, worn: false, burns: false, rips: false, stain: false },
-    },
-    interiorDash: { dent: false, crack: false, holes: false },
-    mechanical: {
-        engine: '', trans: '', airBlowsHot: false, brakes: '', exhaust: '',
-        powerMalfunction: { windows: false, seats: false, locks: false, roof: false },
-        soundInoperative: false
-    },
-    tires: { rightFront: '', leftFront: '', rightRear: '', leftRear: '', spare: '' },
-    spareMissing: false,
-    carKey: 'Yes', carDocs: 'Yes', date: new Date().toISOString().split('T')[0],
-    remarks: ''
+    remarks: '',
+    certified: false
   });
   
   // Warehouse UI State
@@ -435,8 +411,16 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
   };
 
   // --- Helpers ---
-  const addDeliveryItem = () => setDeliveryItems([...deliveryItems, { id: Date.now().toString(), description: '', condition: 'Good', quantity: 1 }]);
-  const addCrate = () => setCrates([...crates, { id: Date.now().toString(), description: '', l: 0, w: 0, h: 0 }]);
+  const addDeliveryItem = () => setDeliveryItems([...deliveryItems, { 
+    id: Date.now().toString(), 
+    pkgNo: '', 
+    description: '', 
+    condition: 'Good', 
+    quantity: 1, 
+    volume: 0, 
+    weight: 0 
+  }]);
+  const addCrate = () => setCrates([...crates, { id: Date.now().toString(), pkgNo: '', description: '', l: 0, w: 0, h: 0 }]);
   const addElectronicItem = () => setElectronicItems([...electronicItems, { id: Date.now().toString(), description: '', make: '', model: '', serial: '', condition: 'Good' }]);
 
   const removeDeliveryItem = (id: string) => setDeliveryItems(deliveryItems.filter(i => i.id !== id));
@@ -494,15 +478,34 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
         setUnpackingData({ clientName: '', jobId: '', date: today, walkThrough: { noDamage: false, itemsCheck: false, foundDamage: false }, clientNotes: '' });
         break;
       case 'delivery':
-        setDeliveryData({ clientName: '', jobId: '', date: today, truckNo: '', notes: '' });
+        setDeliveryData({ clientName: '', jobId: '', date: today, truckNo: '', notes: '', deliveryAddress: '', modeOfShipment: 'Sea' });
         setDeliveryItems([]);
         break;
       case 'crating':
-        setCratingData({ clientName: '', jobId: '', date: today, notes: '' });
+        setCratingData({ 
+            clientName: '', 
+            jobId: '', 
+            date: today,
+            address: '',
+            packingDate: '',
+            loadingDate: '',
+            finalDestination: '',
+            modeOfShipment: 'Sea',
+            notes: '' 
+        });
         setCrates([]);
         break;
       case 'electronicList':
-        setElectronicData({ clientName: '', jobId: '', date: today, remarks: '' });
+        setElectronicData({ 
+            clientName: '', 
+            jobId: '', 
+            date: today,
+            address: '',
+            packingDate: '',
+            loadingDate: '',
+            modeOfShipment: 'Sea',
+            remarks: '' 
+        });
         setElectronicItems([]);
         break;
       case 'accessorial':
@@ -520,22 +523,19 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
         });
         break;
       case 'containerInspection':
-        setContainerData({
-            date: today, containerNo: '', sealNo: '', inspectedBy: '', verifiedBy: '', remarks: '',
-            points: { p1_structuralDamage: false, p1_supportBeams: false, p1_foreignObjects: false, p2_lockingMechanisms: false, p2_looseBolts: false, p2_hingesSecure: false, p3_repairBeams: false, p3_insideRepairs: false, p4_repairBeams: false, p4_insideRepairs: false, p5_corrugated: false, p5_interiorBlocks: false, p5_ventsVisible: false, p6_supportBeams: false, p6_ventHoles: false, p6_foreignObjects: false, p7_floorFlat: false, p7_floorUniform: false, p7_floorRepairs: false, p8_sealAffixed: false, p8_sealISO: false, p8_sealBroken: false }
-        });
-        break;
-      case 'vehicleCondition':
-        setVehicleConditionData({
-            customerName: '', address: '', phone: '', dealerName: '', dealerAddress: '', dealerPhone: '',
-            year: '', make: '', model: '', color: '', style: '', body: '', vin: '', license: '', mileage: '',
-            options: { abs: false, bedliner: false, cruise: false, moonRoof: false, powerWin: false, wideTires: false, airCond: false, camperShell: false, customBumper: false, powerLocks: false, roofRack: false, sportWheels: false, radio: false, cd: false, leather: false, powerSeats: false, runningBoards: false, stereo: false, autoTrans: false, cdChanger: false, luxuryPkg: false, powerSteering: false, rearWindow: false, towPkg: false, tiltWheel: false },
-            damageZones: Object.fromEntries(Array.from({length: 21}, (_, i) => [(i+1).toString(), ''])),
-            interiorGeneral: 'Average',
-            interiorSpecific: { frontCarpet: { good: false, worn: false, burns: false, rips: false, stain: false }, rearCarpet: { good: false, worn: false, burns: false, rips: false, stain: false }, frontSeat: { good: false, worn: false, burns: false, rips: false, stain: false }, rearSeat: { good: false, worn: false, burns: false, rips: false, stain: false }, headliner: { good: false, worn: false, burns: false, rips: false, stain: false }, doorPanels: { good: false, worn: false, burns: false, rips: false, stain: false } },
-            interiorDash: { dent: false, crack: false, holes: false },
-            mechanical: { engine: '', trans: '', airBlowsHot: false, brakes: '', exhaust: '', powerMalfunction: { windows: false, seats: false, locks: false, roof: false }, soundInoperative: false },
-            tires: { rightFront: '', leftFront: '', rightRear: '', leftRear: '', spare: '' }, spareMissing: false, carKey: 'Yes', carDocs: 'Yes', date: today, remarks: ''
+        setContainerInspectionData({
+            date: today, containerNo: '', sealNo: '',
+            checkpoints: {
+                outsideUndercarriage: { structuralDamage: false, supportBeams: false, foreignObjects: false },
+                insideOutsideDoors: { locksSecure: false, looseBolts: false, hingesSecure: false },
+                rightSide: { unusualRepairs: false, repairsVisible: false },
+                leftSide: { unusualRepairs: false, repairsVisible: false },
+                frontWall: { corrugated: false, blocksVisible: false, ventsVisible: false },
+                ceilingRoof: { supportBeams: false, ventilationHoles: false, foreignObjects: false },
+                floor: { flatFloor: false, uniformHeight: false, unusualRepairs: false },
+                sealVerification: { properlyAffixed: false, meetsISO: false, notBroken: false }
+            },
+            remarks: '', certified: false
         });
         break;
     }
@@ -653,7 +653,7 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                 { l: "Assembly", k: "assembly" }, { l: "Disassembly", k: "disassembly" }, { l: "Wardrobes", k: "wardrobes" }
             ]},
             { title: "Valet / Maid Services", items: [
-                { l: "House cleaning", k: "houseCleaning" }, { l: "Laundry", k: "laundry" },
+                { l: "House cleaning", k: "house cleaning" }, { l: "Laundry", k: "laundry" },
                 { l: "Packing Personal Clothes", k: "packingClothes" }, { l: "Closet Arrangements", k: "closetArrangements" }
             ]},
             { title: "Outdoor", items: [
@@ -712,288 +712,117 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
         }
 
     } else if (activeForm === 'containerInspection') {
-        // ... (Existing container inspection logic)
-        addTitle("7- POINT CONTAINER INSPECTION CHECKLIST");
-        addField("Date", containerData.date, margin, yPos);
-        addField("Container Number", containerData.containerNo, margin + 60, yPos);
-        addField("Seal Number", containerData.sealNo, margin + 120, yPos);
-        yPos += 25;
+        addTitle("7-POINT CONTAINER INSPECTION");
+        addField("Date", containerInspectionData.date, margin, yPos);
+        addField("Container No", containerInspectionData.containerNo, margin + 60, yPos);
+        addField("Seal No", containerInspectionData.sealNo, margin + 120, yPos);
+        yPos += 20;
 
-        const points = [
-            { id: 1, title: "Outside /Under Carriage", checks: [
-                { l: "Check for Structural damage (dents, holes, repairs)", k: "p1_structuralDamage" },
-                { l: "Support beams are visible", k: "p1_supportBeams" },
-                { l: "Ensure no foreign objects are mounted on the container", k: "p1_foreignObjects" }
-            ]},
-            { id: 2, title: "Inside/Outside Doors", checks: [
-                { l: "Ensure locks and locking mechanisms are secure and reliable", k: "p2_lockingMechanisms" },
-                { l: "Check for loose bolts", k: "p2_looseBolts" },
-                { l: "Ensure hinges are secure and reliable", k: "p2_hingesSecure" }
-            ]},
-            { id: 3, title: "Right Side", checks: [
-                { l: "Look for unusual repairs to structural beams", k: "p3_repairBeams" },
-                { l: "Repairs to the inside wall must also be visible on outside", k: "p3_insideRepairs" }
-            ]},
-            { id: 4, title: "Left Side", checks: [
-                { l: "Look for unusual repairs to structural beams", k: "p4_repairBeams" },
-                { l: "Repairs to the inside wall must also be visible on outside", k: "p4_insideRepairs" }
-            ]},
-            { id: 5, title: "Front Wall", checks: [
-                { l: "The front wall should be made of corrugated material", k: "p5_corrugated" },
-                { l: "Interior blocks in top corners visible. Missing blocks abnormal.", k: "p5_interiorBlocks" },
-                { l: "Ensure vents are visible", k: "p5_ventsVisible" }
-            ]},
-            { id: 6, title: "Ceiling / Roof", checks: [
-                { l: "Ensure Support beams are visible", k: "p6_supportBeams" },
-                { l: "Ensure ventilation holes are visible and not covered", k: "p6_ventHoles" },
-                { l: "Ensure no foreign objects are mounted on the container", k: "p6_foreignObjects" }
-            ]},
-            { id: 7, title: "Floor", checks: [
-                { l: "Ensure the floor of the container is flat", k: "p7_floorFlat" },
-                { l: "Ensure the floor is uniform in height", k: "p7_floorUniform" },
-                { l: "Look for unusual repairs to the floor", k: "p7_floorRepairs" }
-            ]},
-            { id: 8, title: "Seal Verification", checks: [
-                { l: "Seal properly affixed", k: "p8_sealAffixed" },
-                { l: "Seal meets or exceeds Pas ISO17712", k: "p8_sealISO" },
-                { l: "Ensure seal is not broken or damaged", k: "p8_sealBroken" }
-            ]}
+        const sections = [
+            { title: "1. Outside / Under Carriage", items: [
+                { l: "Check for Structural damage (dents, holes, repairs)", k: "structuralDamage" },
+                { l: "Support beams are visible", k: "supportBeams" },
+                { l: "Ensure no foreign objects are mounted on the container", k: "foreignObjects" }
+            ], key: "outsideUndercarriage" },
+            { title: "2. Inside / Outside Doors", items: [
+                { l: "Ensure locks and locking mechanisms are secure", k: "locksSecure" },
+                { l: "Check for loose bolts", k: "looseBolts" },
+                { l: "Ensure hinges are secure and reliable", k: "hingesSecure" }
+            ], key: "insideOutsideDoors" },
+            { title: "3. Right Side", items: [
+                { l: "Look for unusual repairs to structural beams", k: "unusualRepairs" },
+                { l: "Repairs to inside wall must be visible outside & vice versa", k: "repairsVisible" }
+            ], key: "rightSide" },
+            { title: "4. Left Side", items: [
+                { l: "Look for unusual repairs to structural beams", k: "unusualRepairs" },
+                { l: "Repairs to inside wall must be visible outside & vice versa", k: "repairsVisible" }
+            ], key: "leftSide" },
+            { title: "5. Front Wall", items: [
+                { l: "Front wall is made of corrugated material", k: "corrugated" },
+                { l: "Interior blocks in top corners visible (missing/false is abnormal)", k: "blocksVisible" },
+                { l: "Ensure vents are visible", k: "ventsVisible" }
+            ], key: "frontWall" },
+            { title: "6. Ceiling / Roof", items: [
+                { l: "Ensure Support beams are visible", k: "supportBeams" },
+                { l: "Ensure ventilation holes are visible (not covered/absent)", k: "ventilationHoles" },
+                { l: "Ensure no foreign objects are mounted on container", k: "foreignObjects" }
+            ], key: "ceilingRoof" },
+            { title: "7. Floor", items: [
+                { l: "Ensure floor is flat", k: "flatFloor" },
+                { l: "Ensure floor is uniform in height", k: "uniformHeight" },
+                { l: "Look for unusual repairs to the floor", k: "unusualRepairs" }
+            ], key: "floor" },
+            { title: "8. Seal Verification", items: [
+                { l: "Seal properly affixed", k: "properlyAffixed" },
+                { l: "Seal meets or exceeds PAS ISO17712", k: "meetsISO" },
+                { l: "Ensure seal is not broken or damaged", k: "notBroken" }
+            ], key: "sealVerification" }
         ];
 
         let colX = margin;
         let colY = yPos;
         let maxHeight = 0;
 
-        points.forEach((p, idx) => {
+        sections.forEach((section, idx) => {
             if (idx % 2 === 0 && idx !== 0) {
                 colX = margin;
-                colY += maxHeight + 10;
+                colY += maxHeight + 15;
                 maxHeight = 0;
-            } else if (idx % 2 !== 0) {
-                colX = margin + 95;
+                
+                // Check page break
+                if (colY > pageHeight - 50) {
+                    doc.addPage();
+                    colY = 20;
+                }
             }
 
             let tempY = colY;
-            doc.setFillColor(240, 240, 240);
-            doc.rect(colX, tempY, 90, 6, 'F');
             doc.setFont("helvetica", "bold");
             doc.setFontSize(9);
-            doc.text(`${p.id}. ${p.title}`, colX + 2, tempY + 4);
-            tempY += 10;
+            doc.text(section.title, colX, tempY);
+            doc.line(colX, tempY + 1, colX + 80, tempY + 1);
+            tempY += 8;
 
             doc.setFont("helvetica", "normal");
-            doc.setFontSize(8);
-            p.checks.forEach(check => {
-                const checked = (containerData.points as any)[check.k];
-                drawCheckbox(colX + 2, tempY, checked);
-                const splitText = doc.splitTextToSize(check.l, 80);
-                doc.text(splitText, colX + 8, tempY);
-                tempY += splitText.length * 4 + 4;
+            section.items.forEach(item => {
+                const checked = (containerInspectionData.checkpoints as any)[section.key][item.k];
+                drawCheckbox(colX, tempY, checked);
+                
+                const splitText = doc.splitTextToSize(item.l, 80);
+                doc.text(splitText, colX + 6, tempY);
+                tempY += (splitText.length * 4) + 4;
             });
 
             if ((tempY - colY) > maxHeight) maxHeight = tempY - colY;
+            colX += 95;
         });
 
-        yPos = colY + maxHeight + 10;
+        yPos = colY + maxHeight + 15;
         
-        doc.setFont("helvetica", "bold");
-        doc.text("Remarks:", margin, yPos);
-        yPos += 5;
-        doc.setFont("helvetica", "normal");
-        const remarksText = doc.splitTextToSize(containerData.remarks || 'None', pageWidth - margin*2);
-        doc.text(remarksText, margin, yPos);
-        yPos += remarksText.length * 5 + 10;
-
-        doc.setFontSize(7);
-        const declaration = "I have visually inspected and verified the condition of the container noted above. I confirmed that the container is structurally sound, weather tight, has no false compartments, and the locking mechanism is in good order and shows no visible signs of being tampered noticed.";
-        const decText = doc.splitTextToSize(declaration, pageWidth - margin*2);
-        doc.text(decText, margin, yPos);
-        yPos += 15;
-
-        addField("Inspected By", containerData.inspectedBy, margin, yPos);
-        addField("Verified By", containerData.verifiedBy, margin + 90, yPos);
-    } else if (activeForm === 'vehicleCondition') {
-        addTitle("Vehicle Condition Report");
-        // Header Info
-        doc.setFontSize(8);
-        doc.text(`Ref: WUAEOPS-WH-18/2022`, pageWidth - margin - 40, 20);
-
-        addField("Customer Name", vehicleConditionData.customerName, margin, yPos);
-        addField("Address", vehicleConditionData.address, margin, yPos + 10);
-        addField("Phone #", vehicleConditionData.phone, margin, yPos + 20);
-        addField("Dealer Name", vehicleConditionData.dealerName, margin, yPos + 30);
-        
-        const rightCol = margin + 90;
-        addField("Vehicle Year", vehicleConditionData.year, rightCol, yPos);
-        addField("Make", vehicleConditionData.make, rightCol + 30, yPos);
-        addField("Model", vehicleConditionData.model, rightCol + 60, yPos);
-        
-        addField("Color", vehicleConditionData.color, rightCol, yPos + 10);
-        addField("License #", vehicleConditionData.license, rightCol + 40, yPos + 10);
-        
-        addField("VIN", vehicleConditionData.vin, rightCol, yPos + 20);
-        addField("Mileage", vehicleConditionData.mileage, rightCol + 60, yPos + 20);
-
-        yPos += 45;
-        
-        // Options Grid
-        doc.setFillColor(240, 240, 240);
-        doc.rect(margin, yPos, pageWidth - margin*2, 6, 'F');
-        doc.setFont("helvetica", "bold");
-        doc.text("CHECK OPTIONS INCLUDED ON VEHICLE", margin + 2, yPos + 4);
-        yPos += 10;
-
-        const optionsList = [
-            { l: 'ABS / Wheel', k: 'abs' }, { l: 'Bedliner', k: 'bedliner' }, { l: 'Cruise Control', k: 'cruise' }, { l: 'Moon/Sun Roof', k: 'moonRoof' }, { l: 'Power Windows', k: 'powerWin' },
-            { l: 'Air Cond.', k: 'airCond' }, { l: 'Camper Shell', k: 'camperShell' }, { l: 'Custom Bumper', k: 'customBumper' }, { l: 'Power Door Locks', k: 'powerLocks' }, { l: 'Roof Rack', k: 'roofRack' },
-            { l: 'AM-FM Radio', k: 'radio' }, { l: 'C.D.', k: 'cd' }, { l: 'Leather Interior', k: 'leather' }, { l: 'Power Seats', k: 'powerSeats' }, { l: 'Running Boards', k: 'runningBoards' },
-            { l: 'Auto. Trans.', k: 'autoTrans' }, { l: 'C.D. Changer', k: 'cdChanger' }, { l: 'Luxury/Sport Pkg.', k: 'luxuryPkg' }, { l: 'Power Steering', k: 'powerSteering' }, { l: 'Rear Sliding Window', k: 'rearWindow' }
-        ];
-
-        let optX = margin;
-        let optY = yPos;
-        optionsList.forEach((opt, idx) => {
-            const checked = vehicleConditionData.options[opt.k];
-            drawCheckbox(optX, optY, checked);
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(8);
-            doc.text(opt.l, optX + 6, optY);
-            optX += 35;
-            if ((idx + 1) % 5 === 0) {
-                optX = margin;
-                optY += 6;
-            }
-        });
-        yPos = optY + 10;
-
-        // Condition Legend
-        doc.setFont("helvetica", "bold");
-        doc.text("CONDITION OF VEHICLE", margin, yPos);
-        yPos += 5;
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(7);
-        const legend = "H - Hairline Scratch   PT - Pitted   T - Torn   B - Bent   GC - Glass Cracked   M - Missing\nSM - Smashed   R - Rusty   CR - Creased   S - Scratched   ST - Stained   DR - Broken   D - Dented";
-        doc.text(legend, margin, yPos);
-        yPos += 10;
-
-        // Damage Zones Grid (1-21)
-        doc.text("Damage Description by Zone:", margin, yPos);
-        yPos += 5;
-        let zoneX = margin;
-        let zoneY = yPos;
-        for (let i = 1; i <= 21; i++) {
-            doc.rect(zoneX, zoneY, 8, 5);
-            doc.setFontSize(6);
-            doc.text(i.toString(), zoneX + 1, zoneY + 3);
-            doc.setFontSize(8);
-            doc.text(vehicleConditionData.damageZones[i.toString()] || '', zoneX + 4, zoneY + 4);
-            zoneX += 8.5;
+        // Check page break before remarks
+        if (yPos > pageHeight - 60) {
+            doc.addPage();
+            yPos = 30;
         }
-        yPos += 15;
 
-        // Interior & Mechanical Sections
-        const leftCol = margin;
-        const rightColBase = margin + 90;
-        
-        // INTERIOR
-        doc.setFont("helvetica", "bold");
-        doc.text("INTERIOR", leftCol, yPos);
-        doc.text("MECHANICAL", rightColBase, yPos);
-        yPos += 5;
-
-        doc.setFontSize(7);
-        doc.setFont("helvetica", "normal");
-        doc.text(`General: ${vehicleConditionData.interiorGeneral}`, leftCol + 20, yPos - 5);
-
-        // Interior Grid
-        const intHeaders = ['Good', 'Worn', 'Burns', 'Rips', 'Stain'];
-        let gridY = yPos + 5;
-        
-        // Draw Headers
-        let hX = leftCol + 25;
-        intHeaders.forEach(h => {
-            doc.text(h, hX, gridY);
-            hX += 10;
-        });
-        gridY += 5;
-
-        const intRows = [
-            {l: 'Front Carpet', k: 'frontCarpet'}, {l: 'Rear Carpet', k: 'rearCarpet'},
-            {l: 'Front Seat', k: 'frontSeat'}, {l: 'Rear Seat', k: 'rearSeat'},
-            {l: 'Headliner', k: 'headliner'}, {l: 'Door Panels', k: 'doorPanels'}
-        ];
-
-        intRows.forEach(row => {
-            doc.text(row.l, leftCol, gridY);
-            let cX = leftCol + 27;
-            ['good', 'worn', 'burns', 'rips', 'stain'].forEach(key => {
-                const checked = (vehicleConditionData.interiorSpecific as any)[row.k][key];
-                drawCheckbox(cX, gridY, checked);
-                cX += 10;
-            });
-            gridY += 6;
-        });
-        
-        // Dash Row
-        doc.text("Dash", leftCol, gridY);
-        drawCheckbox(leftCol + 27, gridY, vehicleConditionData.interiorDash.dent); doc.text("Dent", leftCol + 33, gridY);
-        drawCheckbox(leftCol + 47, gridY, vehicleConditionData.interiorDash.crack); doc.text("Crack", leftCol + 53, gridY);
-        drawCheckbox(leftCol + 67, gridY, vehicleConditionData.interiorDash.holes); doc.text("Holes", leftCol + 73, gridY);
-
-        // MECHANICAL
-        let mechY = yPos + 5;
-        const mech = vehicleConditionData.mechanical;
-        
-        const drawMechRow = (label: string, val: string) => {
-            doc.text(`${label}: ${val || '-'}`, rightColBase, mechY);
-            mechY += 5;
-        };
-        
-        drawMechRow("Engine", mech.engine);
-        drawMechRow("Trans/Clutch", mech.trans);
-        doc.text("Air Cond:", rightColBase, mechY); drawCheckbox(rightColBase + 20, mechY, mech.airBlowsHot); doc.text("Blows Hot", rightColBase + 26, mechY); mechY += 5;
-        drawMechRow("Brakes", mech.brakes);
-        drawMechRow("Exhaust", mech.exhaust);
-        
-        doc.text("Power Malfunction:", rightColBase, mechY); mechY += 5;
-        drawCheckbox(rightColBase, mechY, mech.powerMalfunction.windows); doc.text("Windows", rightColBase + 6, mechY);
-        drawCheckbox(rightColBase + 25, mechY, mech.powerMalfunction.seats); doc.text("Seats", rightColBase + 31, mechY);
-        mechY += 5;
-        drawCheckbox(rightColBase, mechY, mech.powerMalfunction.locks); doc.text("Locks", rightColBase + 6, mechY);
-        drawCheckbox(rightColBase + 25, mechY, mech.powerMalfunction.roof); doc.text("Roof", rightColBase + 31, mechY);
-        mechY += 5;
-        
-        // Tires Table
-        yPos = Math.max(gridY, mechY) + 10;
-        doc.autoTable({
-            startY: yPos,
-            head: [['Tires', 'R Front', 'L Front', 'R Rear', 'L Rear', 'Spare']],
-            body: [
-                ['Cond', vehicleConditionData.tires.rightFront, vehicleConditionData.tires.leftFront, vehicleConditionData.tires.rightRear, vehicleConditionData.tires.leftRear, vehicleConditionData.tires.spare]
-            ],
-            margin: { left: margin },
-            tableWidth: pageWidth - margin * 2,
-            styles: { fontSize: 8 }
-        });
-        yPos = (doc as any).lastAutoTable.finalY + 10;
-
-        // Footer
-        doc.text(`Car Key: ${vehicleConditionData.carKey}`, margin, yPos);
-        doc.text(`Documents Received: ${vehicleConditionData.carDocs}`, margin + 60, yPos);
-        yPos += 10;
-
-        // Remarks
-        if (vehicleConditionData.remarks) {
+        if (containerInspectionData.remarks) {
             doc.setFontSize(9);
             doc.setFont("helvetica", "bold");
             doc.text("Remarks:", margin, yPos);
             yPos += 5;
             doc.setFont("helvetica", "normal");
-            const splitRemarks = doc.splitTextToSize(vehicleConditionData.remarks, pageWidth - margin * 2);
+            const splitRemarks = doc.splitTextToSize(containerInspectionData.remarks, pageWidth - margin * 2);
             doc.text(splitRemarks, margin, yPos);
-            yPos += splitRemarks.length * 5 + 5;
+            yPos += splitRemarks.length * 5 + 10;
         }
-        
+
+        drawCheckbox(margin, yPos, containerInspectionData.certified);
+        doc.setFontSize(8);
+        const certText = "I have visually inspected and verified the condition of the container noted above. I confirmed that the container is structurally sound, weather tight, has no false compartments, and the locking mechanism is in good order and shows no visible signs of being tampered with.";
+        const splitCert = doc.splitTextToSize(certText, pageWidth - margin * 2 - 10);
+        doc.text(splitCert, margin + 6, yPos);
+        yPos += splitCert.length * 4 + 10;
+
     } else {
         // ... (Existing logic for other forms)
         if (activeForm === 'packing' || activeForm === 'unpacking') {
@@ -1007,6 +836,15 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
              yPos += 25;
              yPos = addSectionDivider("Walk Through Verification", yPos); yPos += 5;
              
+             // --- ADDED SENTENCE FOR PDF ---
+             doc.setFontSize(9);
+             doc.setFont("helvetica", "normal");
+             const disclaimerText = "On completion of your packing/delivery the Crew foreman will walk through the property with you to check and confirm with you the following:";
+             const splitDisclaimer = doc.splitTextToSize(disclaimerText, pageWidth - (margin * 2));
+             doc.text(splitDisclaimer, margin, yPos);
+             yPos += splitDisclaimer.length * 5 + 5;
+             // -------------------------------
+
              const checkItem = (text: string, checked: boolean, y: number) => { drawCheckbox(margin, y, checked); doc.text(text, margin + 10, y); };
              checkItem("I confirm the property was checked with the crew foreman and found NO damage.", data.walkThrough.noDamage, yPos + 10);
              checkItem("I confirm all items have been packed/removed; no empty cartons left behind.", data.walkThrough.itemsCheck, yPos + 20);
@@ -1022,29 +860,51 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
              addField("Client Name", deliveryData.clientName, margin, yPos);
              addField("Job Ref", deliveryData.jobId, margin + 90, yPos);
              addField("Truck No", deliveryData.truckNo, margin + 140, yPos);
+             yPos += 15;
+             
+             addField("Delivery Address", deliveryData.deliveryAddress, margin, yPos);
+             yPos += 15;
+             
+             addField("Mode of Shipment", deliveryData.modeOfShipment, margin, yPos);
              yPos += 25;
              
              doc.autoTable({
                 startY: yPos,
-                head: [['Condition', 'Qty', 'Description']],
-                body: deliveryItems.map(i => [i.condition, i.quantity, i.description]),
+                head: [['Pkg No', 'Description', 'Condition', 'Qty', 'Vol (CBM)', 'Weight (KG)']],
+                body: deliveryItems.map(i => [i.pkgNo, i.description, i.condition, i.quantity, i.volume, i.weight]),
                 theme: 'grid',
                 styles: { fontSize: 8 },
              });
              yPos = (doc as any).lastAutoTable.finalY + 20;
              if (deliveryData.notes) {
-                doc.text("Notes:", margin, yPos);
-                doc.text(deliveryData.notes, margin, yPos + 5);
+                doc.setFont("helvetica", "bold");
+                doc.text("Remarks / Notes:", margin, yPos);
+                yPos += 5;
+                doc.setFont("helvetica", "normal");
+                const splitNotes = doc.splitTextToSize(deliveryData.notes, pageWidth - margin * 2);
+                doc.text(splitNotes, margin, yPos);
              }
         } else if (activeForm === 'crating') {
              addTitle("Crating Specification Sheet");
              addField("Client Name", cratingData.clientName, margin, yPos);
              addField("Job Ref", cratingData.jobId, margin + 90, yPos);
-             yPos += 25;
+             yPos += 15;
+             
+             // New Fields in PDF
+             addField("Address", cratingData.address, margin, yPos);
+             yPos += 15;
+             
+             addField("Packing Date", cratingData.packingDate, margin, yPos);
+             addField("Loading Date", cratingData.loadingDate, margin + 50, yPos);
+             addField("Final Dest.", cratingData.finalDestination, margin + 100, yPos);
+             addField("Mode", cratingData.modeOfShipment, margin + 150, yPos);
+             
+             yPos += 20;
+
              doc.autoTable({
                 startY: yPos,
-                head: [['Description', 'Length', 'Width', 'Height', 'Vol (ft³)']],
-                body: crates.map(c => [c.description, c.l, c.w, c.h, ((c.l*c.w*c.h)/1728).toFixed(2)]),
+                head: [['Pkg No', 'Description', 'Length', 'Width', 'Height', 'Vol (ft³)']],
+                body: crates.map(c => [c.pkgNo, c.description, c.l, c.w, c.h, ((c.l*c.w*c.h)/1728).toFixed(2)]),
                 theme: 'grid',
                 styles: { fontSize: 8 },
              });
@@ -1063,7 +923,17 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
         } else if (activeForm === 'electronicList') {
              addTitle("Electronic Items Inventory");
              addField("Client Name", electronicData.clientName, margin, yPos);
-             yPos += 25;
+             addField("Job Ref", electronicData.jobId, margin + 90, yPos);
+             yPos += 15;
+
+             addField("Address", electronicData.address, margin, yPos);
+             yPos += 15;
+
+             addField("Packing Date", electronicData.packingDate, margin, yPos);
+             addField("Loading Date", electronicData.loadingDate, margin + 50, yPos);
+             addField("Mode", electronicData.modeOfShipment, margin + 100, yPos);
+
+             yPos += 20;
              doc.autoTable({
                 startY: yPos,
                 head: [['Item Description', 'Make', 'Model', 'Serial No', 'Condition']],
@@ -1084,6 +954,7 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
         } else if (activeForm === 'accessorial') {
              addTitle("Accessorial Services Sheet");
              addField("Client Name", accessorialData.clientName, margin, yPos);
+             addField("Job Ref", accessorialData.jobId, margin + 90, yPos);
              yPos += 25;
              
              const services = Object.entries(accessorialData.services).filter(([_, v]) => v).map(([k]) => k.replace(/([A-Z])/g, ' $1').toUpperCase());
@@ -1193,6 +1064,24 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
     doc.save(`Writer_${activeForm}_${new Date().toISOString().slice(0,10)}.pdf`);
   };
 
+  const accessorialItems = [
+    { key: 'shuttle', title: 'Shuttle service', desc: 'van used for loading or unloading, when a container or a trailer is not permitted at the residence' },
+    { key: 'stairCarry', title: 'Stair carry', desc: 'my belongings were carried up the stairs because they could not fit all into the elevator / elevator available (does not apply to single family dwelling)', hasInput: true, inputLabel: 'Floors / Details', inputKey: 'stairCarryFloors' },
+    { key: 'elevator', title: 'Elevator', desc: 'elevator was used to carry belongings' },
+    { key: 'hoisting', title: 'Hoisting', desc: 'my belongings could not fit through the elevator/door frame due to size and needed to be loaded/unloaded from the residence via outside hoisting' },
+    { key: 'longCarry', title: 'Long carry', desc: 'my belongings were carried for more than 200ft/ 50 meters due to narrow/difficult access to the residence', hasInput: true, inputLabel: 'Distance', inputKey: 'longCarryDistance' },
+    { key: 'piano', title: 'Piano Handling', desc: 'my belongings included a piano (grand/upright), which required special handling' },
+    { key: 'crating', title: 'Crating/Uncrating', desc: 'my belongings included items that needed to be crated/uncrated due to fragile nature' },
+    { key: 'extraLabor', title: 'Extra Labor', desc: 'my belongings required additional labor to assemble or handle' },
+    { key: 'overtime', title: 'Overtime', desc: 'the crew worked beyond normal business hours' },
+    { key: 'preDelivery', title: 'Pre delivery of Cartons', desc: 'Prior to Pack date' },
+    { key: 'extraMileage', title: 'Extra Mileage', desc: 'my residence was located more than 50 miles/80km away for the warehouse' },
+    { key: 'debrisPickup', title: 'Additional Debris Pick up', desc: '' },
+    { key: 'handyman', title: 'Handy Man Service', desc: 'Electrician Plumber Others', hasInput: true, inputLabel: 'Service Type', inputKey: 'handymanType' },
+    { key: 'maidService', title: 'Maid/Valet Services', desc: '' },
+    { key: 'other', title: 'Other', desc: 'my belongings required additional service, not listed above', hasInput: true, inputLabel: 'Description', inputKey: 'otherDescription' },
+  ];
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -1221,7 +1110,7 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
         {/* Navigation Tabs */}
         <div className="bg-white rounded-[2rem] p-4 border border-slate-200 shadow-sm flex flex-col gap-2">
-           {['packing', 'unpacking', 'delivery', 'crating', 'electronicList', 'accessorial', 'warehouseReceipt', 'handyman', 'containerInspection', 'vehicleCondition'].map(formId => (
+           {['packing', 'unpacking', 'delivery', 'crating', 'electronicList', 'accessorial', 'warehouseReceipt', 'handyman', 'containerInspection'].map(formId => (
              <button 
                 key={formId}
                 onClick={() => setActiveForm(formId as any)}
@@ -1236,7 +1125,6 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                 {formId === 'warehouseReceipt' && <ArrowLeftRight className="w-5 h-5" />}
                 {formId === 'handyman' && <Wrench className="w-5 h-5" />}
                 {formId === 'containerInspection' && <ShieldCheck className="w-5 h-5" />}
-                {formId === 'vehicleCondition' && <Car className="w-5 h-5" />}
                 <div>
                   <p className="font-bold text-sm capitalize">{formId.replace(/([A-Z])/g, ' $1').trim()}</p>
                   <p className={`text-[10px] uppercase tracking-wider ${activeForm === formId ? 'text-blue-200' : 'text-slate-400'}`}>Form</p>
@@ -1249,11 +1137,10 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
         <div className="lg:col-span-3 bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
             <div className="bg-slate-50 p-6 md:p-8 border-b border-slate-200">
                <div className="flex justify-between items-center">
-                 <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight flex items-center gap-3">
-                    <FileText className="w-6 h-6 text-blue-600" />
+                 <h3 className="text-xl font-bold text-blue-600 uppercase tracking-widest flex items-center gap-3">
+                    {activeForm === 'containerInspection' ? <ShieldCheck className="w-6 h-6 text-blue-600" /> : <FileText className="w-6 h-6 text-blue-600" />}
                     {activeForm === 'handyman' ? 'Handyman Completion Report' : 
-                     activeForm === 'containerInspection' ? '7-Point Container Inspection' : 
-                     activeForm === 'vehicleCondition' ? 'Vehicle Condition Report' :
+                     activeForm === 'containerInspection' ? '7-Point Container Inspection' :
                      activeForm.replace(/([A-Z])/g, ' $1').trim()}
                  </h3>
                  {logo && <img src={logo} alt="Company Logo" className="h-10 w-auto object-contain opacity-80 grayscale hover:grayscale-0 transition-all" />}
@@ -1262,16 +1149,128 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
 
             <div className="p-6 md:p-8 space-y-8">
                
+               {/* --- CONTAINER INSPECTION FORM --- */}
+               {activeForm === 'containerInspection' && (
+                   <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Date</label><input type="date" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" value={containerInspectionData.date} onChange={e => setContainerInspectionData({...containerInspectionData, date: e.target.value})} /></div>
+                            <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Container Number</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="ABCD 123456-7" value={containerInspectionData.containerNo} onChange={e => setContainerInspectionData({...containerInspectionData, containerNo: e.target.value})} /></div>
+                            <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Seal Number</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="SEAL-001" value={containerInspectionData.sealNo} onChange={e => setContainerInspectionData({...containerInspectionData, sealNo: e.target.value})} /></div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {[
+                                { title: '1. Outside / Under Carriage', key: 'outsideUndercarriage', items: [
+                                    { label: 'Check for Structural damage (dents, holes, repairs)', subKey: 'structuralDamage' },
+                                    { label: 'Support beams are visible', subKey: 'supportBeams' },
+                                    { label: 'Ensure no foreign objects are mounted on the container', subKey: 'foreignObjects' }
+                                ]},
+                                { title: '2. Inside / Outside Doors', key: 'insideOutsideDoors', items: [
+                                    { label: 'Ensure locks and locking mechanisms are secure and reliable', subKey: 'locksSecure' },
+                                    { label: 'Check for loose bolts', subKey: 'looseBolts' },
+                                    { label: 'Ensure hinges are secure and reliable', subKey: 'hingesSecure' }
+                                ]},
+                                { title: '3. Right Side', key: 'rightSide', items: [
+                                    { label: 'Look for unusual repairs to structural beams', subKey: 'unusualRepairs' },
+                                    { label: 'Repairs to the inside wall must also be visible on the outside & vice versa', subKey: 'repairsVisible' }
+                                ]},
+                                { title: '4. Left Side', key: 'leftSide', items: [
+                                    { label: 'Look for unusual repairs to structural beams', subKey: 'unusualRepairs' },
+                                    { label: 'Repairs to the inside wall must also be visible on the outside & vice versa', subKey: 'repairsVisible' }
+                                ]},
+                                { title: '5. Front Wall', key: 'frontWall', items: [
+                                    { label: 'The front wall should be made of corrugated material', subKey: 'corrugated' },
+                                    { label: 'Interior blocks in the top corners should be visible. Missing/false blocks are abnormal', subKey: 'blocksVisible' },
+                                    { label: 'Ensure vents are visible', subKey: 'ventsVisible' }
+                                ]},
+                                { title: '6. Ceiling / Roof', key: 'ceilingRoof', items: [
+                                    { label: 'Ensure Support beams are visible', subKey: 'supportBeams' },
+                                    { label: 'Ensure ventilation holes are visible. They should not be covered or absent', subKey: 'ventilationHoles' },
+                                    { label: 'Ensure no foreign objects are mounted on the container', subKey: 'foreignObjects' }
+                                ]},
+                                { title: '7. Floor', key: 'floor', items: [
+                                    { label: 'Ensure the floor of the container is flat', subKey: 'flatFloor' },
+                                    { label: 'Ensure the floor is uniform in height', subKey: 'uniformHeight' },
+                                    { label: 'Look for unusual repairs to the floor', subKey: 'unusualRepairs' }
+                                ]},
+                                { title: '8. Seal Verification', key: 'sealVerification', items: [
+                                    { label: 'Seal properly affixed', subKey: 'properlyAffixed' },
+                                    { label: 'Seal meets or exceeds PAS ISO17712', subKey: 'meetsISO' },
+                                    { label: 'Ensure seal is not broken or damaged', subKey: 'notBroken' }
+                                ]}
+                            ].map(section => (
+                                <div key={section.key} className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                                    <h4 className="font-bold text-sm text-blue-600 uppercase tracking-widest mb-4 border-b border-slate-200 pb-2">{section.title}</h4>
+                                    <div className="space-y-3">
+                                        {section.items.map(item => (
+                                            <label key={item.subKey} className="flex items-start gap-3 cursor-pointer group">
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="w-5 h-5 rounded text-blue-600 focus:ring-blue-500 mt-0.5"
+                                                    checked={(containerInspectionData.checkpoints as any)[section.key][item.subKey]}
+                                                    onChange={e => {
+                                                        const newVal = e.target.checked;
+                                                        setContainerInspectionData({
+                                                            ...containerInspectionData,
+                                                            checkpoints: {
+                                                                ...containerInspectionData.checkpoints,
+                                                                [section.key]: {
+                                                                    ...(containerInspectionData.checkpoints as any)[section.key],
+                                                                    [item.subKey]: newVal
+                                                                }
+                                                            }
+                                                        });
+                                                    }}
+                                                />
+                                                <span className="text-xs font-bold text-slate-700 group-hover:text-blue-700 transition-colors leading-snug">{item.label}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Remarks</label>
+                                <textarea 
+                                    className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 h-24" 
+                                    value={containerInspectionData.remarks} 
+                                    onChange={e => setContainerInspectionData({...containerInspectionData, remarks: e.target.value})} 
+                                    placeholder="Enter additional observations..."
+                                />
+                            </div>
+                            
+                            <label className="flex items-start gap-4 p-4 bg-blue-50 border border-blue-100 rounded-xl cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    className="w-5 h-5 mt-1 rounded text-blue-600 focus:ring-blue-500"
+                                    checked={containerInspectionData.certified}
+                                    onChange={e => setContainerInspectionData({...containerInspectionData, certified: e.target.checked})}
+                                />
+                                <span className="text-xs font-bold text-blue-800 leading-relaxed">
+                                    I have visually inspected and verified the condition of the container noted above. 
+                                    I confirmed that the container is structurally sound, weather tight, has no false compartments, 
+                                    and the locking mechanism is in good order and shows no visible signs of being tampered with.
+                                </span>
+                            </label>
+                        </div>
+                   </div>
+               )}
+
                {/* --- PACKING & UNPACKING FORM --- */}
                {(activeForm === 'packing' || activeForm === 'unpacking') && (
                  <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                       <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Client Name</label><input type="text" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={activeForm === 'packing' ? packingData.clientName : unpackingData.clientName} onChange={e => activeForm === 'packing' ? setPackingData({...packingData, clientName: e.target.value}) : setUnpackingData({...unpackingData, clientName: e.target.value})} /></div>
-                       <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Job Reference</label><input type="text" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={activeForm === 'packing' ? packingData.jobId : unpackingData.jobId} onChange={e => activeForm === 'packing' ? setPackingData({...packingData, jobId: e.target.value}) : setUnpackingData({...unpackingData, jobId: e.target.value})} /></div>
+                       <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Client Name</label><input type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. John Doe" value={activeForm === 'packing' ? packingData.clientName : unpackingData.clientName} onChange={e => activeForm === 'packing' ? setPackingData({...packingData, clientName: e.target.value}) : setUnpackingData({...unpackingData, clientName: e.target.value})} /></div>
+                       <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Job Reference</label><input type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. AE-1234" value={activeForm === 'packing' ? packingData.jobId : unpackingData.jobId} onChange={e => activeForm === 'packing' ? setPackingData({...packingData, jobId: e.target.value}) : setUnpackingData({...unpackingData, jobId: e.target.value})} /></div>
                     </div>
                     
                     <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-4">
                         <h4 className="font-bold text-slate-700">Walk Through Verification</h4>
+                        <p className="text-sm text-slate-500 font-medium">
+                          On completion of your packing/delivery the Crew foreman will walk through the property with you to check and confirm with you the following:
+                        </p>
                         {[
                             { label: 'I confirm the property was checked with the crew foreman and found NO damage.', key: 'noDamage' },
                             { label: 'I confirm all items have been packed/removed; no empty cartons left behind.', key: 'itemsCheck' },
@@ -1293,7 +1292,7 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                         ))}
                     </div>
 
-                    <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Notes / Damage Report</label><textarea className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm h-24" value={activeForm === 'packing' ? packingData.clientNotes : unpackingData.clientNotes} onChange={e => activeForm === 'packing' ? setPackingData({...packingData, clientNotes: e.target.value}) : setUnpackingData({...unpackingData, clientNotes: e.target.value})} /></div>
+                    <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Notes / Damage Report</label><textarea className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 h-24" placeholder="Enter any specific notes or damage details..." value={activeForm === 'packing' ? packingData.clientNotes : unpackingData.clientNotes} onChange={e => activeForm === 'packing' ? setPackingData({...packingData, clientNotes: e.target.value}) : setUnpackingData({...unpackingData, clientNotes: e.target.value})} /></div>
                  </div>
                )}
 
@@ -1301,28 +1300,121 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                {activeForm === 'delivery' && (
                    <div className="space-y-6">
                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Client Name</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={deliveryData.clientName} onChange={e => setDeliveryData({...deliveryData, clientName: e.target.value})} /></div>
-                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Job Ref</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={deliveryData.jobId} onChange={e => setDeliveryData({...deliveryData, jobId: e.target.value})} /></div>
-                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Truck No</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={deliveryData.truckNo} onChange={e => setDeliveryData({...deliveryData, truckNo: e.target.value})} /></div>
+                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Client Name</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. John Doe" value={deliveryData.clientName} onChange={e => setDeliveryData({...deliveryData, clientName: e.target.value})} /></div>
+                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Job Ref</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. AE-1002" value={deliveryData.jobId} onChange={e => setDeliveryData({...deliveryData, jobId: e.target.value})} /></div>
+                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Truck No</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. DXB-998" value={deliveryData.truckNo} onChange={e => setDeliveryData({...deliveryData, truckNo: e.target.value})} /></div>
+                       </div>
+
+                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                           <div className="md:col-span-2 space-y-1">
+                               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Delivery Address</label>
+                               <input 
+                                   className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" 
+                                   value={deliveryData.deliveryAddress} 
+                                   onChange={e => setDeliveryData({...deliveryData, deliveryAddress: e.target.value})} 
+                                   placeholder="Full Address"
+                               />
+                           </div>
+                           <div className="space-y-1">
+                               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Mode of Shipment</label>
+                               <select 
+                                   className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" 
+                                   value={deliveryData.modeOfShipment} 
+                                   onChange={e => setDeliveryData({...deliveryData, modeOfShipment: e.target.value})}
+                               >
+                                   <option>Sea</option>
+                                   <option>Air</option>
+                                   <option>Land</option>
+                               </select>
+                           </div>
                        </div>
                        
                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                           <div className="flex justify-between items-center mb-4">
+                           <div className="flex justify-between items-center mb-6">
                                <h4 className="font-bold text-slate-700">Delivery Items</h4>
-                               <button onClick={addDeliveryItem} className="p-2 bg-white text-blue-600 rounded-lg shadow-sm hover:bg-blue-50"><Plus className="w-4 h-4"/></button>
+                               <button onClick={addDeliveryItem} className="p-2 bg-white text-blue-600 rounded-lg shadow-sm hover:bg-blue-50 transition-colors"><Plus className="w-4 h-4"/></button>
                            </div>
-                           <div className="space-y-2">
+                           
+                           {/* Header Row for Items */}
+                           <div className="hidden md:flex gap-3 mb-2 px-2">
+                               <div className="w-20 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pkg No</div>
+                               <div className="flex-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Description</div>
+                               <div className="w-28 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Condition</div>
+                               <div className="w-16 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Qty</div>
+                               <div className="w-24 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Vol (CBM)</div>
+                               <div className="w-24 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Wt (KG)</div>
+                               <div className="w-8"></div>
+                           </div>
+
+                           <div className="space-y-3">
                                {deliveryItems.map(item => (
-                                   <div key={item.id} className="flex gap-2 items-center">
-                                       <input className="flex-1 p-2 rounded border border-slate-200 text-sm" placeholder="Description" value={item.description} onChange={e => updateDeliveryItem(item.id, 'description', e.target.value)} />
-                                       <select className="w-32 p-2 rounded border border-slate-200 text-sm" value={item.condition} onChange={e => updateDeliveryItem(item.id, 'condition', e.target.value)}>
-                                           <option>Good</option><option>Damaged</option><option>Missing</option>
-                                       </select>
-                                       <input type="number" className="w-20 p-2 rounded border border-slate-200 text-sm" placeholder="Qty" value={item.quantity} onChange={e => updateDeliveryItem(item.id, 'quantity', parseInt(e.target.value))} />
-                                       <button onClick={() => removeDeliveryItem(item.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded"><Trash2 className="w-4 h-4"/></button>
+                                   <div key={item.id} className="flex flex-wrap gap-3 items-center border-b border-slate-200 pb-4 last:border-0 last:pb-0 animate-in slide-in-from-left-2 duration-300">
+                                       <div className="w-20">
+                                           <input 
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" 
+                                                placeholder="e.g. 101" 
+                                                value={item.pkgNo} 
+                                                onChange={e => updateDeliveryItem(item.id, 'pkgNo', e.target.value)} 
+                                           />
+                                       </div>
+                                       <div className="flex-1 min-w-[200px]">
+                                           <input 
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" 
+                                                placeholder="e.g. Living Room Sofa" 
+                                                value={item.description} 
+                                                onChange={e => updateDeliveryItem(item.id, 'description', e.target.value)} 
+                                           />
+                                       </div>
+                                       <div className="w-28">
+                                           <select 
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" 
+                                                value={item.condition} 
+                                                onChange={e => updateDeliveryItem(item.id, 'condition', e.target.value)}
+                                           >
+                                               <option>Good</option><option>Damaged</option><option>Missing</option>
+                                           </select>
+                                       </div>
+                                       <div className="w-16">
+                                           <input 
+                                                type="number" 
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" 
+                                                placeholder="1" 
+                                                value={item.quantity} 
+                                                onChange={e => updateDeliveryItem(item.id, 'quantity', parseInt(e.target.value))} 
+                                           />
+                                       </div>
+                                       <div className="w-24">
+                                           <input 
+                                                type="number" 
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" 
+                                                placeholder="CBM" 
+                                                value={item.volume} 
+                                                onChange={e => updateDeliveryItem(item.id, 'volume', parseFloat(e.target.value))} 
+                                           />
+                                       </div>
+                                       <div className="w-24">
+                                           <input 
+                                                type="number" 
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" 
+                                                placeholder="KG" 
+                                                value={item.weight} 
+                                                onChange={e => updateDeliveryItem(item.id, 'weight', parseFloat(e.target.value))} 
+                                           />
+                                       </div>
+                                       <button onClick={() => removeDeliveryItem(item.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
                                    </div>
                                ))}
                            </div>
+                       </div>
+
+                       <div className="space-y-1 mt-6">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Notes / Remarks</label>
+                          <textarea 
+                            className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 h-24 resize-none" 
+                            value={deliveryData.notes} 
+                            onChange={e => setDeliveryData({...deliveryData, notes: e.target.value})} 
+                            placeholder="Additional instructions, gate codes, or delivery remarks..."
+                          />
                        </div>
                    </div>
                )}
@@ -1331,37 +1423,107 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                {activeForm === 'crating' && (
                    <div className="space-y-6">
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Client Name</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={cratingData.clientName} onChange={e => setCratingData({...cratingData, clientName: e.target.value})} /></div>
-                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Job Ref</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={cratingData.jobId} onChange={e => setCratingData({...cratingData, jobId: e.target.value})} /></div>
+                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Client Name</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. John Doe" value={cratingData.clientName} onChange={e => setCratingData({...cratingData, clientName: e.target.value})} /></div>
+                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Job Ref</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. AE-1234" value={cratingData.jobId} onChange={e => setCratingData({...cratingData, jobId: e.target.value})} /></div>
+                       </div>
+
+                       <div className="space-y-1">
+                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Client Address / Location</label>
+                           <input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="Full Address" value={cratingData.address} onChange={e => setCratingData({...cratingData, address: e.target.value})} />
+                       </div>
+
+                       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Packing Date</label><input type="date" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" value={cratingData.packingDate} onChange={e => setCratingData({...cratingData, packingDate: e.target.value})} /></div>
+                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Loading Date</label><input type="date" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" value={cratingData.loadingDate} onChange={e => setCratingData({...cratingData, loadingDate: e.target.value})} /></div>
+                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Final Destination</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. London, UK" value={cratingData.finalDestination} onChange={e => setCratingData({...cratingData, finalDestination: e.target.value})} /></div>
+                           <div className="space-y-1">
+                               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Mode of Shipment</label>
+                               <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" value={cratingData.modeOfShipment} onChange={e => setCratingData({...cratingData, modeOfShipment: e.target.value})}>
+                                   <option>Air</option>
+                                   <option>Sea</option>
+                                   <option>Land</option>
+                               </select>
+                           </div>
                        </div>
                        
                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                           <div className="flex justify-between items-center mb-4">
+                           <div className="flex justify-between items-center mb-6">
                                <h4 className="font-bold text-slate-700">Crate Dimensions (inches)</h4>
-                               <button onClick={addCrate} className="p-2 bg-white text-blue-600 rounded-lg shadow-sm hover:bg-blue-50"><Plus className="w-4 h-4"/></button>
+                               <button onClick={addCrate} className="p-2 bg-white text-blue-600 rounded-lg shadow-sm hover:bg-blue-50 transition-colors"><Plus className="w-4 h-4"/></button>
                            </div>
-                           <div className="space-y-2">
+                           
+                           {/* Header Row */}
+                           <div className="hidden md:flex gap-3 mb-2 px-2">
+                               <div className="w-20 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pkg No</div>
+                               <div className="flex-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Description</div>
+                               <div className="w-20 text-[10px] font-bold text-slate-400 uppercase tracking-widest">L (in)</div>
+                               <div className="w-20 text-[10px] font-bold text-slate-400 uppercase tracking-widest">W (in)</div>
+                               <div className="w-20 text-[10px] font-bold text-slate-400 uppercase tracking-widest">H (in)</div>
+                               <div className="w-8"></div>
+                           </div>
+
+                           <div className="space-y-3">
                                {crates.map(c => (
-                                   <div key={c.id} className="flex gap-2 items-center">
-                                       <input className="flex-1 p-2 rounded border border-slate-200 text-sm" placeholder="Description" value={c.description} onChange={e => updateCrate(c.id, 'description', e.target.value)} />
-                                       <input type="number" className="w-16 p-2 rounded border border-slate-200 text-sm" placeholder="L" value={c.l} onChange={e => updateCrate(c.id, 'l', parseFloat(e.target.value))} />
-                                       <input type="number" className="w-16 p-2 rounded border border-slate-200 text-sm" placeholder="W" value={c.w} onChange={e => updateCrate(c.id, 'w', parseFloat(e.target.value))} />
-                                       <input type="number" className="w-16 p-2 rounded border border-slate-200 text-sm" placeholder="H" value={c.h} onChange={e => updateCrate(c.id, 'h', parseFloat(e.target.value))} />
-                                       <button onClick={() => removeCrate(c.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded"><Trash2 className="w-4 h-4"/></button>
+                                   <div key={c.id} className="flex flex-wrap gap-3 items-center border-b border-slate-200 pb-4 last:border-0 last:pb-0 animate-in slide-in-from-left-2 duration-300">
+                                       <div className="w-20">
+                                           <input 
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" 
+                                                placeholder="e.g. 5" 
+                                                value={c.pkgNo} 
+                                                onChange={e => updateCrate(c.id, 'pkgNo', e.target.value)} 
+                                           />
+                                       </div>
+                                       <div className="flex-1 min-w-[200px]">
+                                           <input 
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" 
+                                                placeholder="e.g. Large Mirror" 
+                                                value={c.description} 
+                                                onChange={e => updateCrate(c.id, 'description', e.target.value)} 
+                                           />
+                                       </div>
+                                       <div className="w-20">
+                                           <input 
+                                                type="number" 
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" 
+                                                placeholder="L" 
+                                                value={c.l} 
+                                                onChange={e => updateCrate(c.id, 'l', parseFloat(e.target.value))} 
+                                           />
+                                       </div>
+                                       <div className="w-20">
+                                           <input 
+                                                type="number" 
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" 
+                                                placeholder="W" 
+                                                value={c.w} 
+                                                onChange={e => updateCrate(c.id, 'w', parseFloat(e.target.value))} 
+                                           />
+                                       </div>
+                                       <div className="w-20">
+                                           <input 
+                                                type="number" 
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" 
+                                                placeholder="H" 
+                                                value={c.h} 
+                                                onChange={e => updateCrate(c.id, 'h', parseFloat(e.target.value))} 
+                                           />
+                                       </div>
+                                       <button onClick={() => removeCrate(c.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
                                    </div>
                                ))}
                            </div>
-                           <div className="mt-4 text-right font-bold text-slate-600">
+                           <div className="mt-6 text-right font-black text-slate-700 text-lg border-t border-slate-100 pt-4">
                                Total Volume: {calculateTotalVolume()} CBM
                            </div>
                        </div>
                        
                        <div className="space-y-1 mt-6">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Remarks</label>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Remarks</label>
                           <textarea 
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm h-20" 
+                            className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 h-20" 
                             value={cratingData.notes} 
                             onChange={e => setCratingData({...cratingData, notes: e.target.value})} 
+                            placeholder="Additional details about crating..."
                           />
                        </div>
                    </div>
@@ -1370,31 +1532,102 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                {/* --- ELECTRONIC LIST --- */}
                {activeForm === 'electronicList' && (
                    <div className="space-y-6">
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Client Name</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={electronicData.clientName} onChange={e => setElectronicData({...electronicData, clientName: e.target.value})} /></div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Client Name</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. John Doe" value={electronicData.clientName} onChange={e => setElectronicData({...electronicData, clientName: e.target.value})} /></div>
+                            <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Job Ref</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. AE-1234" value={electronicData.jobId} onChange={e => setElectronicData({...electronicData, jobId: e.target.value})} /></div>
+                        </div>
+
+                        <div className="space-y-1">
+                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Client Address / Location</label>
+                           <input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="Full Address" value={electronicData.address} onChange={e => setElectronicData({...electronicData, address: e.target.value})} />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Packing Date</label><input type="date" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" value={electronicData.packingDate} onChange={e => setElectronicData({...electronicData, packingDate: e.target.value})} /></div>
+                           <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Loading Date</label><input type="date" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" value={electronicData.loadingDate} onChange={e => setElectronicData({...electronicData, loadingDate: e.target.value})} /></div>
+                           <div className="space-y-1">
+                               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Mode of Shipment</label>
+                               <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" value={electronicData.modeOfShipment} onChange={e => setElectronicData({...electronicData, modeOfShipment: e.target.value})}>
+                                   <option>Air</option>
+                                   <option>Sea</option>
+                                   <option>Land</option>
+                               </select>
+                           </div>
+                        </div>
+
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
                            <div className="flex justify-between items-center mb-4">
                                <h4 className="font-bold text-slate-700">Items</h4>
                                <button onClick={addElectronicItem} className="p-2 bg-white text-blue-600 rounded-lg shadow-sm hover:bg-blue-50"><Plus className="w-4 h-4"/></button>
                            </div>
-                           <div className="space-y-2">
+                           
+                           {/* Header Row */}
+                           <div className="hidden md:flex gap-3 mb-2 px-2">
+                               <div className="flex-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Item Description</div>
+                               <div className="w-24 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Make</div>
+                               <div className="w-24 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Model</div>
+                               <div className="w-24 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Serial No</div>
+                               <div className="w-24 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Condition</div>
+                               <div className="w-8"></div>
+                           </div>
+
+                           <div className="space-y-3">
                                {electronicItems.map(i => (
-                                   <div key={i.id} className="grid grid-cols-5 gap-2 items-center">
-                                       <input className="p-2 rounded border border-slate-200 text-sm" placeholder="Desc" value={i.description} onChange={e => updateElectronicItem(i.id, 'description', e.target.value)} />
-                                       <input className="p-2 rounded border border-slate-200 text-sm" placeholder="Make" value={i.make} onChange={e => updateElectronicItem(i.id, 'make', e.target.value)} />
-                                       <input className="p-2 rounded border border-slate-200 text-sm" placeholder="Model" value={i.model} onChange={e => updateElectronicItem(i.id, 'model', e.target.value)} />
-                                       <input className="p-2 rounded border border-slate-200 text-sm" placeholder="Serial" value={i.serial} onChange={e => updateElectronicItem(i.id, 'serial', e.target.value)} />
-                                       <button onClick={() => removeElectronicItem(i.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded place-self-center"><Trash2 className="w-4 h-4"/></button>
+                                   <div key={i.id} className="flex flex-wrap gap-3 items-center border-b border-slate-200 pb-4 last:border-0 last:pb-0 animate-in slide-in-from-left-2 duration-300">
+                                       <div className="flex-1 min-w-[200px]">
+                                           <input 
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" 
+                                                placeholder="e.g. LED TV" 
+                                                value={i.description} 
+                                                onChange={e => updateElectronicItem(i.id, 'description', e.target.value)} 
+                                           />
+                                       </div>
+                                       <div className="w-24">
+                                           <input 
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" 
+                                                placeholder="e.g. Sony" 
+                                                value={i.make} 
+                                                onChange={e => updateElectronicItem(i.id, 'make', e.target.value)} 
+                                           />
+                                       </div>
+                                       <div className="w-24">
+                                           <input 
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" 
+                                                placeholder="e.g. X90" 
+                                                value={i.model} 
+                                                onChange={e => updateElectronicItem(i.id, 'model', e.target.value)} 
+                                           />
+                                       </div>
+                                       <div className="w-24">
+                                           <input 
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" 
+                                                placeholder="S/N 123" 
+                                                value={i.serial} 
+                                                onChange={e => updateElectronicItem(i.id, 'serial', e.target.value)} 
+                                           />
+                                       </div>
+                                       <div className="w-24">
+                                           <select 
+                                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none" 
+                                                value={i.condition} 
+                                                onChange={e => updateElectronicItem(i.id, 'condition', e.target.value)}
+                                           >
+                                               <option>Good</option><option>Damaged</option><option>Scratch</option>
+                                           </select>
+                                       </div>
+                                       <button onClick={() => removeElectronicItem(i.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button>
                                    </div>
                                ))}
                            </div>
                         </div>
                         
                         <div className="space-y-1 mt-6">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Remarks</label>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Remarks</label>
                           <textarea 
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm h-20" 
+                            className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 h-20" 
                             value={electronicData.remarks} 
                             onChange={e => setElectronicData({...electronicData, remarks: e.target.value})} 
+                            placeholder="Additional details about electronics..."
                           />
                         </div>
                    </div>
@@ -1403,30 +1636,61 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                {/* --- ACCESSORIAL SERVICES --- */}
                {activeForm === 'accessorial' && (
                    <div className="space-y-6">
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Client Name</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={accessorialData.clientName} onChange={e => setAccessorialData({...accessorialData, clientName: e.target.value})} /></div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Client Name</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. John Doe" value={accessorialData.clientName} onChange={e => setAccessorialData({...accessorialData, clientName: e.target.value})} /></div>
+                            <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Job Ref</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. AE-1234" value={accessorialData.jobId} onChange={e => setAccessorialData({...accessorialData, jobId: e.target.value})} /></div>
+                        </div>
                         
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                            {Object.entries(accessorialData.services).map(([key, val]) => (
-                                <label key={key} className={`p-4 rounded-xl border cursor-pointer transition-all ${val ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'}`}>
-                                    <div className="flex items-center gap-3">
+                        <div className="flex flex-col gap-4">
+                            <h4 className="text-sm font-bold text-slate-800 uppercase tracking-wide mb-2">Please check all that apply:</h4>
+                            {accessorialItems.map((item) => (
+                                <div key={item.key} className={`flex flex-col p-4 rounded-xl border transition-all ${
+                                    (accessorialData.services as any)[item.key] ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'
+                                }`}>
+                                    <label className="flex items-start gap-4 cursor-pointer">
                                         <input 
                                             type="checkbox" 
-                                            className="w-4 h-4 rounded text-blue-600"
-                                            checked={val} 
-                                            onChange={e => setAccessorialData({...accessorialData, services: {...accessorialData.services, [key]: e.target.checked}})}
+                                            className="w-5 h-5 mt-0.5 rounded text-blue-600 focus:ring-blue-500"
+                                            checked={(accessorialData.services as any)[item.key]} 
+                                            onChange={e => setAccessorialData({...accessorialData, services: {...accessorialData.services, [item.key]: e.target.checked}})}
                                         />
-                                        <span className="font-bold text-xs uppercase tracking-wide text-slate-700">{key.replace(/([A-Z])/g, ' $1')}</span>
-                                    </div>
-                                </label>
+                                        <div className="flex-1">
+                                            <span className="font-bold text-sm text-slate-800 block mb-1">{item.title}</span>
+                                            {item.desc && <span className="text-xs font-medium text-slate-500">{item.desc}</span>}
+                                        </div>
+                                    </label>
+                                    
+                                    {/* Conditional Inputs for Details */}
+                                    {item.hasInput && (accessorialData.services as any)[item.key] && (
+                                        <div className="mt-3 ml-9 animate-in slide-in-from-top-2 duration-300">
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
+                                                    {item.inputLabel}
+                                                </label>
+                                                <input 
+                                                    type="text" 
+                                                    className="w-full px-5 py-3.5 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-400"
+                                                    value={(accessorialData.details as any)[item.inputKey!]} 
+                                                    onChange={e => setAccessorialData({
+                                                        ...accessorialData, 
+                                                        details: { ...accessorialData.details, [item.inputKey!]: e.target.value }
+                                                    })}
+                                                    placeholder="Enter details..."
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             ))}
                         </div>
                         
                         <div className="space-y-1 mt-6">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Remarks</label>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Remarks</label>
                           <textarea 
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm h-20" 
+                            className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 h-20" 
                             value={accessorialData.remarks} 
                             onChange={e => setAccessorialData({...accessorialData, remarks: e.target.value})} 
+                            placeholder="Additional comments..."
                           />
                         </div>
                    </div>
@@ -1437,12 +1701,12 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                    <div className="space-y-6">
                        {/* Header inputs */}
                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                           <input className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" placeholder="Client Name" value={warehouseReceiptData.clientName} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, clientName: e.target.value})} />
-                           <input className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" placeholder="File No" value={warehouseReceiptData.fileNo} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, fileNo: e.target.value})} />
-                           <input className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" placeholder="Total Pkgs" value={warehouseReceiptData.totalPkgs} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, totalPkgs: e.target.value})} />
-                           <input className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" placeholder="Volume" value={warehouseReceiptData.volume} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, volume: e.target.value})} />
-                           <input className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" placeholder="Container No" value={warehouseReceiptData.containerNo} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, containerNo: e.target.value})} />
-                           <input className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" placeholder="Seal No" value={warehouseReceiptData.sealNo} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, sealNo: e.target.value})} />
+                           <input className="px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="Client Name (e.g. Global Trading)" value={warehouseReceiptData.clientName} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, clientName: e.target.value})} />
+                           <input className="px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="File No (e.g. FILE-001)" value={warehouseReceiptData.fileNo} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, fileNo: e.target.value})} />
+                           <input className="px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="Total Pkgs (e.g. 50)" value={warehouseReceiptData.totalPkgs} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, totalPkgs: e.target.value})} />
+                           <input className="px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="Volume (e.g. 20 CBM)" value={warehouseReceiptData.volume} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, volume: e.target.value})} />
+                           <input className="px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="Container No (e.g. CONT123456)" value={warehouseReceiptData.containerNo} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, containerNo: e.target.value})} />
+                           <input className="px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="Seal No (e.g. SEAL999)" value={warehouseReceiptData.sealNo} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, sealNo: e.target.value})} />
                        </div>
 
                        {/* Number Grid */}
@@ -1479,19 +1743,19 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                        {/* Footer Details Inputs */}
                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-slate-100">
                             <div className="space-y-4">
-                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Missing Numbers</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.missingNumbers} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, missingNumbers: e.target.value})} /></div>
-                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Unnumbered</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.unnumbered} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, unnumbered: e.target.value})} /></div>
-                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Double Number</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.doubleNumber} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, doubleNumber: e.target.value})} /></div>
-                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Checked By</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.checkedBy} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, checkedBy: e.target.value})} /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Missing Numbers</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. 5, 12, 40" value={warehouseReceiptData.missingNumbers} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, missingNumbers: e.target.value})} /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Unnumbered</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. 2 Pkgs" value={warehouseReceiptData.unnumbered} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, unnumbered: e.target.value})} /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Double Number</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. 10 (2)" value={warehouseReceiptData.doubleNumber} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, doubleNumber: e.target.value})} /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Checked By</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="Staff Name" value={warehouseReceiptData.checkedBy} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, checkedBy: e.target.value})} /></div>
                             </div>
                             <div className="space-y-4">
-                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Crates</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.totalCrates} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, totalCrates: e.target.value})} /></div>
-                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Crate Nos</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.crateNos} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, crateNos: e.target.value})} /></div>
-                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Received</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.totalReceived} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, totalReceived: e.target.value})} /></div>
-                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Total Delivered</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.totalDelivered} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, totalDelivered: e.target.value})} /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Total Crates</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. 5" value={warehouseReceiptData.totalCrates} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, totalCrates: e.target.value})} /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Crate Nos</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. 1-5" value={warehouseReceiptData.crateNos} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, crateNos: e.target.value})} /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Total Received</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. 150" value={warehouseReceiptData.totalReceived} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, totalReceived: e.target.value})} /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Total Delivered</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. 150" value={warehouseReceiptData.totalDelivered} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, totalDelivered: e.target.value})} /></div>
                             </div>
                             <div className="space-y-4">
-                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Truck Details</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={warehouseReceiptData.truckDetails} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, truckDetails: e.target.value})} /></div>
+                                <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Truck Details</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. DXB-998 / Driver Name" value={warehouseReceiptData.truckDetails} onChange={e => setWarehouseReceiptData({...warehouseReceiptData, truckDetails: e.target.value})} /></div>
                             </div>
                        </div>
                    </div>
@@ -1501,12 +1765,12 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                {activeForm === 'handyman' && (
                  <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Client Name</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={handymanData.clientName} onChange={e => setHandymanData({...handymanData, clientName: e.target.value})} /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">File No</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={handymanData.fileNo} onChange={e => setHandymanData({...handymanData, fileNo: e.target.value})} /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date</label><input type="date" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={handymanData.date} onChange={e => setHandymanData({...handymanData, date: e.target.value})} /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Address</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={handymanData.address} onChange={e => setHandymanData({...handymanData, address: e.target.value})} /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Handyman Assigned</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={handymanData.handymanAssigned} onChange={e => setHandymanData({...handymanData, handymanAssigned: e.target.value})} /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Day Assigned</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={handymanData.dayAssigned} onChange={e => setHandymanData({...handymanData, dayAssigned: e.target.value})} /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Client Name</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. John Doe" value={handymanData.clientName} onChange={e => setHandymanData({...handymanData, clientName: e.target.value})} /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">File No</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. FILE-101" value={handymanData.fileNo} onChange={e => setHandymanData({...handymanData, fileNo: e.target.value})} /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Date</label><input type="date" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" value={handymanData.date} onChange={e => setHandymanData({...handymanData, date: e.target.value})} /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Address</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. Villa 12, Springs 4" value={handymanData.address} onChange={e => setHandymanData({...handymanData, address: e.target.value})} /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Handyman Assigned</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. Mike Smith" value={handymanData.handymanAssigned} onChange={e => setHandymanData({...handymanData, handymanAssigned: e.target.value})} /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Day Assigned</label><input className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" placeholder="e.g. Monday" value={handymanData.dayAssigned} onChange={e => setHandymanData({...handymanData, dayAssigned: e.target.value})} /></div>
                     </div>
 
                     <div className="mt-6 border-t border-slate-200 pt-6">
@@ -1541,259 +1805,17 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                     </div>
 
                     <div className="grid grid-cols-2 gap-6 mt-6">
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time In</label><input type="time" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={handymanData.timeIn} onChange={e => setHandymanData({...handymanData, timeIn: e.target.value})} /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Time Out</label><input type="time" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={handymanData.timeOut} onChange={e => setHandymanData({...handymanData, timeOut: e.target.value})} /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Time In</label><input type="time" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" value={handymanData.timeIn} onChange={e => setHandymanData({...handymanData, timeIn: e.target.value})} /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Time Out</label><input type="time" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400" value={handymanData.timeOut} onChange={e => setHandymanData({...handymanData, timeOut: e.target.value})} /></div>
                     </div>
                     
                     <div className="space-y-1 mt-6">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Remarks</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Remarks</label>
                       <textarea 
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm h-20" 
+                        className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400 h-20" 
                         value={handymanData.remarks} 
                         onChange={e => setHandymanData({...handymanData, remarks: e.target.value})} 
-                      />
-                    </div>
-                 </div>
-               )}
-
-               {/* --- CONTAINER INSPECTION FORM --- */}
-               {activeForm === 'containerInspection' && (
-                 <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Date</label><input type="date" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={containerData.date} onChange={e => setContainerData({...containerData, date: e.target.value})} /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Container Number</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={containerData.containerNo} onChange={e => setContainerData({...containerData, containerNo: e.target.value})} /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Seal Number</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={containerData.sealNo} onChange={e => setContainerData({...containerData, sealNo: e.target.value})} /></div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                        {[
-                            { id: 1, title: 'Outside / Under Carriage', checks: [['Structural damage', 'p1_structuralDamage'], ['Support beams visible', 'p1_supportBeams'], ['No foreign objects', 'p1_foreignObjects']] },
-                            { id: 2, title: 'Inside / Outside Doors', checks: [['Locking mechanisms secure', 'p2_lockingMechanisms'], ['Loose bolts check', 'p2_looseBolts'], ['Hinges secure', 'p2_hingesSecure']] },
-                            { id: 3, title: 'Right Side', checks: [['Unusual repairs beams', 'p3_repairBeams'], ['Inside repairs visible out', 'p3_insideRepairs']] },
-                            { id: 4, title: 'Left Side', checks: [['Unusual repairs beams', 'p4_repairBeams'], ['Inside repairs visible out', 'p4_insideRepairs']] },
-                            { id: 5, title: 'Front Wall', checks: [['Corrugated material', 'p5_corrugated'], ['Interior blocks visible', 'p5_interiorBlocks'], ['Vents visible', 'p5_ventsVisible']] },
-                            { id: 6, title: 'Ceiling / Roof', checks: [['Support beams visible', 'p6_supportBeams'], ['Ventilation holes clear', 'p6_ventHoles'], ['No foreign objects', 'p6_foreignObjects']] },
-                            { id: 7, title: 'Floor', checks: [['Floor flat', 'p7_floorFlat'], ['Floor uniform height', 'p7_floorUniform'], ['Unusual repairs', 'p7_floorRepairs']] },
-                            { id: 8, title: 'Seal Verification', checks: [['Seal properly affixed', 'p8_sealAffixed'], ['Seal meets ISO17712', 'p8_sealISO'], ['Seal not broken', 'p8_sealBroken']] }
-                        ].map(section => (
-                            <div key={section.id} className="bg-slate-50 p-5 rounded-xl border border-slate-100">
-                                <h5 className="font-bold text-sm text-slate-800 mb-3 flex items-center gap-2">
-                                    <span className="bg-blue-100 text-blue-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">{section.id}</span>
-                                    {section.title}
-                                </h5>
-                                <div className="space-y-2.5">
-                                    {section.checks.map(([label, key]) => (
-                                        <label key={key} className="flex items-start gap-3 cursor-pointer p-2 rounded hover:bg-white transition-colors">
-                                            <input 
-                                                type="checkbox" 
-                                                className="w-4 h-4 rounded text-blue-600 mt-0.5"
-                                                checked={(containerData.points as any)[key]} 
-                                                onChange={e => setContainerData({...containerData, points: {...containerData.points, [key]: e.target.checked}})}
-                                            />
-                                            <span className="text-xs font-medium text-slate-600 leading-tight">{label}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="space-y-4 pt-4 border-t border-slate-200">
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Remarks</label>
-                            <textarea className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-1 focus:ring-blue-500 outline-none" rows={3} value={containerData.remarks} onChange={e => setContainerData({...containerData, remarks: e.target.value})}></textarea>
-                        </div>
-                        <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 text-xs text-blue-800 font-medium">
-                            I have visually inspected and verified the condition of the container noted above. I confirmed that the container is structurally sound, weather tight, has no false compartments, and the locking mechanism is in good order and shows no visible signs of being tampered noticed.
-                        </div>
-                        <div className="grid grid-cols-2 gap-6">
-                            <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Inspected By</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={containerData.inspectedBy} onChange={e => setContainerData({...containerData, inspectedBy: e.target.value})} /></div>
-                            <div className="space-y-1"><label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Verified By</label><input className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={containerData.verifiedBy} onChange={e => setContainerData({...containerData, verifiedBy: e.target.value})} /></div>
-                        </div>
-                    </div>
-                 </div>
-               )}
-
-               {/* --- VEHICLE CONDITION FORM --- */}
-               {activeForm === 'vehicleCondition' && (
-                 <div className="space-y-8">
-                    {/* Customer Info */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                       <div className="space-y-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                          <h4 className="font-bold text-xs uppercase text-slate-500">Customer Details</h4>
-                          <input placeholder="Customer Name" className="w-full p-2 text-sm border rounded" value={vehicleConditionData.customerName} onChange={e => setVehicleConditionData({...vehicleConditionData, customerName: e.target.value})} />
-                          <input placeholder="Address" className="w-full p-2 text-sm border rounded" value={vehicleConditionData.address} onChange={e => setVehicleConditionData({...vehicleConditionData, address: e.target.value})} />
-                          <input placeholder="Phone #" className="w-full p-2 text-sm border rounded" value={vehicleConditionData.phone} onChange={e => setVehicleConditionData({...vehicleConditionData, phone: e.target.value})} />
-                          <input placeholder="Dealer Name" className="w-full p-2 text-sm border rounded" value={vehicleConditionData.dealerName} onChange={e => setVehicleConditionData({...vehicleConditionData, dealerName: e.target.value})} />
-                       </div>
-                       <div className="space-y-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                          <h4 className="font-bold text-xs uppercase text-slate-500">Vehicle Info</h4>
-                          <div className="grid grid-cols-2 gap-2">
-                             <input placeholder="Year" className="p-2 text-sm border rounded" value={vehicleConditionData.year} onChange={e => setVehicleConditionData({...vehicleConditionData, year: e.target.value})} />
-                             <input placeholder="Make" className="p-2 text-sm border rounded" value={vehicleConditionData.make} onChange={e => setVehicleConditionData({...vehicleConditionData, make: e.target.value})} />
-                          </div>
-                          <div className="grid grid-cols-2 gap-2">
-                             <input placeholder="Model" className="p-2 text-sm border rounded" value={vehicleConditionData.model} onChange={e => setVehicleConditionData({...vehicleConditionData, model: e.target.value})} />
-                             <input placeholder="Color" className="p-2 text-sm border rounded" value={vehicleConditionData.color} onChange={e => setVehicleConditionData({...vehicleConditionData, color: e.target.value})} />
-                          </div>
-                          <input placeholder="VIN" className="w-full p-2 text-sm border rounded" value={vehicleConditionData.vin} onChange={e => setVehicleConditionData({...vehicleConditionData, vin: e.target.value})} />
-                          <div className="grid grid-cols-2 gap-2">
-                             <input placeholder="License #" className="p-2 text-sm border rounded" value={vehicleConditionData.license} onChange={e => setVehicleConditionData({...vehicleConditionData, license: e.target.value})} />
-                             <input placeholder="Mileage" className="p-2 text-sm border rounded" value={vehicleConditionData.mileage} onChange={e => setVehicleConditionData({...vehicleConditionData, mileage: e.target.value})} />
-                          </div>
-                       </div>
-                    </div>
-
-                    {/* Options Grid */}
-                    <div className="border-t border-slate-200 pt-6">
-                        <h4 className="font-bold text-slate-800 mb-4">Check Options Included</h4>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                            {Object.entries(vehicleConditionData.options).map(([key, val]) => (
-                                <label key={key} className="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" checked={val} onChange={e => setVehicleConditionData({...vehicleConditionData, options: {...vehicleConditionData.options, [key]: e.target.checked}})} className="rounded text-blue-600" />
-                                    <span className="capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
-                                </label>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Condition Zones */}
-                    <div className="border-t border-slate-200 pt-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h4 className="font-bold text-slate-800">Condition Zones (1-21)</h4>
-                            <div className="text-[10px] text-slate-500 bg-slate-100 p-2 rounded">
-                                Legend: H-Hairline, S-Scratched, D-Dented, CR-Creased, R-Rusty...
-                            </div>
-                        </div>
-                        <div className="grid grid-cols-4 md:grid-cols-7 gap-2">
-                            {Array.from({length: 21}, (_, i) => i + 1).map(num => (
-                                <div key={num} className="flex flex-col gap-1">
-                                    <label className="text-[10px] font-bold text-slate-400 text-center">Zone {num}</label>
-                                    <input 
-                                        className="p-2 text-center border rounded text-xs font-bold uppercase" 
-                                        maxLength={2}
-                                        placeholder="Code"
-                                        value={vehicleConditionData.damageZones[num.toString()]}
-                                        onChange={e => setVehicleConditionData({...vehicleConditionData, damageZones: {...vehicleConditionData.damageZones, [num.toString()]: e.target.value}})}
-                                    />
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Interior & Mechanical */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-slate-200 pt-6">
-                        {/* Interior */}
-                        <div>
-                            <h4 className="font-bold text-slate-800 mb-4">Interior</h4>
-                            <div className="flex gap-4 mb-4 text-xs">
-                                {['Clean', 'Average', 'Dirty'].map(opt => (
-                                    <label key={opt} className="flex items-center gap-1 cursor-pointer">
-                                        <input type="radio" name="interiorGen" checked={vehicleConditionData.interiorGeneral === opt} onChange={() => setVehicleConditionData({...vehicleConditionData, interiorGeneral: opt as any})} />
-                                        {opt}
-                                    </label>
-                                ))}
-                            </div>
-                            <div className="space-y-2">
-                                {Object.keys(vehicleConditionData.interiorSpecific).map(key => (
-                                    <div key={key} className="flex items-center justify-between text-xs bg-slate-50 p-2 rounded">
-                                        <span className="font-bold capitalize w-24">{key.replace(/([A-Z])/g, ' $1')}</span>
-                                        <div className="flex gap-2">
-                                            {['good', 'worn', 'burns', 'rips', 'stain'].map(cond => (
-                                                <label key={cond} className="flex flex-col items-center cursor-pointer">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={(vehicleConditionData.interiorSpecific as any)[key][cond]} 
-                                                        onChange={e => setVehicleConditionData({
-                                                            ...vehicleConditionData, 
-                                                            interiorSpecific: {
-                                                                ...vehicleConditionData.interiorSpecific, 
-                                                                [key]: { ...(vehicleConditionData.interiorSpecific as any)[key], [cond]: e.target.checked }
-                                                            }
-                                                        })}
-                                                    />
-                                                    <span className="text-[8px] uppercase">{cond}</span>
-                                                </label>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Mechanical & Tires */}
-                        <div className="space-y-6">
-                            <div>
-                                <h4 className="font-bold text-slate-800 mb-4">Mechanical</h4>
-                                <div className="space-y-2 text-xs">
-                                    <div className="flex justify-between items-center bg-slate-50 p-2 rounded">
-                                        <span>Engine</span>
-                                        <select className="bg-white border rounded p-1" value={vehicleConditionData.mechanical.engine} onChange={e => setVehicleConditionData({...vehicleConditionData, mechanical: {...vehicleConditionData.mechanical, engine: e.target.value as any}})}>
-                                            <option value="">Select...</option><option value="Smooth">Smooth</option><option value="Rough">Rough</option><option value="Knock">Knock</option>
-                                        </select>
-                                    </div>
-                                    <div className="flex justify-between items-center bg-slate-50 p-2 rounded">
-                                        <span>Trans</span>
-                                        <select className="bg-white border rounded p-1" value={vehicleConditionData.mechanical.trans} onChange={e => setVehicleConditionData({...vehicleConditionData, mechanical: {...vehicleConditionData.mechanical, trans: e.target.value as any}})}>
-                                            <option value="">Select...</option><option value="Smooth OK">Smooth OK</option><option value="Slips">Slips</option>
-                                        </select>
-                                    </div>
-                                    <label className="flex items-center gap-2 p-2 bg-slate-50 rounded">
-                                        <input type="checkbox" checked={vehicleConditionData.mechanical.airBlowsHot} onChange={e => setVehicleConditionData({...vehicleConditionData, mechanical: {...vehicleConditionData.mechanical, airBlowsHot: e.target.checked}})} />
-                                        <span>Air Cond Blows Hot</span>
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div>
-                                <h4 className="font-bold text-slate-800 mb-2">Tires Condition</h4>
-                                <div className="grid grid-cols-5 gap-2 text-center text-xs">
-                                    {['Right Front', 'Left Front', 'Right Rear', 'Left Rear', 'Spare'].map(tire => {
-                                        const key = tire.replace(' ', '').charAt(0).toLowerCase() + tire.replace(' ', '').slice(1);
-                                        return (
-                                            <div key={tire} className="flex flex-col gap-1">
-                                                <span className="font-bold text-[9px]">{tire}</span>
-                                                <select 
-                                                    className="p-1 border rounded"
-                                                    value={(vehicleConditionData.tires as any)[key]}
-                                                    onChange={e => setVehicleConditionData({...vehicleConditionData, tires: {...vehicleConditionData.tires, [key]: e.target.value}})}
-                                                >
-                                                    <option value="">-</option><option value="Good">Good</option><option value="Fair">Fair</option><option value="Poor">Poor</option>
-                                                </select>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Footer */}
-                    <div className="flex justify-between items-center border-t border-slate-200 pt-6">
-                        <div className="flex gap-6">
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold">Car Key:</span>
-                                <div className="flex gap-2">
-                                    <button onClick={() => setVehicleConditionData({...vehicleConditionData, carKey: 'Yes'})} className={`px-3 py-1 rounded text-xs ${vehicleConditionData.carKey === 'Yes' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>Yes</button>
-                                    <button onClick={() => setVehicleConditionData({...vehicleConditionData, carKey: 'No'})} className={`px-3 py-1 rounded text-xs ${vehicleConditionData.carKey === 'No' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>No</button>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold">Docs Received:</span>
-                                <div className="flex gap-2">
-                                    <button onClick={() => setVehicleConditionData({...vehicleConditionData, carDocs: 'Yes'})} className={`px-3 py-1 rounded text-xs ${vehicleConditionData.carDocs === 'Yes' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>Yes</button>
-                                    <button onClick={() => setVehicleConditionData({...vehicleConditionData, carDocs: 'No'})} className={`px-3 py-1 rounded text-xs ${vehicleConditionData.carDocs === 'No' ? 'bg-blue-600 text-white' : 'bg-slate-100'}`}>No</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Remarks</label>
-                      <textarea 
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm h-20" 
-                        value={vehicleConditionData.remarks} 
-                        onChange={e => setVehicleConditionData({...vehicleConditionData, remarks: e.target.value})} 
+                        placeholder="Work completion notes..."
                       />
                     </div>
                  </div>
@@ -1826,7 +1848,7 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                      )}
                   </div>
                   <div className="mt-4 flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                     <span>{activeForm === 'vehicleCondition' ? 'Foreman Signature' : activeForm === 'delivery' ? 'Receiver Signature' : 'Client / Rep Signature'}</span>
+                     <span>{activeForm === 'delivery' ? 'Receiver Signature' : 'Client / Rep Signature'}</span>
                      <span>Date: {new Date().toLocaleDateString()}</span>
                   </div>
                </div>

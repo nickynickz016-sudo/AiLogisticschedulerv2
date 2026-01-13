@@ -45,52 +45,72 @@ const App: React.FC = () => {
 
   // Data Fetching Functions
   const fetchJobs = useCallback(async () => {
-    const { data, error } = await supabase.from('jobs').select('*').order('created_at', { ascending: false });
-    if (error) {
-      console.error('Error fetching jobs:', error.message);
-    } else {
-      // Normalize data: Ensure 'vehicles' array exists. 
-      // If 'vehicles' is null but 'vehicle' exists (legacy), convert 'vehicle' string to array.
-      const normalizedData = (data || []).map((j: any) => ({
-        ...j,
-        vehicles: j.vehicles || (j.vehicle ? j.vehicle.split(',').map((s: string) => s.trim()) : [])
-      }));
-      setJobs(normalizedData);
+    try {
+      const { data, error } = await supabase.from('jobs').select('*').order('created_at', { ascending: false });
+      if (error) {
+        console.error('Error fetching jobs:', error.message);
+      } else {
+        // Normalize data: Ensure 'vehicles' array exists. 
+        // If 'vehicles' is null but 'vehicle' exists (legacy), convert 'vehicle' string to array.
+        const normalizedData = (data || []).map((j: any) => ({
+          ...j,
+          vehicles: j.vehicles || (j.vehicle ? j.vehicle.split(',').map((s: string) => s.trim()) : [])
+        }));
+        setJobs(normalizedData);
+      }
+    } catch (err) {
+      console.error('Unexpected error fetching jobs:', err);
     }
   }, []);
 
   const fetchUsers = useCallback(async () => {
-    // Sync systemUsers with the profiles in allCredentials
-    const userProfiles = allCredentials.map(u => u.profile);
-    setSystemUsers(userProfiles);
+    try {
+        // Sync systemUsers with the profiles in allCredentials
+        const userProfiles = allCredentials.map(u => u.profile);
+        setSystemUsers(userProfiles);
+    } catch (err) {
+        console.error('Unexpected error fetching users:', err);
+    }
   }, [allCredentials]);
 
   const fetchPersonnel = useCallback(async () => {
-    const { data, error } = await supabase.from('personnel').select('*');
-    if (error) console.error('Error fetching personnel:', error.message);
-    else setPersonnel(data || []);
+    try {
+        const { data, error } = await supabase.from('personnel').select('*');
+        if (error) console.error('Error fetching personnel:', error.message);
+        else setPersonnel(data || []);
+    } catch (err) {
+        console.error('Unexpected error fetching personnel:', err);
+    }
   }, []);
 
   const fetchVehicles = useCallback(async () => {
-    const { data, error } = await supabase.from('vehicles').select('*');
-    if (error) console.error('Error fetching vehicles:', error.message);
-    else setVehicles(data || []);
+    try {
+        const { data, error } = await supabase.from('vehicles').select('*');
+        if (error) console.error('Error fetching vehicles:', error.message);
+        else setVehicles(data || []);
+    } catch (err) {
+        console.error('Unexpected error fetching vehicles:', err);
+    }
   }, []);
 
   const fetchSettings = useCallback(async () => {
-    // Updated query to include company_logo
-    const { data, error } = await supabase.from('system_settings').select('daily_job_limits, holidays, company_logo').eq('id', 1).single();
-    if (data) {
-      setSettings({
-        daily_job_limits: data.daily_job_limits || {},
-        holidays: data.holidays || [],
-        company_logo: data.company_logo || undefined
-      });
-    } else if (error) {
-      console.error('Error fetching settings:', error.message);
-      // If settings don't exist, create them
-      const { error: insertError } = await supabase.from('system_settings').insert([{ id: 1, daily_job_limits: {}, holidays: [] as string[] }]);
-      if (insertError) console.error('Error creating initial settings:', insertError.message);
+    try {
+        // Updated query to include company_logo
+        const { data, error } = await supabase.from('system_settings').select('daily_job_limits, holidays, company_logo').eq('id', 1).single();
+        if (data) {
+          setSettings({
+            daily_job_limits: data.daily_job_limits || {},
+            holidays: data.holidays || [],
+            company_logo: data.company_logo || undefined
+          });
+        } else if (error) {
+          console.error('Error fetching settings:', error.message);
+          // If settings don't exist, create them
+          const { error: insertError } = await supabase.from('system_settings').insert([{ id: 1, daily_job_limits: {}, holidays: [] as string[] }]);
+          if (insertError) console.error('Error creating initial settings:', insertError.message);
+        }
+    } catch (err) {
+        console.error('Unexpected error fetching settings:', err);
     }
   }, []);
 
