@@ -95,7 +95,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const fetchSettings = useCallback(async () => {
+  const fetchSettings = useCallback(async (retryCount = 0) => {
     try {
         // Use select('*') to gracefully handle missing columns in legacy schemas
         // This prevents the app from crashing if 'system_alert' or other new columns don't exist yet
@@ -121,13 +121,19 @@ const App: React.FC = () => {
              console.log('Settings not found, creating default...');
              const { error: insertError } = await supabase.from('system_settings').insert([{ id: 1, daily_job_limits: {}, holidays: [] as string[] }]);
              if (insertError) console.error('Error creating initial settings:', insertError.message);
-             else await fetchSettings(); // Retry fetch
+             else if (retryCount < 3) {
+                 setTimeout(() => fetchSettings(retryCount + 1), 1000);
+             }
           } else {
-             console.error('Error fetching settings:', error.message);
+             throw error; // Throw error to trigger retry logic
           }
         }
     } catch (err) {
-        console.error('Unexpected error fetching settings:', err);
+        console.error('Unexpected error fetching settings (attempt ' + (retryCount + 1) + '):', err);
+        // Retry logic for transient network errors
+        if (retryCount < 3) {
+            setTimeout(() => fetchSettings(retryCount + 1), 2000);
+        }
     }
   }, []);
 

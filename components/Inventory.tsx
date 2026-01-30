@@ -93,9 +93,33 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
         console.error("Error fetching cost sheet:", error);
     }
 
+    // Merge Logic: Combine Master Inventory with Saved Data
+    // We map over the Master 'items' so every item is present in the sheet.
+    const mergedItems: CostSheetItem[] = items.map(masterItem => {
+        // Check if this master item exists in the saved sheet data
+        const savedItem = data?.items?.find((i: any) => i.inventory_id === masterItem.id);
+        
+        if (savedItem) {
+            // Use saved values
+            return savedItem;
+        } else {
+            // Initialize with 0
+            return {
+                inventory_id: masterItem.id,
+                code: masterItem.code,
+                description: masterItem.description,
+                unit: masterItem.unit,
+                price: masterItem.price,
+                issued_qty: 0,
+                returned_qty: 0
+            };
+        }
+    });
+
     if (data) {
-        setCurrentSheet(data);
-        // Determine stage based on status or user override
+        setCurrentSheet({ ...data, items: mergedItems });
+        
+        // Determine stage
         if (onlyFinalAssessment) {
             setCostingStage('Final');
         } else if (data.status === 'Finalized') {
@@ -106,10 +130,10 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
             setCostingStage('Issued');
         }
     } else {
-        // Initialize blank sheet
+        // Initialize new sheet with full inventory list
         setCurrentSheet({
             job_id: jobId,
-            items: [],
+            items: mergedItems,
             status: 'Issued',
             total_cost: 0
         });
@@ -129,7 +153,7 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
     } else {
         setCurrentSheet(null);
     }
-  }, [selectedJobId, onlyFinalAssessment]);
+  }, [selectedJobId, onlyFinalAssessment, items]); // Added items dependency so if master list loads later, sheet updates
 
   // --- Inventory Functions ---
 
@@ -262,39 +286,6 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
     j.shipper_name.toLowerCase().includes(jobSearchTerm.toLowerCase())
   );
 
-  const addItemToSheet = (inventoryItem: InventoryItem) => {
-    if (!currentSheet) return;
-    
-    const exists = currentSheet.items.find(i => i.inventory_id === inventoryItem.id);
-    if (exists) return; // Prevent duplicates
-
-    const newItem: CostSheetItem = {
-        inventory_id: inventoryItem.id,
-        code: inventoryItem.code,
-        description: inventoryItem.description,
-        unit: inventoryItem.unit,
-        price: inventoryItem.price,
-        issued_qty: 0,
-        returned_qty: 0
-    };
-
-    setCurrentSheet({
-        ...currentSheet,
-        items: [...currentSheet.items, newItem]
-    });
-    setSearchMaterial('');
-  };
-
-  const removeItemFromSheet = (inventoryId: number) => {
-    if (!currentSheet) return;
-    if (confirm("Remove this item from the sheet? Any saved consumption will be reversed upon saving.")) {
-        setCurrentSheet({
-            ...currentSheet,
-            items: currentSheet.items.filter(item => item.inventory_id !== inventoryId)
-        });
-    }
-  };
-
   const updateSheetItem = (inventoryId: number, field: 'issued_qty' | 'returned_qty', value: number) => {
     if (!currentSheet) return;
     
@@ -322,7 +313,7 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
 
     try {
         // 1. Fetch Previous Sheet State from DB to calculate differential
-        const { data: previousSheetData, error: fetchError } = await supabase
+        const { data: previousSheetData } = await supabase
             .from('job_cost_sheets')
             .select('items')
             .eq('job_id', currentSheet.job_id)
@@ -360,7 +351,7 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
 
             if (diff !== 0) {
                 // Fetch fresh stock first
-                const { data: masterItem, error: masterError } = await supabase
+                const { data: masterItem } = await supabase
                     .from('inventory_items')
                     .select('stock')
                     .eq('id', invId)
@@ -385,10 +376,20 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
         }
 
         // 4. Save the Sheet
+        // OPTIONAL: Filter out items with 0 issued/returned to save DB space, 
+        // OR save everything to maintain full state. 
+        // Saving everything ensures the full list structure is preserved for history.
         const status = costingStage === 'Final' ? 'Finalized' : costingStage === 'Returned' ? 'Returned' : 'Issued';
+        
+        // Let's filter slightly to clean up database but keep user intent
+        // Ideally we save the full list if we want to show 0s next time without re-merging from master, 
+        // BUT since we re-merge on fetchCostSheet anyway, we can strictly save only modified items to DB.
+        // However, to keep it simple and less prone to sync errors, we'll save the items that have any activity.
+        const itemsToSave = currentSheet.items.filter(i => i.issued_qty > 0 || i.returned_qty > 0);
+
         const payload = {
             job_id: currentSheet.job_id,
-            items: currentSheet.items,
+            items: itemsToSave,
             status: status,
             total_cost: calculateTotalCost()
         };
@@ -400,6 +401,7 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
         if (saveError) throw saveError;
 
         alert(`Sheet saved successfully! ${updatesMade ? 'Inventory stock has been updated.' : ''}`);
+        // Update local state to reflect status change
         setCurrentSheet({ ...currentSheet, status });
         await fetchInventory(); // Refresh master list to show new stock levels
 
@@ -458,7 +460,7 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
 
         alert("Cost sheet deleted successfully. Stock levels have been restored.");
         
-        // Reset local state to blank
+        // Reset local state
         setCurrentSheet({
             job_id: selectedJobId,
             items: [],
@@ -468,7 +470,7 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
         setCostingStage('Issued');
         setJobSearchTerm('');
         setSelectedJobId('');
-        await fetchInventory();
+        await fetchInventory(); // Refresh master list
 
     } catch (error: any) {
         console.error("Delete failed:", error);
@@ -479,8 +481,6 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
   };
 
   const handleRedeductStock = async () => {
-      // Manual override if needed, but differential logic should handle it.
-      // This button is mostly for recovery if initial deduction failed.
       if(!confirm("Force re-deduct stock? Only use this if stock wasn't updated automatically.")) return;
       await saveCostSheet();
   };
@@ -553,7 +553,9 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
     yPos += 20;
 
     // --- Table ---
-    const tableBody = currentSheet.items.map(item => {
+    // Only show items with activity for clean PDF
+    const itemsToShow = currentSheet.items.filter(i => i.issued_qty > 0 || i.returned_qty > 0);
+    const tableBody = itemsToShow.map(item => {
         const consumed = Math.max(0, item.issued_qty - item.returned_qty);
         const cost = consumed * item.price;
         return [
@@ -606,7 +608,7 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
             fontSize: 11,
             halign: 'right'
         },
-        theme: 'grid', // 'grid' provides a neat bordered look, 'plain' is minimal. Grid is usually preferred for financial data.
+        theme: 'grid', 
         styles: {
             lineWidth: 0.1,
             lineColor: colors.border
@@ -721,10 +723,11 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
     doc.save(`Inventory_Master_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
-  // Filter materials for dropdown
-  const filteredMaterialList = items.filter(i => 
-    i.description.toLowerCase().includes(searchMaterial.toLowerCase())
-  );
+  // Filter materials for the Cost Sheet Table View
+  const visibleSheetItems = currentSheet?.items.filter(i => 
+    i.description.toLowerCase().includes(searchMaterial.toLowerCase()) || 
+    (i.code && i.code.toLowerCase().includes(searchMaterial.toLowerCase()))
+  ) || [];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-12">
@@ -1063,47 +1066,35 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                                         <input 
                                             type="text" 
-                                            placeholder="Search materials to add..."
+                                            placeholder="Filter material list..."
                                             className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none"
                                             value={searchMaterial}
                                             onChange={e => setSearchMaterial(e.target.value)}
                                         />
-                                        {searchMaterial && (
-                                            <div className="absolute top-full left-0 right-0 bg-white border border-slate-200 rounded-xl shadow-xl mt-2 max-h-48 overflow-y-auto z-10 custom-scrollbar">
-                                                {filteredMaterialList.map(item => (
-                                                    <div 
-                                                        key={item.id} 
-                                                        onClick={() => addItemToSheet(item)}
-                                                        className="p-3 hover:bg-blue-50 cursor-pointer text-sm font-medium flex justify-between"
-                                                    >
-                                                        <span>{item.description}</span>
-                                                        <span className="text-slate-400 text-xs">{item.code}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
                             )}
 
-                            <div className="overflow-x-auto rounded-xl border border-slate-200">
+                            <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[600px] overflow-y-auto custom-scrollbar">
                                 <table className="w-full text-left">
                                     <thead>
-                                        <tr className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase tracking-widest">
-                                            <th className="p-4">Material Description</th>
-                                            <th className="p-4 text-center w-24">Unit</th>
+                                        <tr className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase tracking-widest sticky top-0 z-10 border-b border-slate-200">
+                                            <th className="p-4 bg-slate-50">Material Description</th>
+                                            <th className="p-4 text-center w-24 bg-slate-50">Unit</th>
                                             <th className="p-4 text-center w-32 bg-blue-50/50 text-blue-700">Issued Qty</th>
                                             <th className="p-4 text-center w-32 bg-orange-50/50 text-orange-700">Returned Qty</th>
                                             <th className="p-4 text-center w-24 bg-slate-100 text-slate-700">Consumed</th>
-                                            {costingStage === 'Issued' && <th className="p-4 text-center w-16">Action</th>}
                                             {costingStage === 'Final' && <th className="p-4 text-right w-32 bg-emerald-50/50 text-emerald-700">Cost (AED)</th>}
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
-                                        {currentSheet.items.map((item) => {
+                                        {visibleSheetItems.map((item) => {
                                             const consumed = Math.max(0, item.issued_qty - item.returned_qty);
                                             const cost = consumed * item.price;
                                             
+                                            // Only hide items in Final stage if no activity
+                                            if (costingStage === 'Final' && item.issued_qty === 0 && item.returned_qty === 0) return null;
+
                                             return (
                                                 <tr key={item.inventory_id} className="hover:bg-slate-50/50 transition-colors">
                                                     <td className="p-4 text-sm font-bold text-slate-700">
@@ -1117,7 +1108,8 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                                                             min="0"
                                                             disabled={costingStage !== 'Issued'}
                                                             className={`w-full text-center p-2 rounded-lg text-sm font-bold outline-none ${costingStage === 'Issued' ? 'bg-white border border-blue-200 focus:ring-1 focus:ring-blue-500 text-slate-900 shadow-sm' : 'bg-transparent text-slate-600'}`}
-                                                            value={item.issued_qty}
+                                                            value={item.issued_qty || ''}
+                                                            placeholder="0"
                                                             onChange={e => updateSheetItem(item.inventory_id, 'issued_qty', parseInt(e.target.value) || 0)}
                                                         />
                                                     </td>
@@ -1127,24 +1119,14 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                                                             min="0"
                                                             disabled={costingStage !== 'Returned'}
                                                             className={`w-full text-center p-2 rounded-lg text-sm font-bold outline-none ${costingStage === 'Returned' ? 'bg-white border border-orange-200 focus:ring-1 focus:ring-orange-500 text-slate-900 shadow-sm' : 'bg-transparent text-slate-600'}`}
-                                                            value={item.returned_qty}
+                                                            value={item.returned_qty || ''}
+                                                            placeholder="0"
                                                             onChange={e => updateSheetItem(item.inventory_id, 'returned_qty', parseInt(e.target.value) || 0)}
                                                         />
                                                     </td>
                                                     <td className="p-4 text-center bg-slate-50 font-bold text-slate-800 text-sm border-l border-slate-100">
                                                         {consumed}
                                                     </td>
-                                                    {costingStage === 'Issued' && (
-                                                        <td className="p-4 text-center">
-                                                            <button 
-                                                                onClick={() => removeItemFromSheet(item.inventory_id)}
-                                                                className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
-                                                                title="Remove Item"
-                                                            >
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </button>
-                                                        </td>
-                                                    )}
                                                     {costingStage === 'Final' && (
                                                         <td className="p-4 text-right font-bold text-emerald-600 text-sm bg-emerald-50/20">
                                                             {cost.toFixed(2)}
@@ -1153,10 +1135,10 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                                                 </tr>
                                             )
                                         })}
-                                        {currentSheet.items.length === 0 && (
+                                        {visibleSheetItems.length === 0 && (
                                             <tr>
-                                                <td colSpan={7} className="p-8 text-center text-slate-400 text-sm italic">
-                                                    No materials added to this sheet yet. Search above to add items.
+                                                <td colSpan={6} className="p-8 text-center text-slate-400 text-sm italic">
+                                                    No materials found matching filter.
                                                 </td>
                                             </tr>
                                         )}
@@ -1164,7 +1146,7 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                                     {costingStage === 'Final' && (
                                         <tfoot>
                                             <tr className="bg-slate-900 text-white">
-                                                <td colSpan={6} className="p-4 text-right text-xs font-bold uppercase tracking-widest">Total Material Cost</td>
+                                                <td colSpan={5} className="p-4 text-right text-xs font-bold uppercase tracking-widest">Total Material Cost</td>
                                                 <td className="p-4 text-right text-lg font-black">{calculateTotalCost().toFixed(2)} AED</td>
                                             </tr>
                                         </tfoot>

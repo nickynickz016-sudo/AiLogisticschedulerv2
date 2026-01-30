@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Job, JobStatus, LoadingType, UserProfile, Personnel, Vehicle, UserRole, ShipmentDetailsType } from '../types';
-import { Plus, Search, Package, Clock, User, X, Calendar as CalendarIcon, CheckCircle2, Truck, Settings2, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Phone, Mail, Briefcase, FileText, AlertCircle, MapPin, RefreshCw, Edit2 } from 'lucide-react';
+import { Plus, Search, Package, Clock, User, X, Calendar as CalendarIcon, CheckCircle2, Truck, Settings2, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Phone, Mail, Briefcase, FileText, AlertCircle, MapPin, RefreshCw, Edit2, Maximize2, Minimize2 } from 'lucide-react';
 import { JobDetailModal } from './JobDetailModal';
 
 interface ScheduleViewProps {
@@ -48,6 +48,10 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   const [viewMode, setViewMode] = useState<'calendar' | 'list' | 'month'>('list');
   const [currentDate, setCurrentDate] = useState(new Date());
   
+  // UI States for Expansion and Search
+  const [expandedSection, setExpandedSection] = useState<'leader' | 'crew' | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+
   // Edit Mode State
   const [isEditingMode, setIsEditingMode] = useState(false);
 
@@ -190,6 +194,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
       vehicles: job.vehicles || [],
       writer_crew: job.writer_crew || []
     });
+    setExpandedSection(null);
+    setSearchTerm('');
   };
 
   const handleToggleJobLock = (jobId: string, e: React.MouseEvent) => {
@@ -230,6 +236,16 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         return { ...prev, vehicles: [...prev.vehicles, name] };
       }
     });
+  };
+
+  const toggleSection = (section: 'leader' | 'crew') => {
+    if (expandedSection === section) {
+        setExpandedSection(null);
+        setSearchTerm('');
+    } else {
+        setExpandedSection(section);
+        setSearchTerm('');
+    }
   };
 
   const handleDateInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -355,8 +371,13 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     );
   };
 
+  // Filter lists based on search term
+  const teamLeaders = personnel.filter(p => p.type === 'Team Leader' && p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const allCrew = personnel.filter(p => p.type !== 'Team Leader' && p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
+      {/* ... (previous JSX code for header and tables remains unchanged) ... */}
       <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
         <div className="flex-1 w-full">
           <h2 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-3">
@@ -680,70 +701,165 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
       {/* Allocation Edit Modal */}
       {showAllocationModal && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden flex flex-col max-h-[90vh]">
+           <div className={`bg-white rounded-3xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden flex flex-col ${expandedSection ? 'h-[85vh]' : 'max-h-[90vh]'}`}>
               <div className="p-8 border-b bg-slate-900 flex justify-between items-center text-white shrink-0">
                  <div>
                    <h3 className="text-lg font-bold uppercase tracking-widest">Dispatch Allocation</h3>
                    <p className="text-[10px] font-medium opacity-70 uppercase tracking-tighter">Job No: {showAllocationModal.id}</p>
                  </div>
-                 <button onClick={() => setShowAllocationModal(null)} className="p-2 hover:bg-white/10 rounded-xl transition-all"><X className="w-5 h-5" /></button>
+                 <div className="flex items-center gap-2">
+                    {expandedSection && (
+                        <button onClick={() => { setExpandedSection(null); setSearchTerm(''); }} className="p-2 hover:bg-white/10 rounded-xl transition-all">
+                            <Minimize2 className="w-5 h-5" />
+                        </button>
+                    )}
+                    <button onClick={() => setShowAllocationModal(null)} className="p-2 hover:bg-white/10 rounded-xl transition-all"><X className="w-5 h-5" /></button>
+                 </div>
               </div>
-              <form onSubmit={handleUpdateAllocation} className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
-                 <div className="space-y-2">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Team Leader Assignment</label>
-                    <select className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={editAllocation.team_leader} onChange={e => setEditAllocation({...editAllocation, team_leader: e.target.value})}>
-                       <option value="">Choose Leader...</option>
-                       {personnel.filter(p => p.type === 'Team Leader').map(tl => <option key={tl.id} value={tl.name}>{tl.name}</option>)}
-                    </select>
+              <form onSubmit={handleUpdateAllocation} className="p-8 space-y-6 overflow-y-auto custom-scrollbar flex-1 flex flex-col">
+                 
+                 {/* Team Leader Section */}
+                 <div className={`bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden transition-all duration-300 flex flex-col ${expandedSection === 'leader' ? 'flex-1 h-full min-h-[300px]' : ''} ${expandedSection === 'crew' ? 'hidden' : ''}`}>
+                    <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-white sticky top-0 z-10">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                            <User className="w-4 h-4 text-slate-400" /> Assign Team Leader
+                        </label>
+                        <div className="flex items-center gap-2">
+                            {expandedSection === 'leader' && (
+                                <div className="relative">
+                                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"/>
+                                    <input 
+                                        autoFocus
+                                        className="bg-slate-100 rounded-lg pl-8 pr-3 py-1.5 text-xs font-bold outline-none w-40 border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500/20 transition-all" 
+                                        placeholder="Search Leaders..." 
+                                        value={searchTerm}
+                                        onChange={e => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
+                            )}
+                            <button 
+                                type="button"
+                                onClick={() => toggleSection('leader')} 
+                                className={`p-1.5 rounded-lg transition-all ${expandedSection === 'leader' ? 'bg-blue-100 text-blue-600' : 'hover:bg-slate-100 text-slate-400'}`}
+                                title={expandedSection === 'leader' ? "Collapse View" : "Expand View"}
+                            >
+                                {expandedSection === 'leader' ? <Minimize2 className="w-4 h-4"/> : <Maximize2 className="w-4 h-4"/>}
+                            </button>
+                        </div>
+                    </div>
+                    <div className={`p-2 overflow-y-auto custom-scrollbar grid grid-cols-1 gap-2 ${expandedSection === 'leader' ? 'flex-1' : 'max-h-32'}`}>
+                       {teamLeaders.length === 0 && <p className="text-xs text-slate-400 p-4 text-center">No Team Leaders available.</p>}
+                       {teamLeaders.map(tl => (
+                           <button
+                             key={tl.id}
+                             type="button"
+                             onClick={() => setEditAllocation({...editAllocation, team_leader: tl.name})}
+                             className={`px-4 py-3 rounded-xl border text-[11px] font-bold transition-all text-left flex justify-between items-center ${
+                               editAllocation.team_leader === tl.name
+                                 ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                                 : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
+                             }`}
+                           >
+                             <div className="flex flex-col">
+                                <span className="truncate pr-2 text-sm">{tl.name}</span>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  <div className={`w-1.5 h-1.5 rounded-full ${tl.status === 'Available' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                                  <span className={`text-[9px] uppercase tracking-tighter ${editAllocation.team_leader === tl.name ? 'text-blue-200' : 'text-slate-400'}`}>
+                                    {tl.status}
+                                  </span>
+                                </div>
+                             </div>
+                             {editAllocation.team_leader === tl.name && <CheckCircle2 className="w-5 h-5 shrink-0" />}
+                           </button>
+                       ))}
+                    </div>
                  </div>
 
-                 <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Select Crew Members</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {personnel.filter(p => p.type === 'Writer Crew').map(crew => (
+                 {/* Crew Section */}
+                 <div className={`bg-slate-50 rounded-2xl border border-slate-200 overflow-hidden transition-all duration-300 flex flex-col ${expandedSection === 'crew' ? 'flex-1 h-full min-h-[300px]' : ''} ${expandedSection === 'leader' ? 'hidden' : ''}`}>
+                    <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-white sticky top-0 z-10">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                            <Users className="w-4 h-4 text-slate-400" /> Assign Crew Members
+                        </label>
+                        <div className="flex items-center gap-2">
+                            {expandedSection === 'crew' && (
+                                <div className="relative">
+                                    <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"/>
+                                    <input 
+                                        autoFocus
+                                        className="bg-slate-100 rounded-lg pl-8 pr-3 py-1.5 text-xs font-bold outline-none w-40 border-transparent focus:bg-white focus:ring-2 focus:ring-blue-500/20 transition-all" 
+                                        placeholder="Search Crew..." 
+                                        value={searchTerm}
+                                        onChange={e => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
+                            )}
+                            <button 
+                                type="button"
+                                onClick={() => toggleSection('crew')} 
+                                className={`p-1.5 rounded-lg transition-all ${expandedSection === 'crew' ? 'bg-blue-100 text-blue-600' : 'hover:bg-slate-100 text-slate-400'}`}
+                                title={expandedSection === 'crew' ? "Collapse View" : "Expand View"}
+                            >
+                                {expandedSection === 'crew' ? <Minimize2 className="w-4 h-4"/> : <Maximize2 className="w-4 h-4"/>}
+                            </button>
+                        </div>
+                    </div>
+                    <div className={`p-2 overflow-y-auto custom-scrollbar grid grid-cols-2 gap-2 ${expandedSection === 'crew' ? 'flex-1 auto-rows-min' : 'max-h-48'}`}>
+                      {allCrew.length === 0 && <p className="text-xs text-slate-400 p-4 col-span-2 text-center">No crew found.</p>}
+                      {allCrew.map(crew => (
                         <button
                           key={crew.id}
                           type="button"
                           onClick={() => toggleCrewMember(crew.name)}
-                          className={`px-4 py-3 rounded-xl border text-[11px] font-bold transition-all text-left flex justify-between items-center ${
+                          className={`px-3 py-3 rounded-xl border text-[11px] font-bold transition-all text-left flex justify-between items-center group relative ${
                             editAllocation.writer_crew.includes(crew.name)
                               ? 'bg-blue-600 border-blue-600 text-white shadow-md'
-                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
+                              : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'
                           }`}
                         >
-                          <div className="flex flex-col">
-                            <span>{crew.name}</span>
-                            <span className={`text-[8px] uppercase tracking-tighter ${editAllocation.writer_crew.includes(crew.name) ? 'text-blue-100' : 'text-slate-400'}`}>ID: {crew.employee_id}</span>
+                          <div className="flex flex-col min-w-0">
+                             <span className="truncate pr-2">{crew.name}</span>
+                             <div className="flex items-center gap-1.5 mt-0.5">
+                               <div className={`w-1.5 h-1.5 rounded-full ${crew.status === 'Available' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
+                               <span className={`text-[8px] uppercase tracking-tighter truncate ${editAllocation.writer_crew.includes(crew.name) ? 'text-blue-100' : 'text-slate-400'}`}>
+                                 {crew.status}
+                               </span>
+                             </div>
                           </div>
-                          {editAllocation.writer_crew.includes(crew.name) && <CheckCircle2 className="w-4 h-4" />}
+                          {editAllocation.writer_crew.includes(crew.name) && <CheckCircle2 className="w-4 h-4 shrink-0" />}
                         </button>
                       ))}
                     </div>
                  </div>
 
-                 <div className="space-y-3">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Fleet Assignment</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {vehicles.map(v => (
-                        <button
-                          key={v.id}
-                          type="button"
-                          onClick={() => toggleVehicle(v.name)}
-                          className={`px-4 py-3 rounded-xl border text-[11px] font-bold transition-all text-left flex justify-between items-center ${
-                            editAllocation.vehicles.includes(v.name)
-                              ? 'bg-blue-600 border-blue-600 text-white shadow-md'
-                              : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
-                          }`}
-                        >
-                          <div className="flex flex-col">
-                             <span>{v.name}</span>
-                             <span className={`text-[8px] uppercase tracking-tighter ${editAllocation.vehicles.includes(v.name) ? 'text-blue-100' : 'text-slate-400'}`}>{v.plate}</span>
-                          </div>
-                          {editAllocation.vehicles.includes(v.name) && <CheckCircle2 className="w-4 h-4" />}
-                        </button>
-                      ))}
-                    </div>
-                 </div>
+                 {/* Fleet Section (Hidden when expanded) */}
+                 {!expandedSection && (
+                     <div className="space-y-3">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                            <Truck className="w-4 h-4 text-slate-400" /> Fleet Assignment
+                        </label>
+                        <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar p-1">
+                          {vehicles.map(v => (
+                            <button
+                              key={v.id}
+                              type="button"
+                              onClick={() => toggleVehicle(v.name)}
+                              className={`px-4 py-3 rounded-xl border text-[11px] font-bold transition-all text-left flex justify-between items-center ${
+                                editAllocation.vehicles.includes(v.name)
+                                  ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                                  : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
+                              }`}
+                            >
+                              <div className="flex flex-col">
+                                 <span className="truncate pr-2">{v.name}</span>
+                                 <span className={`text-[8px] uppercase tracking-tighter ${editAllocation.vehicles.includes(v.name) ? 'text-blue-100' : 'text-slate-400'}`}>{v.plate}</span>
+                              </div>
+                              {editAllocation.vehicles.includes(v.name) && <CheckCircle2 className="w-4 h-4 shrink-0" />}
+                            </button>
+                          ))}
+                        </div>
+                     </div>
+                 )}
                  
                  <div className="pt-6 flex gap-4 shrink-0 mt-auto">
                    <button type="button" onClick={() => setShowAllocationModal(null)} className="flex-1 py-4 font-bold text-slate-400 hover:text-slate-600 text-[11px] uppercase tracking-widest">Discard</button>

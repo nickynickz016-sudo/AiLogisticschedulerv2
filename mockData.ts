@@ -98,7 +98,7 @@ const SEMI_ADMIN_ACCESS = {
   inventory: true,
   tracking: true, // Added
   resources: true,
-  capacity: false,
+  capacity: true, // CHANGED TO TRUE
   users: false,
   ai: true,
 };
@@ -244,6 +244,19 @@ export const USERS: MockUser[] = [
       role: UserRole.USER,
       permissions: SEMI_ADMIN_ACCESS,
       avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Karthik',
+      status: 'Active',
+    },
+  },
+  {
+    username: 'Allen',
+    password: 'Writer@123',
+    profile: {
+      id: 'l2b3c4d5-e6f7-8901-2345-67890abcdef123',
+      employee_id: 'OPS-204',
+      name: 'Allen',
+      role: UserRole.USER,
+      permissions: SENIOR_OPS_ACCESS,
+      avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Allen',
       status: 'Active',
     },
   },

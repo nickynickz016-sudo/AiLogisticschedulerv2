@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Job, JobStatus, UserProfile, CustomsStatus, UserRole } from '../types';
-import { Plus, X, FileCheck, User, Clock, AlertCircle, Info, ShieldCheck, Edit3, Calendar, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, X, FileCheck, User, Clock, AlertCircle, Info, ShieldCheck, Edit3, Calendar, RefreshCw, ChevronLeft, ChevronRight, History } from 'lucide-react';
 
 interface ImportClearanceProps {
   jobs: Job[];
@@ -31,6 +31,10 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({ jobs, onAddJob
     container_number: '',
     job_date: selectedDate
   });
+  
+  // History Modal State
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [selectedHistoryJob, setSelectedHistoryJob] = useState<Job | null>(null);
   
   // When the selectedDate changes, update the date for new activities
   useEffect(() => {
@@ -221,6 +225,13 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({ jobs, onAddJob
                     </select>
                   </div>
                   <button 
+                    onClick={() => { setSelectedHistoryJob(activity); setHistoryModalOpen(true); }}
+                    className="p-3 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                    title="View Status History"
+                  >
+                    <History className="w-5 h-5" />
+                  </button>
+                  <button 
                     onClick={() => onDeleteJob(activity.id)}
                     className="p-3 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
                   >
@@ -291,6 +302,57 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({ jobs, onAddJob
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* History Modal */}
+      {historyModalOpen && selectedHistoryJob && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[80vh]">
+              <div className="p-6 border-b bg-slate-50 flex justify-between items-center shrink-0">
+                 <div>
+                   <h3 className="text-lg font-bold text-slate-800">Status History</h3>
+                   <p className="text-xs text-slate-500 font-medium">Job: {selectedHistoryJob.id}</p>
+                 </div>
+                 <button onClick={() => setHistoryModalOpen(false)} className="p-2 hover:bg-white rounded-xl transition-all text-slate-400"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="p-6 overflow-y-auto custom-scrollbar">
+                 {selectedHistoryJob.customs_history && selectedHistoryJob.customs_history.length > 0 ? (
+                    <div className="space-y-6 relative">
+                        {/* Vertical Line */}
+                        <div className="absolute left-3.5 top-2 bottom-2 w-0.5 bg-slate-200"></div>
+                        
+                        {[...selectedHistoryJob.customs_history].reverse().map((entry, idx) => (
+                            <div key={idx} className="relative pl-10">
+                                <div className="absolute left-0 top-1 w-7 h-7 rounded-full bg-white border-2 border-indigo-200 flex items-center justify-center z-10">
+                                    <div className="w-2.5 h-2.5 rounded-full bg-indigo-500"></div>
+                                </div>
+                                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                    <div className="flex justify-between items-start mb-1">
+                                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase ${getStatusColor(entry.status as CustomsStatus)}`}>
+                                            {entry.status.replace(/_/g, ' ')}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 font-medium">
+                                            {new Date(entry.updated_at).toLocaleString()}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-slate-600 font-medium mt-2">
+                                        Updated by: <span className="font-bold text-slate-800">{entry.updated_by}</span>
+                                    </p>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                 ) : (
+                    <div className="text-center py-10">
+                        <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <History className="w-8 h-8 text-slate-300" />
+                        </div>
+                        <p className="text-sm font-bold text-slate-400">No history available</p>
+                    </div>
+                 )}
+              </div>
+           </div>
         </div>
       )}
     </div>

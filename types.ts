@@ -89,6 +89,12 @@ export interface TrackingStepDetails {
   completed?: boolean;
 }
 
+export interface CustomsHistoryEntry {
+  status: string;
+  updated_at: string;
+  updated_by: string;
+}
+
 // FIX: Made several properties optional to support different job creation contexts (e.g., Warehouse vs. Schedule).
 // This prevents type errors where not all job details are available upon creation.
 export interface Job {
@@ -130,6 +136,7 @@ export interface Job {
   bol_number?: string;
   container_number?: string;
   customs_status?: CustomsStatus;
+  customs_history?: CustomsHistoryEntry[];
 
   // Fields for Tracking
   tracking_current_step?: number;

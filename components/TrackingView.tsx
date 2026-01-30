@@ -40,6 +40,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ jobs, onUpdateJob, l
   );
 
   // Sync form data when selecting a step
+  // NOTE: removed selectedJob from dependencies to prevent overwriting text while typing if background refresh happens
   useEffect(() => {
     if (selectedJob && editingStepId) {
       const stepData = selectedJob.tracking_data?.[editingStepId.toString()] || {};
@@ -57,7 +58,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ jobs, onUpdateJob, l
 
       setStepNotes(initialNotes);
     }
-  }, [editingStepId, selectedJob]);
+  }, [editingStepId]); 
 
   // If selected job updates in parent, update local reference
   useEffect(() => {

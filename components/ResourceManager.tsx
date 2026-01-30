@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Personnel, Vehicle } from '../types';
-import { Plus, X, Users, Truck, ShieldAlert, IdCard, Trash2, Fingerprint, CreditCard, User, CheckCircle2 } from 'lucide-react';
+import { Plus, X, Users, Truck, ShieldAlert, IdCard, Trash2, Fingerprint, CreditCard, User, CheckCircle2, Edit2 } from 'lucide-react';
 
 interface ResourceManagerProps {
   personnel: Personnel[];
@@ -13,77 +13,121 @@ interface ResourceManagerProps {
   onDeleteVehicle: (id: string) => void;
   onAddPersonnel: (person: Omit<Personnel, 'id'>) => void;
   onAddVehicle: (vehicle: Omit<Vehicle, 'id'>) => void;
+  onEditPersonnel?: (person: Personnel) => void;
+  onEditVehicle?: (vehicle: Vehicle) => void;
 }
 
 export const ResourceManager: React.FC<ResourceManagerProps> = ({ 
   personnel, onUpdatePersonnelStatus, vehicles, onUpdateVehicleStatus, isAdmin, onDeletePersonnel, onDeleteVehicle,
-  onAddPersonnel, onAddVehicle
+  onAddPersonnel, onAddVehicle, onEditPersonnel, onEditVehicle
 }) => {
   const [activeResTab, setActiveResTab] = useState<'personnel' | 'fleet'>('personnel');
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form states
-  const [newPerson, setNewPerson] = useState({ 
+  const [personForm, setPersonForm] = useState({ 
     name: '', 
     type: 'Writer Crew' as 'Writer Crew' | 'Team Leader' | 'Driver', 
     emirates_id: '', 
     employee_id: '',
-    license_number: ''
+    license_number: '',
+    status: 'Available' as Personnel['status']
   });
-  const [newVehicle, setNewVehicle] = useState({ name: '', plate: '' });
+  const [vehicleForm, setVehicleForm] = useState({ name: '', plate: '', status: 'Available' as Vehicle['status'] });
   
   // Reset form when modal opens or tab changes
   useEffect(() => {
-    setNewPerson({ 
-      name: '', 
-      type: 'Writer Crew', 
-      emirates_id: '', 
-      employee_id: '', 
-      license_number: '' 
-    });
-    setNewVehicle({ name: '', plate: '' });
-  }, [showAddModal, activeResTab]);
+    if (!isEditing) {
+        setPersonForm({ 
+          name: '', 
+          type: 'Writer Crew', 
+          emirates_id: '', 
+          employee_id: '', 
+          license_number: '',
+          status: 'Available'
+        });
+        setVehicleForm({ name: '', plate: '', status: 'Available' });
+    }
+  }, [showModal, activeResTab, isEditing]);
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  const openAddModal = () => {
+      setIsEditing(false);
+      setEditingId(null);
+      setShowModal(true);
+  };
+
+  const openEditPersonModal = (p: Personnel) => {
+      setIsEditing(true);
+      setEditingId(p.id);
+      setPersonForm({
+          name: p.name,
+          type: p.type || 'Writer Crew', // Handle potentially missing type
+          emirates_id: p.emirates_id || '',
+          employee_id: p.employee_id || '',
+          license_number: p.license_number || '',
+          status: p.status
+      });
+      setShowModal(true);
+  };
+
+  const openEditVehicleModal = (v: Vehicle) => {
+      setIsEditing(true);
+      setEditingId(v.id);
+      setVehicleForm({
+          name: v.name || '',
+          plate: v.plate,
+          status: v.status
+      });
+      setShowModal(true);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     if (activeResTab === 'personnel') {
       const missingFields = [];
-      if (!newPerson.name) missingFields.push("Full Name");
-      if (!newPerson.employee_id) missingFields.push("Employee ID");
-      if (!newPerson.emirates_id) missingFields.push("Emirates ID");
-      if (newPerson.type === 'Driver' && !newPerson.license_number) missingFields.push("Drivers License Number");
+      if (!personForm.name) missingFields.push("Full Name");
+      if (!personForm.employee_id) missingFields.push("Employee ID");
+      // Allow legacy data to be edited without forcing emirates_id if it was optional before, 
+      // but enforcing it for new adds is good. Here we enforce for consistency.
+      if (!personForm.emirates_id) missingFields.push("Emirates ID"); 
+      if (personForm.type === 'Driver' && !personForm.license_number) missingFields.push("Drivers License Number");
 
       if (missingFields.length > 0) {
         alert(`Missing Requirements:\n\nPlease fill in the following mandatory fields:\n• ${missingFields.join('\n• ')}`);
         return;
       }
 
-      // Prepare payload: Remove license_number if not a driver to keep DB clean
       const personnelPayload = {
-        ...newPerson,
-        status: 'Available' as const,
-        // Only include license_number if type is Driver, otherwise undefined
-        license_number: newPerson.type === 'Driver' ? newPerson.license_number : undefined
+        ...personForm,
+        // Only include license_number if type is Driver, otherwise undefined/empty
+        license_number: personForm.type === 'Driver' ? personForm.license_number : undefined
       };
 
-      onAddPersonnel(personnelPayload);
+      if (isEditing && editingId && onEditPersonnel) {
+          onEditPersonnel({ id: editingId, ...personnelPayload } as Personnel);
+      } else {
+          onAddPersonnel(personnelPayload);
+      }
     } else {
       const missingFields = [];
-      if (!newVehicle.name) missingFields.push("Vehicle Name/Model");
-      if (!newVehicle.plate) missingFields.push("Plate Number");
+      if (!vehicleForm.name) missingFields.push("Vehicle Name/Model");
+      if (!vehicleForm.plate) missingFields.push("Plate Number");
 
       if (missingFields.length > 0) {
         alert(`Missing Requirements:\n\nPlease fill in the following mandatory fields:\n• ${missingFields.join('\n• ')}`);
         return;
       }
 
-      onAddVehicle({
-        ...newVehicle,
-        status: 'Available'
-      });
+      if (isEditing && editingId && onEditVehicle) {
+          onEditVehicle({ id: editingId, ...vehicleForm } as Vehicle);
+      } else {
+          onAddVehicle(vehicleForm);
+      }
     }
-    setShowAddModal(false);
+    setShowModal(false);
   };
 
   if (!isAdmin) {
@@ -110,6 +154,12 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
                 {p.status}
               </span>
               <button 
+                onClick={() => openEditPersonModal(p)}
+                className="p-1.5 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+              >
+                <Edit2 className="w-4 h-4" />
+              </button>
+              <button 
                 onClick={() => onDeletePersonnel(p.id)}
                 className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
               >
@@ -118,13 +168,13 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
             </div>
          </div>
          <h4 className="font-bold text-lg text-slate-800 leading-tight">{p.name}</h4>
-         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{p.type}</p>
+         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{p.type || 'Unassigned'}</p>
          <div className="space-y-1">
             <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 bg-slate-50 px-2 py-1.5 rounded">
               <Fingerprint className="w-3 h-3 text-slate-400" /> EMP ID: {p.employee_id}
             </div>
             <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 bg-slate-50 px-2 py-1.5 rounded">
-              <IdCard className="w-3 h-3 text-slate-400" /> EID: {p.emirates_id}
+              <IdCard className="w-3 h-3 text-slate-400" /> EID: {p.emirates_id || 'N/A'}
             </div>
             {p.type === 'Driver' && (
               <div className="flex items-center gap-2 text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-1.5 rounded border border-blue-100 mt-1">
@@ -154,7 +204,7 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
              <button onClick={() => setActiveResTab('personnel')} className={`px-4 lg:px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${activeResTab === 'personnel' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>Crew</button>
              <button onClick={() => setActiveResTab('fleet')} className={`px-4 lg:px-6 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest transition-all ${activeResTab === 'fleet' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>Fleet Units</button>
           </div>
-          <button onClick={() => setShowAddModal(true)} className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-all shadow-md shadow-blue-200">
+          <button onClick={openAddModal} className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-all shadow-md shadow-blue-200">
             <Plus className="w-5 h-5" />
           </button>
         </div>
@@ -176,6 +226,12 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
                         }`}>
                           {v.status}
                         </span>
+                        <button 
+                            onClick={() => openEditVehicleModal(v)}
+                            className="p-1.5 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                        >
+                            <Edit2 className="w-4 h-4" />
+                        </button>
                         <button 
                           onClick={() => onDeleteVehicle(v.id)}
                           className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-100 rounded-lg transition-all opacity-0 group-hover:opacity-100"
@@ -207,40 +263,40 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
         )}
       </div>
 
-      {showAddModal && (
+      {showModal && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
            <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
               <div className="p-8 border-b bg-white flex justify-between items-center">
                  <h3 className="text-lg font-bold text-slate-800 uppercase tracking-widest">
-                    Add {activeResTab === 'fleet' ? 'Fleet Unit' : 'Crew Member'}
+                    {isEditing ? 'Edit' : 'Add'} {activeResTab === 'fleet' ? 'Fleet Unit' : 'Crew Member'}
                  </h3>
-                 <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-slate-600"><X className="w-6 h-6" /></button>
+                 <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600"><X className="w-6 h-6" /></button>
               </div>
-              <form onSubmit={handleAddSubmit} className="p-8 space-y-6">
+              <form onSubmit={handleSubmit} className="p-8 space-y-6">
                  {activeResTab === 'fleet' ? (
                    <>
                      <div className="space-y-1.5">
                         <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Vehicle Name/Model *</label>
-                        <input required className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-medium" value={newVehicle.name} onChange={e => setNewVehicle({...newVehicle, name: e.target.value})} placeholder="e.g. Mitsubishi Canter" />
+                        <input required className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-medium" value={vehicleForm.name} onChange={e => setVehicleForm({...vehicleForm, name: e.target.value})} placeholder="e.g. Mitsubishi Canter" />
                      </div>
                      <div className="space-y-1.5">
                         <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Plate Number *</label>
-                        <input required className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-medium" value={newVehicle.plate} onChange={e => setNewVehicle({...newVehicle, plate: e.target.value})} placeholder="e.g. DXB A 12345" />
+                        <input required className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-medium" value={vehicleForm.plate} onChange={e => setVehicleForm({...vehicleForm, plate: e.target.value})} placeholder="e.g. DXB A 12345" />
                      </div>
                    </>
                  ) : (
                    <>
                      <div className="space-y-1.5">
                         <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Full Name *</label>
-                        <input required className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-medium" value={newPerson.name} onChange={e => setNewPerson({...newPerson, name: e.target.value})} placeholder="e.g. John Doe" />
+                        <input required className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-medium" value={personForm.name} onChange={e => setPersonForm({...personForm, name: e.target.value})} placeholder="e.g. John Doe" />
                      </div>
                      
                      <div className="space-y-1.5">
                         <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Role *</label>
                         <select 
                             className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-medium" 
-                            value={newPerson.type} 
-                            onChange={e => setNewPerson({...newPerson, type: e.target.value as any})}
+                            value={personForm.type} 
+                            onChange={e => setPersonForm({...personForm, type: e.target.value as any})}
                         >
                            <option value="Writer Crew">Writer Crew</option>
                            <option value="Team Leader">Team Leader</option>
@@ -251,15 +307,15 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
                      <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Employee ID *</label>
-                            <input required className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-medium" value={newPerson.employee_id} onChange={e => setNewPerson({...newPerson, employee_id: e.target.value})} placeholder="WR-..." />
+                            <input required className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-medium" value={personForm.employee_id} onChange={e => setPersonForm({...personForm, employee_id: e.target.value})} placeholder="WR-..." />
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Emirates ID *</label>
-                            <input required className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-medium" value={newPerson.emirates_id} onChange={e => setNewPerson({...newPerson, emirates_id: e.target.value})} placeholder="784-..." />
+                            <input required className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-medium" value={personForm.emirates_id} onChange={e => setPersonForm({...personForm, emirates_id: e.target.value})} placeholder="784-..." />
                         </div>
                      </div>
                      
-                     {newPerson.type === 'Driver' && (
+                     {personForm.type === 'Driver' && (
                         <div className="space-y-1.5 bg-slate-50 p-4 rounded-xl border border-slate-200 animate-in slide-in-from-top-2">
                             <label className="text-[10px] font-bold uppercase text-slate-500 tracking-widest ml-1 flex items-center gap-2">
                                <CreditCard className="w-3 h-3" />
@@ -268,8 +324,8 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
                             <input 
                               required 
                               className="w-full p-3.5 mt-1 bg-white border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-medium" 
-                              value={newPerson.license_number} 
-                              onChange={e => setNewPerson({...newPerson, license_number: e.target.value})} 
+                              value={personForm.license_number} 
+                              onChange={e => setPersonForm({...personForm, license_number: e.target.value})} 
                               placeholder="Enter License Number..." 
                             />
                         </div>
@@ -277,9 +333,9 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
                    </>
                  )}
                  <div className="pt-4 flex gap-4">
-                   <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 py-4 font-bold text-slate-400 hover:text-slate-600 uppercase text-[10px] tracking-widest">Cancel</button>
+                   <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-4 font-bold text-slate-400 hover:text-slate-600 uppercase text-[10px] tracking-widest">Cancel</button>
                    <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-xl font-bold uppercase text-[11px] tracking-widest shadow-lg shadow-blue-200">
-                      Add {activeResTab === 'fleet' ? 'Unit' : 'Member'}
+                      {isEditing ? 'Save Changes' : `Add ${activeResTab === 'fleet' ? 'Unit' : 'Member'}`}
                    </button>
                  </div>
               </form>

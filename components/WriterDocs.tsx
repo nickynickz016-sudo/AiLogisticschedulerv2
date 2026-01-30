@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { FileText, Package, Box, Truck, Eraser, PenTool, Plus, Trash2, Printer, ClipboardCheck, Layers, ArrowLeftRight, ChevronLeft, ChevronRight, CheckSquare, Square, Monitor, Upload, Image as ImageIcon, Wrench, ShieldCheck } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -541,6 +542,20 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
     }
   };
 
+  const getClientName = () => {
+    switch (activeForm) {
+      case 'packing': return packingData.clientName;
+      case 'unpacking': return unpackingData.clientName;
+      case 'delivery': return deliveryData.clientName;
+      case 'crating': return cratingData.clientName;
+      case 'electronicList': return electronicData.clientName;
+      case 'accessorial': return accessorialData.clientName;
+      case 'warehouseReceipt': return warehouseReceiptData.clientName;
+      case 'handyman': return handymanData.clientName;
+      default: return '';
+    }
+  };
+
   const handlePrint = () => {
     const isLandscape = activeForm === 'warehouseReceipt';
     const doc = new jsPDF({ orientation: isLandscape ? 'landscape' : 'portrait' }) as any;
@@ -735,7 +750,7 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
             ], key: "rightSide" },
             { title: "4. Left Side", items: [
                 { l: "Look for unusual repairs to structural beams", k: "unusualRepairs" },
-                { l: "Repairs to inside wall must be visible outside & vice versa", k: "repairsVisible" }
+                { l: "Repairs to inside wall must also be visible outside & vice versa", k: "repairsVisible" }
             ], key: "leftSide" },
             { title: "5. Front Wall", items: [
                 { l: "Front wall is made of corrugated material", k: "corrugated" },
@@ -1848,7 +1863,10 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
                      )}
                   </div>
                   <div className="mt-4 flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                     <span>{activeForm === 'delivery' ? 'Receiver Signature' : 'Client / Rep Signature'}</span>
+                     <div className="flex flex-col">
+                        <span>{activeForm === 'delivery' ? 'Receiver Signature' : 'Client / Rep Signature'}</span>
+                        {getClientName() && <span className="text-slate-900 mt-0.5">{getClientName()}</span>}
+                     </div>
                      <span>Date: {new Date().toLocaleDateString()}</span>
                   </div>
                </div>
