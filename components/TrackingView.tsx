@@ -131,7 +131,9 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ jobs, onUpdateJob, l
     if (!selectedJob) return;
     // Simulate a secure link generation
     const mockToken = btoa(selectedJob.id + Date.now()).substring(0, 12);
-    setGeneratedLink(`https://portal.logisync.com/track/${selectedJob.id}?token=${mockToken}`);
+    // Use window.location.origin to use the actual website URL
+    const baseUrl = window.location.origin;
+    setGeneratedLink(`${baseUrl}/track/${selectedJob.id}?token=${mockToken}`);
     setShowShareModal(true);
   };
 

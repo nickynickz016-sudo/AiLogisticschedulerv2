@@ -145,34 +145,6 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ jobs, onApproval, 
                     )}
                     {job.volume_cbm ? ` • ${job.volume_cbm} CBM` : ''}
                 </p>
-                
-                {/* Specific Details for Warehouse/Import Jobs */}
-                {(job.is_warehouse_activity || job.is_import_clearance) && (
-                    <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-100 text-xs text-slate-600 space-y-2 max-w-2xl">
-                        {job.is_warehouse_activity && (
-                            <>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <p><span className="font-bold uppercase tracking-wider text-slate-400 text-[10px]">Operation Type:</span> <br/><span className="font-bold text-slate-800 text-sm">{job.activity_name || 'General Warehouse Op'}</span></p>
-                                </div>
-                                {job.description && (
-                                    <div className="pt-2 border-t border-slate-200 mt-1">
-                                        <span className="font-bold uppercase tracking-wider text-slate-400 text-[10px] block mb-1">Operational Notes:</span>
-                                        <p className="italic text-slate-700">{job.description}</p>
-                                    </div>
-                                )}
-                            </>
-                        )}
-                        {job.is_import_clearance && (
-                            <>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                                    <div><span className="font-bold uppercase tracking-wider text-slate-400 text-[10px] block">Agent / SD Name</span> <span className="font-bold text-slate-800">{job.agent_name || 'N/A'}</span></div>
-                                    <div><span className="font-bold uppercase tracking-wider text-slate-400 text-[10px] block">BOL / AWB</span> <span className="font-mono text-slate-700">{job.bol_number || 'N/A'}</span></div>
-                                    <div><span className="font-bold uppercase tracking-wider text-slate-400 text-[10px] block">Container / Flight</span> <span className="font-mono text-slate-700">{job.container_number || 'N/A'}</span></div>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                )}
 
                 <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-6">
                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
