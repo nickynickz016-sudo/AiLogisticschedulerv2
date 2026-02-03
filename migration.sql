@@ -1,19 +1,27 @@
 
--- Run this in your Supabase SQL Editor to fix the missing column error
+-- IMPORTANT: Run this entire script in Supabase SQL Editor to fix "Cannot Add Member" issues.
 
--- Add 'type' column to personnel table if it doesn't exist
+-- 1. Ensure 'type' column exists (Writer Crew, Team Leader, Driver)
 ALTER TABLE public.personnel 
 ADD COLUMN IF NOT EXISTS "type" text;
 
--- Add 'license_number' column to personnel table if it doesn't exist
+-- 2. Ensure 'license_number' column exists (For Drivers)
 ALTER TABLE public.personnel 
 ADD COLUMN IF NOT EXISTS license_number text;
 
--- Add 'emirates_id' column to personnel table if it doesn't exist
+-- 3. Ensure 'emirates_id' column exists
 ALTER TABLE public.personnel 
 ADD COLUMN IF NOT EXISTS emirates_id text;
 
--- Ensure vehicles table has necessary columns
+-- 4. Ensure 'status' column exists (Available, On Leave, etc.)
+ALTER TABLE public.personnel 
+ADD COLUMN IF NOT EXISTS status text DEFAULT 'Available';
+
+-- 5. Ensure 'employee_id' column exists
+ALTER TABLE public.personnel 
+ADD COLUMN IF NOT EXISTS employee_id text;
+
+-- 6. Ensure vehicles table has necessary columns
 ALTER TABLE public.vehicles 
 ADD COLUMN IF NOT EXISTS name text;
 
@@ -23,5 +31,15 @@ ADD COLUMN IF NOT EXISTS plate text;
 ALTER TABLE public.vehicles 
 ADD COLUMN IF NOT EXISTS status text;
 
--- Refresh the schema cache to ensure the API picks up the changes
+-- 7. Ensure jobs table has allocation columns
+ALTER TABLE public.jobs 
+ADD COLUMN IF NOT EXISTS team_leader text;
+
+ALTER TABLE public.jobs 
+ADD COLUMN IF NOT EXISTS writer_crew text[];
+
+ALTER TABLE public.jobs 
+ADD COLUMN IF NOT EXISTS vehicles text[];
+
+-- Refresh schema
 NOTIFY pgrst, 'reload schema';

@@ -17,7 +17,13 @@ interface ScheduleViewProps {
   users: UserProfile[];
 }
 
-const HOURS = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
+// Generate hours with 30-minute intervals (48 slots)
+const HOURS = Array.from({ length: 48 }, (_, i) => {
+  const hour = Math.floor(i / 2).toString().padStart(2, '0');
+  const minute = i % 2 === 0 ? '00' : '30';
+  return `${hour}:${minute}`;
+});
+
 const SHIPMENT_TYPES: ShipmentDetailsType[] = ['Local Move', 'Sea FCL', 'AIR', 'AIR LCL', 'SEA LCL', 'Groupage', 'Road'];
 const LOADING_TYPES: LoadingType[] = ['Warehouse Removal', 'Direct Loading', 'Storage', 'Local Storage', 'Delivery'];
 

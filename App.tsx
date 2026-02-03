@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
@@ -16,9 +15,9 @@ import { HolidayAlertModal } from './components/HolidayAlertModal';
 import { SystemAlertModal } from './components/SystemAlertModal';
 import { WriterDocs } from './components/WriterDocs';
 import { Inventory } from './components/Inventory';
-import { TrackingView } from './components/TrackingView'; // Import TrackingView
+import { TrackingView } from './components/TrackingView';
 import { UserRole, Job, JobStatus, UserProfile, Personnel, Vehicle, SystemSettings, CustomsStatus } from './types';
-import { Bell, Search, Menu, LogOut, X, CheckCircle2, XCircle } from 'lucide-react';
+import { Bell, Search, Menu, LogOut, X, CheckCircle2, XCircle, AlertTriangle, Info } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { USERS, MockUser } from './mockData';
 
@@ -41,7 +40,7 @@ const App: React.FC = () => {
   const [showSystemAlert, setShowSystemAlert] = useState(false);
 
   // Notification State
-  const [notifications, setNotifications] = useState<{id: string, text: string, time: string, read: boolean, type: 'success'|'error'}[]>([]);
+  const [notifications, setNotifications] = useState<{id: string, text: string, time: string, read: boolean, type: 'success'|'error'|'info'|'warning'}[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
@@ -95,7 +94,7 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const fetchSettings = useCallback(async () => {
+  const fetchSettings = useCallback(async (retryCount = 0) => {
     try {
         // Use select('*') to gracefully handle missing columns in legacy schemas
         // This prevents the app from crashing if 'system_alert' or other new columns don't exist yet
@@ -121,13 +120,19 @@ const App: React.FC = () => {
              console.log('Settings not found, creating default...');
              const { error: insertError } = await supabase.from('system_settings').insert([{ id: 1, daily_job_limits: {}, holidays: [] as string[] }]);
              if (insertError) console.error('Error creating initial settings:', insertError.message);
-             else await fetchSettings(); // Retry fetch
+             else if (retryCount < 3) {
+                 setTimeout(() => fetchSettings(retryCount + 1), 1000);
+             }
           } else {
-             console.error('Error fetching settings:', error.message);
+             throw error; // Throw error to trigger retry logic
           }
         }
     } catch (err) {
-        console.error('Unexpected error fetching settings:', err);
+        console.error('Unexpected error fetching settings (attempt ' + (retryCount + 1) + '):', err);
+        // Retry logic for transient network errors
+        if (retryCount < 3) {
+            setTimeout(() => fetchSettings(retryCount + 1), 2000);
+        }
     }
   }, []);
 
@@ -162,50 +167,167 @@ const App: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Process Notifications
+  // --- Notification Logic: Load & Diff ---
+  
+  // 1. Load persisted notifications on mount/user switch
   useEffect(() => {
     if (!currentUser) return;
-    
-    // Get read receipts from local storage
-    const readKey = `read_notifs_${currentUser.employee_id}`;
-    const readIds = JSON.parse(localStorage.getItem(readKey) || '[]');
+    const saved = localStorage.getItem(`notifications_${currentUser.employee_id}`);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setNotifications(Array.isArray(parsed) ? parsed : []);
+      } catch (e) { 
+        console.error("Failed to parse notifications", e); 
+        setNotifications([]);
+      }
+    } else {
+      setNotifications([]);
+    }
+  }, [currentUser]);
 
-    // Filter jobs where current user is requester and status is decided
-    const relevantJobs = jobs.filter(j => 
-      j.requester_id === currentUser.employee_id && 
-      (j.status === JobStatus.ACTIVE || j.status === JobStatus.REJECTED)
-    );
+  // 2. Diffing logic to detect changes
+  useEffect(() => {
+    if (!currentUser || jobs.length === 0) return;
 
-    const generatedNotifs = relevantJobs.map(j => {
-      const id = `${j.id}-${j.status}`;
-      return {
-        id,
-        text: `Job ${j.id} ${j.status === JobStatus.ACTIVE ? 'Approved' : 'Rejected'} by Admin`,
-        time: new Date(j.created_at).toLocaleDateString(), 
-        read: readIds.includes(id),
-        type: j.status === JobStatus.ACTIVE ? 'success' : 'error' as 'success'|'error'
-      };
-    }).sort((a,b) => {
-        if (a.read === b.read) return 0;
-        return a.read ? 1 : -1;
+    const snapshotKey = `jobs_snapshot_${currentUser.employee_id}`;
+    const lastSnapshotStr = localStorage.getItem(snapshotKey);
+    const lastSnapshot: Job[] = lastSnapshotStr ? JSON.parse(lastSnapshotStr) : [];
+
+    // If first run (no snapshot), baseline it and return
+    if (lastSnapshot.length === 0) {
+        localStorage.setItem(snapshotKey, JSON.stringify(jobs));
+        return;
+    }
+
+    let newNotifs: typeof notifications = [];
+    const now = new Date();
+    const timeString = now.toLocaleDateString() + ' ' + now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+    jobs.forEach(currentJob => {
+        // Only track jobs requested by current user
+        if (currentJob.requester_id !== currentUser.employee_id) return;
+
+        const previousJob = lastSnapshot.find(j => j.id === currentJob.id);
+        
+        // Skip if new job (creation) or not found in previous
+        if (!previousJob) return;
+
+        // 1. Status Change (Approve/Reject)
+        if (currentJob.status !== previousJob.status) {
+            if (currentJob.status === JobStatus.ACTIVE) {
+                newNotifs.push({
+                    id: `status-${currentJob.id}-${Date.now()}`,
+                    text: `Job ${currentJob.id} has been APPROVED by Admin.`,
+                    time: timeString,
+                    read: false,
+                    type: 'success'
+                });
+            } else if (currentJob.status === JobStatus.REJECTED) {
+                newNotifs.push({
+                    id: `status-${currentJob.id}-${Date.now()}`,
+                    text: `Job ${currentJob.id} was REJECTED by Admin.`,
+                    time: timeString,
+                    read: false,
+                    type: 'error'
+                });
+            }
+        }
+
+        // 2. Allocation Changes (Team Leader, Crew, Vehicle)
+        if (currentJob.team_leader !== previousJob.team_leader && currentJob.team_leader) {
+             newNotifs.push({
+                id: `tl-${currentJob.id}-${Date.now()}`,
+                text: `Admin assigned Team Leader: ${currentJob.team_leader} to Job ${currentJob.id}.`,
+                time: timeString,
+                read: false,
+                type: 'info'
+            });
+        }
+
+        const prevVehicles = previousJob.vehicles || [];
+        const currVehicles = currentJob.vehicles || [];
+        if (JSON.stringify(prevVehicles.sort()) !== JSON.stringify(currVehicles.sort()) && currVehicles.length > 0) {
+             newNotifs.push({
+                id: `veh-${currentJob.id}-${Date.now()}`,
+                text: `Vehicles updated for Job ${currentJob.id}: ${currVehicles.join(', ')}.`,
+                time: timeString,
+                read: false,
+                type: 'info'
+            });
+        }
+
+        const prevCrew = previousJob.writer_crew || [];
+        const currCrew = currentJob.writer_crew || [];
+        if (JSON.stringify(prevCrew.sort()) !== JSON.stringify(currCrew.sort()) && currCrew.length > 0) {
+             newNotifs.push({
+                id: `crew-${currentJob.id}-${Date.now()}`,
+                text: `Crew members updated for Job ${currentJob.id}.`,
+                time: timeString,
+                read: false,
+                type: 'info'
+            });
+        }
+
+        // 3. Details Changes (Time, Date, Notes)
+        if (currentJob.job_time !== previousJob.job_time) {
+             newNotifs.push({
+                id: `time-${currentJob.id}-${Date.now()}`,
+                text: `Time changed for Job ${currentJob.id}: ${previousJob.job_time} → ${currentJob.job_time}.`,
+                time: timeString,
+                read: false,
+                type: 'warning'
+            });
+        }
+
+        if (currentJob.job_date !== previousJob.job_date) {
+             newNotifs.push({
+                id: `date-${currentJob.id}-${Date.now()}`,
+                text: `Date changed for Job ${currentJob.id}: ${previousJob.job_date} → ${currentJob.job_date}.`,
+                time: timeString,
+                read: false,
+                type: 'warning'
+            });
+        }
+
+        if (currentJob.description !== previousJob.description) {
+             newNotifs.push({
+                id: `desc-${currentJob.id}-${Date.now()}`,
+                text: `Notes updated for Job ${currentJob.id}.`,
+                time: timeString,
+                read: false,
+                type: 'info'
+            });
+        }
     });
 
-    setNotifications(generatedNotifs);
+    if (newNotifs.length > 0) {
+        setNotifications(prev => {
+            const updated = [...newNotifs, ...prev];
+            // Persist to local storage
+            localStorage.setItem(`notifications_${currentUser.employee_id}`, JSON.stringify(updated));
+            return updated;
+        });
+    }
+
+    // Update snapshot for next diff
+    localStorage.setItem(snapshotKey, JSON.stringify(jobs));
+
   }, [jobs, currentUser]);
 
   const handleToggleNotif = () => {
     if (!isNotifOpen) {
       // Mark all as read when opening
-      const readKey = `read_notifs_${currentUser?.employee_id}`;
-      const allIds = notifications.map(n => n.id);
-      localStorage.setItem(readKey, JSON.stringify(allIds));
-      // Update local state to reflect read status
-      setNotifications(prev => prev.map(n => ({...n, read: true})));
+      setNotifications(prev => {
+          const updated = prev.map(n => ({...n, read: true}));
+          localStorage.setItem(`notifications_${currentUser?.employee_id}`, JSON.stringify(updated));
+          return updated;
+      });
     }
     setIsNotifOpen(!isNotifOpen);
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications ? notifications.filter(n => !n.read).length : 0;
 
   // Data Mutation Handlers
   const handleUpdateJob = (updatedJob: Job) => {
@@ -229,7 +351,13 @@ const App: React.FC = () => {
         duration: job.duration,
         special_requests: job.special_requests,
         shuttle: job.shuttle,
-        long_carry: job.long_carry
+        long_carry: job.long_carry,
+        // Ensure allocation and warehouse fields are updated
+        team_leader: job.team_leader,
+        writer_crew: job.writer_crew,
+        vehicles: job.vehicles,
+        vehicle: job.vehicles?.join(', '), // Maintain legacy string compatibility
+        activity_name: job.activity_name
     }).eq('id', job.id);
 
     if (error) {
@@ -291,7 +419,17 @@ const App: React.FC = () => {
        }
 
        // Generate ID
-       const dayId = daysScheduled === 0 ? baseId : `${baseId}-D${daysScheduled + 1}`;
+       let dayId = daysScheduled === 0 ? baseId : `${baseId}-D${daysScheduled + 1}`;
+       
+       // Allow duplicate base IDs by appending suffix if ID already exists
+       // This handles the request: "User can use the same unique ID" by making it technically unique but same base.
+       let uniqueId = dayId;
+       let counter = 1;
+       // Check against local jobs state AND jobs being created in this batch
+       while (jobs.some(j => j.id === uniqueId) || jobsToCreate.some(j => j.id === uniqueId)) {
+           uniqueId = `${dayId}-${counter}`;
+           counter++;
+       }
        
        // Prepare vehicles data
        const vehiclesArray = job.vehicles || [];
@@ -299,8 +437,8 @@ const App: React.FC = () => {
 
        const newJobEntry: Job = {
          ...job,
-         id: dayId,
-         title: dayId,
+         id: uniqueId,
+         title: uniqueId,
          status: currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD,
          created_at: Date.now(),
          requester_id: currentUser.employee_id,
@@ -327,7 +465,7 @@ const App: React.FC = () => {
     
     if (error) {
       if (error.code === '23505') {
-        alert("Error: A job with this ID already exists. Please use a unique Job No.");
+        alert("System Warning: Job ID collision detected. Please retry or use a unique ID.");
       } else {
         alert(`Error: ${error.message}`);
       }
@@ -787,8 +925,12 @@ const App: React.FC = () => {
               <WarehouseActivity 
                 jobs={jobs} 
                 onAddJob={handleAddJob} 
+                onEditJob={handleEditJob}
                 onDeleteJob={handleDeleteJob}
                 currentUser={currentUser}
+                personnel={personnel}
+                vehicles={vehicles}
+                users={systemUsers}
               />
             )}
             {activeTab === 'import-clearance' && (
@@ -834,7 +976,7 @@ const App: React.FC = () => {
                 onUpdatePersonnelStatus={handleUpdatePersonnelStatus}
                 vehicles={vehicles}
                 onUpdateVehicleStatus={handleUpdateVehicleStatus}
-                isAdmin={currentUser.role === UserRole.ADMIN}
+                isAdmin={currentUser.role === UserRole.ADMIN || currentUser.permissions.resources}
                 onDeletePersonnel={handleDeletePersonnel}
                 onDeleteVehicle={handleDeleteVehicle}
                 onAddPersonnel={handleAddPersonnel}

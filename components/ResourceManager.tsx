@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Personnel, Vehicle } from '../types';
-import { Plus, X, Users, Truck, ShieldAlert, IdCard, Trash2, Fingerprint, CreditCard, User, CheckCircle2, Edit2 } from 'lucide-react';
+import { Plus, X, Users, Truck, ShieldAlert, IdCard, Trash2, Fingerprint, CreditCard, User, CheckCircle2, Edit2, Loader2 } from 'lucide-react';
 
 interface ResourceManagerProps {
   personnel: Personnel[];
@@ -11,10 +11,10 @@ interface ResourceManagerProps {
   isAdmin: boolean;
   onDeletePersonnel: (id: string) => void;
   onDeleteVehicle: (id: string) => void;
-  onAddPersonnel: (person: Omit<Personnel, 'id'>) => void;
-  onAddVehicle: (vehicle: Omit<Vehicle, 'id'>) => void;
-  onEditPersonnel?: (person: Personnel) => void;
-  onEditVehicle?: (vehicle: Vehicle) => void;
+  onAddPersonnel: (person: Omit<Personnel, 'id'>) => Promise<boolean | void> | void;
+  onAddVehicle: (vehicle: Omit<Vehicle, 'id'>) => Promise<boolean | void> | void;
+  onEditPersonnel?: (person: Personnel) => Promise<boolean | void> | void;
+  onEditVehicle?: (vehicle: Vehicle) => Promise<boolean | void> | void;
 }
 
 export const ResourceManager: React.FC<ResourceManagerProps> = ({ 
@@ -24,6 +24,7 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
   const [activeResTab, setActiveResTab] = useState<'personnel' | 'fleet'>('personnel');
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   // Form states
@@ -39,7 +40,7 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
   
   // Reset form when modal opens or tab changes
   useEffect(() => {
-    if (!isEditing) {
+    if (!isEditing && showModal) {
         setPersonForm({ 
           name: '', 
           type: 'Writer Crew', 
@@ -83,51 +84,73 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
       setShowModal(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     
-    if (activeResTab === 'personnel') {
-      const missingFields = [];
-      if (!personForm.name) missingFields.push("Full Name");
-      if (!personForm.employee_id) missingFields.push("Employee ID");
-      // Allow legacy data to be edited without forcing emirates_id if it was optional before, 
-      // but enforcing it for new adds is good. Here we enforce for consistency.
-      if (!personForm.emirates_id) missingFields.push("Emirates ID"); 
-      if (personForm.type === 'Driver' && !personForm.license_number) missingFields.push("Drivers License Number");
+    let success = true;
 
-      if (missingFields.length > 0) {
-        alert(`Missing Requirements:\n\nPlease fill in the following mandatory fields:\n• ${missingFields.join('\n• ')}`);
-        return;
-      }
+    try {
+      if (activeResTab === 'personnel') {
+        const missingFields = [];
+        if (!personForm.name) missingFields.push("Full Name");
+        if (!personForm.employee_id) missingFields.push("Employee ID");
+        // Ensure Emirates ID is provided
+        if (!personForm.emirates_id) missingFields.push("Emirates ID"); 
+        if (personForm.type === 'Driver' && !personForm.license_number) missingFields.push("Drivers License Number");
 
-      const personnelPayload = {
-        ...personForm,
-        // Only include license_number if type is Driver, otherwise undefined/empty
-        license_number: personForm.type === 'Driver' ? personForm.license_number : undefined
-      };
+        if (missingFields.length > 0) {
+          alert(`Missing Requirements:\n\nPlease fill in the following mandatory fields:\n• ${missingFields.join('\n• ')}`);
+          setIsSubmitting(false);
+          return;
+        }
 
-      if (isEditing && editingId && onEditPersonnel) {
-          onEditPersonnel({ id: editingId, ...personnelPayload } as Personnel);
+        const personnelPayload = {
+          ...personForm,
+          // Explicitly set license_number to null if not Driver to clear it or keep it clean in DB
+          license_number: personForm.type === 'Driver' ? personForm.license_number : null
+        };
+
+        // Cast to any to handle potential null vs undefined mismatch in types vs DB
+        const payload: any = personnelPayload;
+
+        if (isEditing && editingId && onEditPersonnel) {
+            const res = await onEditPersonnel({ id: editingId, ...payload } as Personnel);
+            if (res === false) success = false;
+        } else {
+            const res = await onAddPersonnel(payload);
+            if (res === false) success = false;
+        }
       } else {
-          onAddPersonnel(personnelPayload);
-      }
-    } else {
-      const missingFields = [];
-      if (!vehicleForm.name) missingFields.push("Vehicle Name/Model");
-      if (!vehicleForm.plate) missingFields.push("Plate Number");
+        const missingFields = [];
+        if (!vehicleForm.name) missingFields.push("Vehicle Name/Model");
+        if (!vehicleForm.plate) missingFields.push("Plate Number");
 
-      if (missingFields.length > 0) {
-        alert(`Missing Requirements:\n\nPlease fill in the following mandatory fields:\n• ${missingFields.join('\n• ')}`);
-        return;
-      }
+        if (missingFields.length > 0) {
+          alert(`Missing Requirements:\n\nPlease fill in the following mandatory fields:\n• ${missingFields.join('\n• ')}`);
+          setIsSubmitting(false);
+          return;
+        }
 
-      if (isEditing && editingId && onEditVehicle) {
-          onEditVehicle({ id: editingId, ...vehicleForm } as Vehicle);
-      } else {
-          onAddVehicle(vehicleForm);
+        if (isEditing && editingId && onEditVehicle) {
+            const res = await onEditVehicle({ id: editingId, ...vehicleForm } as Vehicle);
+            if (res === false) success = false;
+        } else {
+            const res = await onAddVehicle(vehicleForm);
+            if (res === false) success = false;
+        }
       }
+    } catch (err) {
+      console.error("Submission Error", err);
+      success = false;
     }
-    setShowModal(false);
+
+    setIsSubmitting(false);
+    
+    // Only close if no error occurred (returned true or void/undefined, assuming void is success)
+    if (success) {
+      setShowModal(false);
+    }
   };
 
   if (!isAdmin) {
@@ -141,7 +164,7 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
   }
 
   const renderPersonnelCard = (p: Personnel) => (
-    <div key={p.id} className="p-6 bg-white border border-slate-200 rounded-3xl flex flex-col justify-between hover:border-blue-200 transition-all group relative">
+    <div key={p.id} className="p-6 bg-white border border-slate-200 rounded-3xl flex flex-col justify-between hover:border-blue-200 transition-all group relative shadow-sm hover:shadow-md">
       <div>
          <div className="flex justify-between items-start mb-4">
             <div className={`p-2.5 rounded-xl border ${p.type === 'Driver' ? 'bg-blue-50 border-blue-100' : 'bg-slate-50 border-slate-100'}`}>
@@ -155,13 +178,13 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
               </span>
               <button 
                 onClick={() => openEditPersonModal(p)}
-                className="p-1.5 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                className="p-1.5 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
               >
                 <Edit2 className="w-4 h-4" />
               </button>
               <button 
                 onClick={() => onDeletePersonnel(p.id)}
-                className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -214,7 +237,7 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
         {activeResTab === 'fleet' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {vehicles.map(v => (
-              <div key={v.id} className="p-6 bg-white border border-slate-200 rounded-3xl flex flex-col justify-between hover:border-blue-200 transition-all group relative">
+              <div key={v.id} className="p-6 bg-white border border-slate-200 rounded-3xl flex flex-col justify-between hover:border-blue-200 transition-all group relative shadow-sm hover:shadow-md">
                 <div>
                    <div className="flex justify-between items-start mb-4">
                       <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
@@ -228,13 +251,13 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
                         </span>
                         <button 
                             onClick={() => openEditVehicleModal(v)}
-                            className="p-1.5 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                            className="p-1.5 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
                         >
                             <Edit2 className="w-4 h-4" />
                         </button>
                         <button 
                           onClick={() => onDeleteVehicle(v.id)}
-                          className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-100 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                          className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-100 rounded-lg transition-all"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -264,15 +287,15 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-           <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
-              <div className="p-8 border-b bg-white flex justify-between items-center">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in zoom-in-95 duration-200">
+           <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+              <div className="p-8 border-b bg-white flex justify-between items-center shrink-0">
                  <h3 className="text-lg font-bold text-slate-800 uppercase tracking-widest">
                     {isEditing ? 'Edit' : 'Add'} {activeResTab === 'fleet' ? 'Fleet Unit' : 'Crew Member'}
                  </h3>
                  <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600"><X className="w-6 h-6" /></button>
               </div>
-              <form onSubmit={handleSubmit} className="p-8 space-y-6">
+              <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-y-auto custom-scrollbar">
                  {activeResTab === 'fleet' ? (
                    <>
                      <div className="space-y-1.5">
@@ -334,7 +357,12 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
                  )}
                  <div className="pt-4 flex gap-4">
                    <button type="button" onClick={() => setShowModal(false)} className="flex-1 py-4 font-bold text-slate-400 hover:text-slate-600 uppercase text-[10px] tracking-widest">Cancel</button>
-                   <button type="submit" className="flex-1 py-4 bg-blue-600 text-white rounded-xl font-bold uppercase text-[11px] tracking-widest shadow-lg shadow-blue-200">
+                   <button 
+                    type="submit" 
+                    disabled={isSubmitting}
+                    className="flex-1 py-4 bg-blue-600 text-white rounded-xl font-bold uppercase text-[11px] tracking-widest shadow-lg shadow-blue-200 disabled:opacity-50 flex items-center justify-center gap-2"
+                   >
+                      {isSubmitting && <Loader2 className="w-4 h-4 animate-spin" />}
                       {isEditing ? 'Save Changes' : `Add ${activeResTab === 'fleet' ? 'Unit' : 'Member'}`}
                    </button>
                  </div>
