@@ -103,6 +103,22 @@ const SEMI_ADMIN_ACCESS = {
   ai: true,
 };
 
+const ACCOUNTS_ACCESS = {
+  dashboard: true,
+  schedule: true,
+  jobBoard: true,
+  warehouse: false,
+  importClearance: false,
+  approvals: false,
+  writerDocs: true, // Needed for Invoices/Docs
+  inventory: true, // Critical for Job Costing
+  tracking: true,
+  resources: false,
+  capacity: false,
+  users: false,
+  ai: false,
+};
+
 export const USERS: MockUser[] = [
   {
     username: 'Admin',
@@ -257,6 +273,32 @@ export const USERS: MockUser[] = [
       role: UserRole.USER,
       permissions: SENIOR_OPS_ACCESS,
       avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Allen',
+      status: 'Active',
+    },
+  },
+  {
+    username: 'Accounts',
+    password: 'Accountdxb@123',
+    profile: {
+      id: 'm3c4d5e6-f7g8-9012-3456-7890abcdef1234',
+      employee_id: 'ACC-001',
+      name: 'Accounts Team',
+      role: UserRole.USER,
+      permissions: ACCOUNTS_ACCESS,
+      avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Accounts',
+      status: 'Active',
+    },
+  },
+  {
+    username: 'Daryl',
+    password: 'Writercs@123',
+    profile: {
+      id: 'n4d5e6f7-g8h9-0123-4567-890abcdef12345',
+      employee_id: 'OPS-205',
+      name: 'Daryl',
+      role: UserRole.USER,
+      permissions: SENIOR_OPS_ACCESS,
+      avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Daryl',
       status: 'Active',
     },
   },

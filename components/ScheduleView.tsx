@@ -133,10 +133,11 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     return null;
   };
 
+  // Filter jobs based on selected date OR global search filter
   const filteredJobs = jobs.filter(j => 
     !j.is_warehouse_activity &&
     !j.is_import_clearance &&
-    j.job_date === selectedDate &&
+    (filter ? true : j.job_date === selectedDate) && // If filtering, search all dates. Else restrict to selected date.
     (j.id.toLowerCase().includes(filter.toLowerCase()) || 
      j.shipper_name.toLowerCase().includes(filter.toLowerCase())) &&
     j.status !== JobStatus.REJECTED
@@ -315,6 +316,9 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
     const jobsForMonth = jobs.filter(job => {
         if (job.is_warehouse_activity || job.is_import_clearance) return false;
+        // Apply filter to month view as well if active
+        if (filter && !job.id.toLowerCase().includes(filter.toLowerCase()) && !job.shipper_name.toLowerCase().includes(filter.toLowerCase())) return false;
+        
         const jobDate = new Date(job.job_date);
         return jobDate.getFullYear() === year && jobDate.getMonth() === month;
     });
@@ -487,6 +491,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                  <div>
                                     <div className="flex items-center gap-2 mb-1">
                                       <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">ID: {job.id}</p>
+                                      {/* Display date when searching globally */}
+                                      {filter && <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{new Date(job.job_date).toLocaleDateString(undefined, {month:'numeric', day:'numeric'})}</span>}
                                       {dayLabel && (
                                         <span className="text-[9px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded border border-violet-200">
                                             {dayLabel}
@@ -619,7 +625,10 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                 </div>
                                 <div className="flex items-center gap-2 border-t border-slate-50 pt-1 mt-1">
                                     <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                    <span className="text-[10px] text-slate-500 font-bold">{job.job_time}</span>
+                                    <span className="text-[10px] text-slate-500 font-bold">
+                                        {filter ? <span className="text-blue-600 mr-1">{new Date(job.job_date).toLocaleDateString(undefined, {month:'short', day:'numeric'})} •</span> : null}
+                                        {job.job_time}
+                                    </span>
                                 </div>
                             </div>
                          </td>

@@ -1,10 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { Job, JobStatus, SystemSettings } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, Download, Loader2 } from 'lucide-react';
+import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, Download, Loader2, Activity, Calendar, X, Filter, CalendarRange, ListFilter, Camera } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import html2canvas from 'html2canvas';
 
 // Extend jsPDF with the autoTable plugin
 type jsPDFWithAutoTable = jsPDF & {
@@ -20,6 +21,19 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin }) => {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [isScreenshotting, setIsScreenshotting] = useState(false);
+  
+  // Summary Modal State
+  const [showSummary, setShowSummary] = useState(false);
+  const [summaryFilterType, setSummaryFilterType] = useState<'day' | 'range' | 'month'>('day');
+  const [summaryDate, setSummaryDate] = useState(new Date().toISOString().split('T')[0]);
+  const [summaryStartDate, setSummaryStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [summaryEndDate, setSummaryEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [summaryMonth, setSummaryMonth] = useState(new Date().toISOString().slice(0, 7));
+  
+  // Ref for the summary content to screenshot
+  const summaryRef = useRef<HTMLDivElement>(null);
+
   const today = new Date().toISOString().split('T')[0];
   const currentLimit = settings.daily_job_limits[today] || 10;
   const currentJobsCount = jobs.filter(j => j.job_date === today && j.status !== JobStatus.REJECTED).length;
@@ -30,6 +44,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
     { label: 'Operations Final', value: jobs.filter(j => j.status === JobStatus.COMPLETED).length, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50/50' },
     { label: 'Critical Alerts', value: jobs.filter(j => j.priority === 'HIGH' && j.status === JobStatus.ACTIVE).length, icon: AlertCircle, color: 'text-rose-600', bg: 'bg-rose-50/50' },
   ];
+
+  // Filtered Activities for Summary
+  const filteredActivities = useMemo(() => {
+    let filtered = jobs.filter(j => j.status !== JobStatus.REJECTED);
+
+    if (summaryFilterType === 'day') {
+      filtered = filtered.filter(j => j.job_date === summaryDate);
+    } else if (summaryFilterType === 'range') {
+      filtered = filtered.filter(j => j.job_date >= summaryStartDate && j.job_date <= summaryEndDate);
+    } else if (summaryFilterType === 'month') {
+      filtered = filtered.filter(j => j.job_date.startsWith(summaryMonth));
+    }
+
+    const schedule = filtered.filter(j => !j.is_warehouse_activity && !j.is_import_clearance);
+    const warehouse = filtered.filter(j => j.is_warehouse_activity);
+
+    return { schedule, warehouse };
+  }, [jobs, summaryFilterType, summaryDate, summaryStartDate, summaryEndDate, summaryMonth]);
   
   const handleGeneratePdf = () => {
     setIsGeneratingPdf(true);
@@ -46,7 +78,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
         doc.text('WRITER Relocations - Operations Report', data.settings.margin.left, 22);
         
         // Footer
-        // FIX: doc.internal.getNumberOfPages() is not valid in newer typings. Use doc.getNumberOfPages() or fallback.
         const pageCount = doc.getNumberOfPages ? doc.getNumberOfPages() : (doc.internal.pages.length - 1);
         doc.setFontSize(10);
         doc.setTextColor(150);
@@ -120,6 +151,29 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
     }
   };
 
+  const handleScreenshot = async () => {
+    if (!summaryRef.current) return;
+    setIsScreenshotting(true);
+    try {
+        const canvas = await html2canvas(summaryRef.current, {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            ignoreElements: (element) => element.id === 'summary-close-btn'
+        });
+        
+        const link = document.createElement('a');
+        link.download = `activities_summary_${new Date().toISOString().split('T')[0]}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+    } catch (e) {
+        console.error("Screenshot failed:", e);
+        alert("Failed to capture screenshot.");
+    } finally {
+        setIsScreenshotting(false);
+    }
+  };
+
 
   return (
     <div className="space-y-10 animate-in fade-in duration-700">
@@ -136,6 +190,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
         </div>
         
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+          <button 
+            onClick={() => setShowSummary(true)}
+            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all font-bold uppercase text-[10px] tracking-widest shadow-md shadow-blue-200"
+          >
+            <Activity className="w-4 h-4" /> Activities Summary
+          </button>
+
           <button
             onClick={handleGeneratePdf}
             disabled={isGeneratingPdf}
@@ -231,6 +292,140 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
            </div>
         </div>
       </div>
+
+      {/* Activities Summary Modal */}
+      {showSummary && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
+          <div ref={summaryRef} className="bg-white rounded-[2rem] w-full max-w-5xl shadow-2xl flex flex-col h-[90vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-6 md:p-8 border-b bg-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-6 shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
+                  <Activity className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-800 tracking-tight uppercase">Activities Summary</h3>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Consolidated Operational View</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 self-end md:self-auto">
+                <button 
+                    onClick={handleScreenshot}
+                    disabled={isScreenshotting}
+                    className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 transition-all disabled:opacity-50"
+                >
+                    {isScreenshotting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                    Screenshot
+                </button>
+                <button id="summary-close-btn" onClick={() => setShowSummary(false)} className="p-2 hover:bg-white rounded-xl transition-all text-slate-400"><X className="w-6 h-6" /></button>
+              </div>
+            </div>
+
+            {/* Controls */}
+            <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row gap-6 items-center bg-white shrink-0">
+               <div className="flex bg-slate-100 p-1 rounded-xl">
+                  <button onClick={() => setSummaryFilterType('day')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${summaryFilterType === 'day' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                    <Calendar className="w-3.5 h-3.5" /> Day
+                  </button>
+                  <button onClick={() => setSummaryFilterType('range')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${summaryFilterType === 'range' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                    <CalendarRange className="w-3.5 h-3.5" /> Range
+                  </button>
+                  <button onClick={() => setSummaryFilterType('month')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${summaryFilterType === 'month' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                    <ListFilter className="w-3.5 h-3.5" /> Month
+                  </button>
+               </div>
+
+               <div className="flex-1 flex items-center gap-4">
+                  {summaryFilterType === 'day' && (
+                    <input type="date" value={summaryDate} onChange={(e) => setSummaryDate(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500" />
+                  )}
+                  {summaryFilterType === 'range' && (
+                    <div className="flex items-center gap-2">
+                      <input type="date" value={summaryStartDate} onChange={(e) => setSummaryStartDate(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500" />
+                      <span className="text-slate-400 font-bold">-</span>
+                      <input type="date" value={summaryEndDate} onChange={(e) => setSummaryEndDate(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                  )}
+                  {summaryFilterType === 'month' && (
+                    <input type="month" value={summaryMonth} onChange={(e) => setSummaryMonth(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500" />
+                  )}
+               </div>
+            </div>
+
+            {/* Content List */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-8 bg-slate-50/50">
+               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  
+                  {/* Job Schedule List */}
+                  <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 h-full">
+                     <div className="flex items-center justify-between mb-6">
+                        <h4 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                           <span className="w-2 h-6 bg-emerald-500 rounded-full"></span>
+                           Job Schedule
+                        </h4>
+                        <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase">{filteredActivities.schedule.length} Jobs</span>
+                     </div>
+                     <div className="space-y-4">
+                        {filteredActivities.schedule.length === 0 ? (
+                           <div className="text-center py-10 text-slate-400 font-medium text-sm italic">No scheduled jobs found for selection.</div>
+                        ) : (
+                           filteredActivities.schedule.map(job => (
+                              <div key={job.id} className="p-4 rounded-2xl border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/30 transition-all bg-white group">
+                                 <div className="flex justify-between items-start mb-2">
+                                    <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">{job.job_date} • {job.job_time}</span>
+                                    <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded ${job.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{job.status}</span>
+                                 </div>
+                                 <h5 className="font-bold text-slate-800 text-sm mb-1">{job.shipper_name}</h5>
+                                 <div className="flex items-center gap-2 text-xs text-slate-500 mb-2">
+                                    <span className="truncate max-w-[150px]">{job.location}</span>
+                                    <span className="text-slate-300">|</span>
+                                    <span>{job.volume_cbm} CBM</span>
+                                 </div>
+                                 <div className="pt-2 border-t border-slate-50 flex gap-2 text-[10px] font-bold text-slate-400">
+                                    <span className="uppercase">TL: {job.team_leader || 'N/A'}</span>
+                                    {job.vehicles && job.vehicles.length > 0 && <span className="uppercase">• {job.vehicles[0]}</span>}
+                                 </div>
+                              </div>
+                           ))
+                        )}
+                     </div>
+                  </div>
+
+                  {/* Warehouse Activities List */}
+                  <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 h-full">
+                     <div className="flex items-center justify-between mb-6">
+                        <h4 className="font-bold text-slate-800 text-lg flex items-center gap-2">
+                           <span className="w-2 h-6 bg-blue-500 rounded-full"></span>
+                           Warehouse Area
+                        </h4>
+                        <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase">{filteredActivities.warehouse.length} Slots</span>
+                     </div>
+                     <div className="space-y-4">
+                        {filteredActivities.warehouse.length === 0 ? (
+                           <div className="text-center py-10 text-slate-400 font-medium text-sm italic">No warehouse activity found for selection.</div>
+                        ) : (
+                           filteredActivities.warehouse.map(job => (
+                              <div key={job.id} className="p-4 rounded-2xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all bg-white group">
+                                 <div className="flex justify-between items-start mb-2">
+                                    <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">{job.job_date}</span>
+                                    <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded bg-blue-100 text-blue-700">WAREHOUSE</span>
+                                 </div>
+                                 <h5 className="font-bold text-slate-800 text-sm mb-1">{job.shipper_name}</h5>
+                                 <p className="text-xs text-slate-500 font-medium mb-2">{job.activity_name || 'General Activity'}</p>
+                                 <div className="pt-2 border-t border-slate-50 text-[10px] font-bold text-slate-400">
+                                    <span className="uppercase">Req By: {job.requester_id}</span>
+                                 </div>
+                              </div>
+                           ))
+                        )}
+                     </div>
+                  </div>
+
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

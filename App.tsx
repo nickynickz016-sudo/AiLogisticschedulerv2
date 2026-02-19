@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
@@ -439,7 +440,8 @@ const App: React.FC = () => {
          ...job,
          id: uniqueId,
          title: uniqueId,
-         status: currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD,
+         // Allow status to be passed (e.g. for BLOCKED slots), otherwise default based on role
+         status: job.status || (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD),
          created_at: Date.now(),
          requester_id: currentUser.employee_id,
          assigned_to: job.assigned_to || 'Unassigned',
