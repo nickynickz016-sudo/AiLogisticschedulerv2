@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Job, JobStatus, UserProfile, Personnel, Vehicle } from '../types';
-import { Plus, X, Bus, User, MapPin, Navigation, Trash2, Edit2, CheckCircle2, AlertCircle, ArrowRight, Users, Settings, Camera, Loader2 } from 'lucide-react';
+import { Plus, X, Bus, User, MapPin, Navigation, Trash2, Edit2, CheckCircle2, AlertCircle, ArrowRight, Users, Settings } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { getUAEToday } from '../utils';
-import html2canvas from 'html2canvas';
 
 interface TransporterProps {
   jobs: Job[];
@@ -28,8 +27,6 @@ export const Transporter: React.FC<TransporterProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getUAEToday());
   const [isOptimizing, setIsOptimizing] = useState(false);
-  const [isScreenshotting, setIsScreenshotting] = useState(false);
-  const componentRef = useRef<HTMLDivElement>(null);
 
   const [newService, setNewService] = useState({
     id: 'TR-',
@@ -188,31 +185,8 @@ export const Transporter: React.FC<TransporterProps> = ({
     });
   };
 
-  const handleScreenshot = async () => {
-    if (!componentRef.current) return;
-    setIsScreenshotting(true);
-    try {
-        const canvas = await html2canvas(componentRef.current, {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-            ignoreElements: (element) => element.id === 'transporter-actions' || element.id === 'screenshot-btn'
-        });
-        
-        const link = document.createElement('a');
-        link.download = `Transporter_Schedule_${selectedDate}.png`;
-        link.href = canvas.toDataURL('image/png');
-        link.click();
-    } catch (e) {
-        console.error("Screenshot failed:", e);
-        alert("Failed to capture screenshot.");
-    } finally {
-        setIsScreenshotting(false);
-    }
-  };
-
   return (
-    <div ref={componentRef} className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-8 animate-in fade-in duration-500">
       <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-8">
         <div>
           <h2 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-3">
@@ -223,15 +197,6 @@ export const Transporter: React.FC<TransporterProps> = ({
         </div>
         
         <div className="flex items-center gap-4">
-           <button 
-             id="screenshot-btn"
-             onClick={handleScreenshot}
-             disabled={isScreenshotting}
-             className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 transition-all disabled:opacity-50 shadow-sm"
-           >
-             {isScreenshotting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-             Screenshot
-           </button>
            <div className="relative">
               <input 
                 type="date" 
@@ -241,7 +206,6 @@ export const Transporter: React.FC<TransporterProps> = ({
               />
            </div>
            <button 
-             id="transporter-actions"
              onClick={() => { resetForm(); generateUniqueId(); setShowModal(true); }}
              className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all font-bold uppercase text-xs tracking-widest shadow-lg shadow-blue-200"
            >
