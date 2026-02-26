@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { getUAEToday } from '../utils';
 import { Job, JobStatus, LoadingType, UserProfile, Personnel, Vehicle, UserRole, ShipmentDetailsType } from '../types';
 import { Plus, Search, Package, Clock, User, X, Calendar as CalendarIcon, CheckCircle2, Truck, Settings2, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Phone, Mail, Briefcase, FileText, AlertCircle, MapPin, RefreshCw, Edit2, Maximize2, Minimize2 } from 'lucide-react';
 import { JobDetailModal } from './JobDetailModal';
@@ -37,10 +38,14 @@ const countryCodes = [
   { name: 'Qatar', code: '+974', digits: 8 },
 ];
 
-// Helper to get local date string YYYY-MM-DD
+// Helper to get UAE date string YYYY-MM-DD
 const getLocalDateString = (date: Date = new Date()) => {
-  const offset = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() - offset).toISOString().split('T')[0];
+  return new Intl.DateTimeFormat('en-CA', { 
+    timeZone: 'Asia/Dubai', 
+    year: 'numeric', 
+    month: '2-digit', 
+    day: '2-digit' 
+  }).format(date);
 };
 
 export const ScheduleView: React.FC<ScheduleViewProps> = ({ 
@@ -52,7 +57,11 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [filter, setFilter] = useState('');
   const [viewMode, setViewMode] = useState<'calendar' | 'list' | 'month'>('list');
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const [currentDate, setCurrentDate] = useState(() => {
+    const uaeStr = getUAEToday();
+    const [y, m, d] = uaeStr.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  });
   
   // UI States for Expansion and Search
   const [expandedSection, setExpandedSection] = useState<'leader' | 'crew' | null>(null);
@@ -319,8 +328,9 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         // Apply filter to month view as well if active
         if (filter && !job.id.toLowerCase().includes(filter.toLowerCase()) && !job.shipper_name.toLowerCase().includes(filter.toLowerCase())) return false;
         
-        const jobDate = new Date(job.job_date);
-        return jobDate.getFullYear() === year && jobDate.getMonth() === month;
+        // Parse job date string manually to avoid timezone issues
+        const [jY, jM, jD] = job.job_date.split('-').map(Number);
+        return jY === year && (jM - 1) === month;
     });
 
     const handleDayClick = (day: number) => {
@@ -328,7 +338,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         setViewMode('list');
     };
 
-    const localTodayStr = getLocalDateString();
+    const localTodayStr = getUAEToday();
 
     return (
       <div className="flex flex-col">
@@ -339,8 +349,17 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         </div>
         <div className="grid grid-cols-7 grid-rows-5 gap-px bg-slate-200 border-t-0">
           {calendarDays.map((day, index) => {
-            const jobsForThisDay = day.isCurrentMonth ? jobsForMonth.filter(job => new Date(job.job_date).getDate() === day.day) : [];
-            const dayDateStr = day.date ? getLocalDateString(day.date) : '';
+            // Filter jobs by matching day component
+            const jobsForThisDay = day.isCurrentMonth ? jobsForMonth.filter(job => {
+                const [,, jD] = job.job_date.split('-').map(Number);
+                return jD === day.day;
+            }) : [];
+            
+            // Construct date string manually from day.date (which is local)
+            const dayDateStr = day.date ? 
+                `${day.date.getFullYear()}-${String(day.date.getMonth() + 1).padStart(2, '0')}-${String(day.date.getDate()).padStart(2, '0')}` 
+                : '';
+                
             const isToday = day.isCurrentMonth && dayDateStr === localTodayStr;
 
             return (

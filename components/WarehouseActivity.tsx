@@ -1,7 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
+import { getUAEToday } from '../utils';
 import { Job, JobStatus, UserProfile, Personnel, Vehicle } from '../types';
-import { Plus, X, Box, User, Clock, AlertCircle, Info, Calendar, RefreshCw, ChevronLeft, ChevronRight, Activity, LayoutList, CalendarDays, Edit2, Truck, Users, ArrowRight } from 'lucide-react';
+import { Plus, X, Box, User, Clock, AlertCircle, Info, Calendar, RefreshCw, ChevronLeft, ChevronRight, Activity, LayoutList, CalendarDays, Edit2, Truck, Users, ArrowRight, FileDown } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface WarehouseActivityProps {
   jobs: Job[];
@@ -14,14 +17,8 @@ interface WarehouseActivityProps {
   users?: UserProfile[];
 }
 
-// Helper to get local date string YYYY-MM-DD
-const getLocalToday = () => {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
+// Helper to get UAE date string YYYY-MM-DD
+const getLocalToday = () => getUAEToday();
 
 export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({ 
   jobs, 
@@ -61,6 +58,42 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
 
   const dailyActivities = jobs.filter(j => j.is_warehouse_activity && j.job_date === selectedDate);
   const slotsRemaining = 5 - dailyActivities.length;
+
+  const handleDownloadPDF = () => {
+    const doc = new jsPDF();
+    
+    // Add title
+    doc.setFontSize(18);
+    doc.text(`Warehouse Activity Report - ${selectedDate}`, 14, 22);
+    
+    // Add generation date
+    doc.setFontSize(10);
+    doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
+
+    // Prepare table data
+    const tableData = dailyActivities.map(activity => {
+        const requester = users ? users.find(u => u.employee_id === activity.requester_id) : null;
+        return [
+            activity.id,
+            activity.shipper_name,
+            activity.activity_name || '-',
+            activity.team_leader || '-',
+            requester ? requester.name : activity.requester_id,
+            activity.status
+        ];
+    });
+
+    // Add table
+    autoTable(doc, {
+        head: [['Unit ID', 'Shipper', 'Activity', 'Team Leader', 'Requested By', 'Status']],
+        body: tableData,
+        startY: 40,
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [37, 99, 235] } // Blue-600
+    });
+
+    doc.save(`warehouse-activity-${selectedDate}.pdf`);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -172,7 +205,10 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
   };
 
   const renderMonthView = () => {
-    const dateObj = new Date(selectedDate);
+    // Parse selectedDate manually to ensure local date construction
+    const [sY, sM, sD] = selectedDate.split('-').map(Number);
+    const dateObj = new Date(sY, sM - 1, sD);
+    
     const year = dateObj.getFullYear();
     const month = dateObj.getMonth();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -203,7 +239,8 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
                 {days.map((date, idx) => {
                     if (!date) return <div key={idx} className="bg-white min-h-[120px]"></div>;
                     
-                    const dateStr = date.toISOString().split('T')[0];
+                    // Construct local date string manually
+                    const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
                     const isToday = dateStr === getLocalToday();
                     const acts = jobs.filter(j => j.is_warehouse_activity && j.job_date === dateStr);
                     
@@ -244,6 +281,9 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
         </div>
         
         <div className="flex items-center gap-4">
+            <button onClick={handleDownloadPDF} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:text-blue-600 hover:border-blue-200 transition-all uppercase tracking-widest shadow-sm">
+                <FileDown className="w-4 h-4" /> Export PDF
+            </button>
             <div className="flex bg-slate-100 p-1 rounded-xl">
                 <button onClick={() => setViewMode('day')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${viewMode === 'day' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                     <LayoutList className="w-4 h-4" /> Day

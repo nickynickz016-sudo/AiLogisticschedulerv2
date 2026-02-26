@@ -50,6 +50,7 @@ export interface UserPermissions {
   resources: boolean;
   capacity: boolean;
   users: boolean;
+  transporter: boolean;
   ai: boolean;
 }
 
@@ -124,6 +125,7 @@ export interface Job {
   assigned_to: string;
   is_warehouse_activity?: boolean;
   is_import_clearance?: boolean;
+  is_transporter?: boolean; // New field for Transporter module
   is_locked?: boolean;
   
   // Admin allocations
@@ -144,6 +146,10 @@ export interface Job {
 
   // Fields for Warehouse
   activity_name?: string;
+
+  // Fields for Transporter
+  drop_off_locations?: string[]; // List of locations
+  transporter_status?: 'Scheduled' | 'In Transit' | 'Completed';
 }
 
 export interface InventoryItem {

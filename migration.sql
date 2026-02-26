@@ -41,5 +41,15 @@ ADD COLUMN IF NOT EXISTS writer_crew text[];
 ALTER TABLE public.jobs 
 ADD COLUMN IF NOT EXISTS vehicles text[];
 
+-- 8. Add Transporter module columns
+ALTER TABLE public.jobs 
+ADD COLUMN IF NOT EXISTS is_transporter boolean DEFAULT false;
+
+ALTER TABLE public.jobs 
+ADD COLUMN IF NOT EXISTS drop_off_locations text[];
+
+ALTER TABLE public.jobs 
+ADD COLUMN IF NOT EXISTS transporter_status text DEFAULT 'Scheduled';
+
 -- Refresh schema
 NOTIFY pgrst, 'reload schema';

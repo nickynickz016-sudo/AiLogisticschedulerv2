@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { getUAEToday } from './utils';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { ScheduleView } from './components/ScheduleView';
@@ -17,6 +18,7 @@ import { SystemAlertModal } from './components/SystemAlertModal';
 import { WriterDocs } from './components/WriterDocs';
 import { Inventory } from './components/Inventory';
 import { TrackingView } from './components/TrackingView';
+import { Transporter } from './components/Transporter';
 import { UserRole, Job, JobStatus, UserProfile, Personnel, Vehicle, SystemSettings, CustomsStatus } from './types';
 import { Bell, Search, Menu, LogOut, X, CheckCircle2, XCircle, AlertTriangle, Info } from 'lucide-react';
 import { supabase } from './supabaseClient';
@@ -25,7 +27,7 @@ import { USERS, MockUser } from './mockData';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'job-board' | 'approvals' | 'writer-docs' | 'inventory' | 'tracking' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'job-board' | 'approvals' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>('dashboard');
   
   // Local state for app data, fetched from Supabase
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -375,11 +377,7 @@ const App: React.FC = () => {
     // However, job.job_date usually comes from inputs which are YYYY-MM-DD.
     let baseDate = job.job_date;
     if (!baseDate) {
-        const d = new Date();
-        const year = d.getFullYear();
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const day = String(d.getDate()).padStart(2, '0');
-        baseDate = `${year}-${month}-${day}`;
+        baseDate = getUAEToday();
     }
 
     const duration = job.duration || 1;
@@ -736,6 +734,7 @@ const App: React.FC = () => {
                 writerDocs: 'writer-docs',
                 inventory: 'inventory',
                 tracking: 'tracking',
+                transporter: 'transporter',
                 resources: 'resources',
                 capacity: 'capacity',
                 users: 'users',
@@ -972,6 +971,17 @@ const App: React.FC = () => {
               />
             )}
             {activeTab === 'tracking' && <TrackingView jobs={jobs} onUpdateJob={handleUpdateJob} logo={settings.company_logo} />}
+            {activeTab === 'transporter' && (
+              <Transporter 
+                jobs={jobs}
+                personnel={personnel}
+                vehicles={vehicles}
+                currentUser={currentUser}
+                onAddJob={handleAddJob}
+                onEditJob={handleEditJob}
+                onDeleteJob={handleDeleteJob}
+              />
+            )}
             {activeTab === 'resources' && (
               <ResourceManager 
                 personnel={personnel}

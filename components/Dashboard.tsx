@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useRef } from 'react';
+import { getUAEToday } from '../utils';
 import { Job, JobStatus, SystemSettings } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, Download, Loader2, Activity, Calendar, X, Filter, CalendarRange, ListFilter, Camera } from 'lucide-react';
@@ -26,15 +27,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
   // Summary Modal State
   const [showSummary, setShowSummary] = useState(false);
   const [summaryFilterType, setSummaryFilterType] = useState<'day' | 'range' | 'month'>('day');
-  const [summaryDate, setSummaryDate] = useState(new Date().toISOString().split('T')[0]);
-  const [summaryStartDate, setSummaryStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [summaryEndDate, setSummaryEndDate] = useState(new Date().toISOString().split('T')[0]);
-  const [summaryMonth, setSummaryMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [summaryDate, setSummaryDate] = useState(getUAEToday());
+  const [summaryStartDate, setSummaryStartDate] = useState(getUAEToday());
+  const [summaryEndDate, setSummaryEndDate] = useState(getUAEToday());
+  const [summaryMonth, setSummaryMonth] = useState(getUAEToday().slice(0, 7));
   
   // Ref for the summary content to screenshot
   const summaryRef = useRef<HTMLDivElement>(null);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getUAEToday();
   const currentLimit = settings.daily_job_limits[today] || 10;
   const currentJobsCount = jobs.filter(j => j.job_date === today && j.status !== JobStatus.REJECTED).length;
 
@@ -149,6 +150,74 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
     } finally {
       setIsGeneratingPdf(false);
     }
+  };
+
+  const handleDownloadSummaryPdf = () => {
+    const doc = new jsPDF() as jsPDFWithAutoTable;
+    const generationDate = new Date().toLocaleDateString();
+
+    // Define header and footer
+    const pageContent = (data: any) => {
+        doc.setFontSize(20);
+        doc.setTextColor(40);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Activities Summary Report', data.settings.margin.left, 22);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Filter: ${summaryFilterType.toUpperCase()} - ${summaryFilterType === 'day' ? summaryDate : summaryFilterType === 'range' ? `${summaryStartDate} to ${summaryEndDate}` : summaryMonth}`, data.settings.margin.left, 28);
+
+        const pageCount = doc.getNumberOfPages ? doc.getNumberOfPages() : (doc.internal.pages.length - 1);
+        doc.setFontSize(10);
+        doc.setTextColor(150);
+        doc.text(`Page ${data.pageNumber} of ${pageCount}`, data.settings.margin.left, doc.internal.pageSize.height - 10);
+        doc.text(`Generated on: ${generationDate}`, doc.internal.pageSize.width - data.settings.margin.right, doc.internal.pageSize.height - 10, { align: 'right' });
+    };
+
+    let finalY = 35;
+
+    // 1. Job Schedule Table
+    if (filteredActivities.schedule.length > 0) {
+        doc.autoTable({
+            startY: finalY,
+            head: [['Job No.', 'Shipper', 'Date', 'Time', 'Location', 'CBM', 'Team Leader', 'Vehicles', 'Status']],
+            body: filteredActivities.schedule.map(j => [j.id, j.shipper_name, j.job_date, j.job_time || 'N/A', j.location || 'N/A', j.volume_cbm || 0, j.team_leader || 'N/A', j.vehicles?.join(', ') || 'N/A', j.status]),
+            didDrawPage: pageContent,
+            headStyles: { fillColor: [22, 163, 74] }, // Emerald
+            margin: { top: 35 },
+            styles: { fontSize: 8 },
+            didParseCell: function(data: any) {
+                if (data.section === 'head' && data.column.index === 0) {
+                    data.cell.text = ['Job Schedule'];
+                }
+            },
+        });
+        finalY = (doc as any).lastAutoTable.finalY + 10;
+    }
+
+    // 2. Warehouse Activity Table
+    if (filteredActivities.warehouse.length > 0) {
+        doc.autoTable({
+            startY: finalY,
+            head: [['Job No.', 'Shipper', 'Date', 'Activity', 'Requester', 'Status']],
+            body: filteredActivities.warehouse.map(j => [j.id, j.shipper_name, j.job_date, j.activity_name || '-', j.requester_id, j.status]),
+            didDrawPage: pageContent,
+            headStyles: { fillColor: [37, 99, 235] }, // Blue
+            margin: { top: 35 },
+            styles: { fontSize: 8 },
+            didParseCell: function(data: any) {
+                if (data.section === 'head' && data.column.index === 0) {
+                    data.cell.text = ['Warehouse Activity'];
+                }
+            },
+        });
+    }
+    
+    if (filteredActivities.schedule.length === 0 && filteredActivities.warehouse.length === 0) {
+         doc.text("No records found for the selected period.", 14, 40);
+    }
+
+    doc.save(`activities_summary_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const handleScreenshot = async () => {
@@ -309,6 +378,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
                 </div>
               </div>
               <div className="flex items-center gap-3 self-end md:self-auto">
+                <button 
+                    onClick={handleDownloadSummaryPdf}
+                    className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 transition-all"
+                >
+                    <Download className="w-4 h-4" />
+                    PDF
+                </button>
                 <button 
                     onClick={handleScreenshot}
                     disabled={isScreenshotting}
