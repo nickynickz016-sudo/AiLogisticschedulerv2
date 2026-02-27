@@ -409,12 +409,19 @@ const App: React.FC = () => {
        }
 
        // Check capacity for this specific date
-       const limit = settings.daily_job_limits[currentDateStr] ?? 10;
-       const currentCount = jobs.filter(j => j.job_date === currentDateStr && j.status !== JobStatus.REJECTED).length;
-       
-       if (currentCount >= limit) {
-         alert(`Daily limit of ${limit} reached for ${currentDateStr}. Cannot schedule multi-day job.`);
-         return;
+       // Only enforce limit for non-warehouse jobs
+       if (!job.is_warehouse_activity) {
+           const limit = settings.daily_job_limits[currentDateStr] ?? 10;
+           const currentCount = jobs.filter(j => 
+               j.job_date === currentDateStr && 
+               j.status !== JobStatus.REJECTED &&
+               !j.is_warehouse_activity
+           ).length;
+           
+           if (currentCount >= limit) {
+             alert(`Daily limit of ${limit} reached for ${currentDateStr}. Cannot schedule multi-day job.`);
+             return;
+           }
        }
 
        // Generate ID

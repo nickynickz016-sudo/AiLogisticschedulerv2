@@ -755,6 +755,22 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
       textDark: [45, 55, 72], textLight: [113, 128, 150], accent: [30, 41, 59], border: [226, 232, 240], bg: [248, 250, 252],
     };
 
+    const getReferenceNumber = (formType: string) => {
+      switch (formType) {
+        case 'packing': return 'Ref: MovePlanning16/2024';
+        case 'unpacking': return 'Ref: MovePlanning16/2024';
+        case 'delivery': return 'Ref: WUAEOPS-WH-20/2024';
+        case 'crating': return 'Ref : WUAEOPS-WH-03/2024';
+        case 'electronicList': return 'Ref : WUAEOPS-WH-04/2024';
+        case 'accessorial': return 'Ref : WUAEOPS-WH-15/2024';
+        case 'warehouseReceipt': return 'Ref : WUAEOPS-WH-01/2024';
+        case 'handyman': return 'Ref : WUAEOPS-WH-20/2024';
+        case 'containerInspection': return 'Ref : WUAEOPS-WH-22/2024';
+        case 'vehicleInspection': return 'Ref : WUAEOPS-WH-19/2024';
+        default: return '';
+      }
+    };
+
     const addTitle = (title: string, showHeader: boolean = true) => {
       let titleXOffset = 0;
       if (logo) {
@@ -780,6 +796,16 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
       doc.text("WRITER RELOCATIONS", textX, 18);
       doc.setFontSize(8); doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]); doc.setFont("helvetica", "normal");
       doc.text("PREMIUM LOGISTICS SERVICES", textX, 22);
+
+      // Inject Reference Number
+      const refNum = getReferenceNumber(activeForm);
+      if (refNum) {
+          doc.setFontSize(10); 
+          doc.setTextColor(0, 0, 0); // Black
+          doc.setFont("helvetica", "bold");
+          doc.text(refNum, pageWidth - margin, 20, { align: 'right' });
+      }
+
       doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
       doc.line(margin, 38, pageWidth - margin, 38);
       yPos = 50;
@@ -875,13 +901,6 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
     } else if (activeForm === 'crating') {
          addTitle("Crating Specification Sheet");
          
-         // Added Reference per request
-         doc.setFontSize(10);
-         doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]);
-         doc.setFont("helvetica", "bold");
-         doc.text("Ref : MovePlanning-03/2024", margin, yPos);
-         yPos += 10;
-
          addField("Client Name", cratingData.clientName, margin, yPos);
          addField("Job Ref", cratingData.jobId, margin + 90, yPos);
          yPos += 15;

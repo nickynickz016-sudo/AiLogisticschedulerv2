@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { getUAEToday } from '../utils';
 import { Job, JobStatus, LoadingType, UserProfile, Personnel, Vehicle, UserRole, ShipmentDetailsType } from '../types';
-import { Plus, Search, Package, Clock, User, X, Calendar as CalendarIcon, CheckCircle2, Truck, Settings2, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Phone, Mail, Briefcase, FileText, AlertCircle, MapPin, RefreshCw, Edit2, Maximize2, Minimize2 } from 'lucide-react';
+import { Plus, Search, Package, Clock, User, X, Calendar as CalendarIcon, CheckCircle2, Truck, Settings2, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Phone, Mail, Briefcase, FileText, AlertCircle, MapPin, RefreshCw, Edit2, Maximize2, Minimize2, Copy } from 'lucide-react';
 import { JobDetailModal } from './JobDetailModal';
 
 interface ScheduleViewProps {
@@ -110,6 +110,34 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   };
 
   const [newJob, setNewJob] = useState<Partial<Job>>(initialNewJobState);
+  const [showCopyModal, setShowCopyModal] = useState<Job | null>(null);
+  const [copyDate, setCopyDate] = useState(getUAEToday());
+
+  const handleCopyJob = (e: React.MouseEvent, job: Job) => {
+    e.stopPropagation();
+    setShowCopyModal(job);
+    // Default to next day
+    const nextDay = new Date(job.job_date);
+    nextDay.setDate(nextDay.getDate() + 1);
+    setCopyDate(getLocalDateString(nextDay));
+  };
+
+  const confirmCopyJob = () => {
+    if (!showCopyModal) return;
+
+    const copiedJob: Partial<Job> = {
+      ...showCopyModal,
+      id: showCopyModal.id, // Will be regenerated in onAddJob logic if duplicate
+      job_date: copyDate,
+      status: JobStatus.PENDING_ADD, // Reset status for new schedule
+      is_locked: false, // Reset lock
+      created_at: Date.now(),
+      // Keep other details like shipper, location, etc.
+    };
+
+    onAddJob(copiedJob);
+    setShowCopyModal(null);
+  };
 
   // Sync newJob date with currently selected view date when modal opens (only for new jobs)
   useEffect(() => {
@@ -553,6 +581,13 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                       </button>
                                     )}
                                     <button 
+                                      onClick={(e) => handleCopyJob(e, job)}
+                                      className="p-1.5 hover:bg-emerald-50 rounded-lg text-slate-400 hover:text-emerald-600 transition-all"
+                                      title="Copy to Next Schedule"
+                                    >
+                                      <Copy className="w-4 h-4" />
+                                    </button>
+                                    <button 
                                       onClick={(e) => handleDeleteJobClick(job.id, e)} 
                                       className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-300 hover:text-rose-500 transition-all opacity-100 lg:opacity-0 lg:group-hover/job:opacity-100"
                                     >
@@ -707,6 +742,13 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                 </button>
                              )}
                              <button 
+                                onClick={(e) => handleCopyJob(e, job)}
+                                className="p-2 bg-slate-100 hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 rounded-xl transition-all shadow-sm"
+                                title="Copy to Next Schedule"
+                             >
+                                <Copy className="w-4 h-4" />
+                             </button>
+                             <button 
                                onClick={(e) => handleDeleteJobClick(job.id, e)}
                                disabled={job.is_locked && !canManageSchedule}
                                className={`p-2 rounded-xl transition-all ${job.is_locked && !canManageSchedule ? 'opacity-20 cursor-not-allowed' : 'bg-rose-50 text-rose-300 hover:text-rose-600 hover:bg-rose-100'}`}
@@ -730,6 +772,38 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
           onClose={() => setSelectedJob(null)}
           users={users}
         />
+      )}
+
+      {/* Copy Job Modal */}
+      {showCopyModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+           <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden p-6 space-y-6">
+              <div className="text-center">
+                 <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Copy className="w-6 h-6 text-emerald-600" />
+                 </div>
+                 <h3 className="text-lg font-bold text-slate-800">Copy Job to Next Schedule</h3>
+                 <p className="text-sm text-slate-500 mt-2">
+                    Select the date to copy <strong>{showCopyModal.shipper_name}</strong> to.
+                 </p>
+              </div>
+              
+              <div className="space-y-2">
+                 <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Target Date</label>
+                 <input 
+                    type="date" 
+                    value={copyDate} 
+                    onChange={(e) => setCopyDate(e.target.value)}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-700"
+                 />
+              </div>
+
+              <div className="flex gap-3">
+                 <button onClick={() => setShowCopyModal(null)} className="flex-1 py-3 text-slate-400 font-bold text-xs uppercase tracking-widest hover:bg-slate-50 rounded-xl transition-all">Cancel</button>
+                 <button onClick={confirmCopyJob} className="flex-1 py-3 bg-emerald-600 text-white font-bold text-xs uppercase tracking-widest rounded-xl hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all">Confirm Copy</button>
+              </div>
+           </div>
+        </div>
       )}
 
       {/* Allocation Edit Modal */}

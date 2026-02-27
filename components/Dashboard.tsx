@@ -37,7 +37,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
 
   const today = getUAEToday();
   const currentLimit = settings.daily_job_limits[today] || 10;
-  const currentJobsCount = jobs.filter(j => j.job_date === today && j.status !== JobStatus.REJECTED).length;
+  // Filter out warehouse activities from the capacity count as per user request
+  const currentJobsCount = jobs.filter(j => 
+    j.job_date === today && 
+    j.status !== JobStatus.REJECTED && 
+    !j.is_warehouse_activity
+  ).length;
 
   const stats = [
     { label: 'Units Authorized', value: jobs.filter(j => j.status === JobStatus.ACTIVE).length, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50/50' },
