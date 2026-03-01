@@ -1,12 +1,13 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { getUAEToday } from '../utils';
-import { Job, JobStatus, SystemSettings } from '../types';
+import { Job, JobStatus, SystemSettings, JobCostSheet } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, Download, Loader2, Activity, Calendar, X, Filter, CalendarRange, ListFilter, Camera } from 'lucide-react';
+import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, Download, Loader2, Activity, Calendar, X, Filter, CalendarRange, ListFilter, Camera, DollarSign } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
+import { supabase } from '../supabaseClient';
 
 // Extend jsPDF with the autoTable plugin
 type jsPDFWithAutoTable = jsPDF & {
@@ -44,11 +45,58 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
     !j.is_warehouse_activity
   ).length;
 
+  const [dailyCosts, setDailyCosts] = useState<{name: string, v: number}[]>([]);
+
+  useEffect(() => {
+    const fetchCosts = async () => {
+      const { data, error } = await supabase.from('job_cost_sheets').select('job_id, total_cost');
+      if (error) {
+        console.error('Error fetching costs:', error);
+        return;
+      }
+      
+      // Group by date
+      const costsByDate: Record<string, number> = {};
+      
+      // Initialize last 7 days with 0
+      const todayDate = new Date(today);
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(todayDate);
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+        costsByDate[dateStr] = 0;
+      }
+
+      data?.forEach((sheet: any) => {
+        const job = jobs.find(j => j.id === sheet.job_id);
+        if (job && job.job_date) {
+           // Only aggregate if the date is initialized in our range (last 7 days)
+           if (costsByDate[job.job_date] !== undefined) {
+             costsByDate[job.job_date] += sheet.total_cost || 0;
+           }
+        }
+      });
+
+      const chartData = Object.entries(costsByDate)
+        .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+        .map(([date, cost]) => ({
+          name: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }), // Mon, Tue
+          v: cost
+        }));
+      
+      setDailyCosts(chartData);
+    };
+
+    if (jobs.length > 0) {
+        fetchCosts();
+    }
+  }, [jobs, today]);
+
   const stats = [
     { label: 'Units Authorized', value: jobs.filter(j => j.status === JobStatus.ACTIVE).length, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50/50' },
     { label: 'Pending Pool', value: jobs.filter(j => j.status === JobStatus.PENDING_ADD).length, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50/50' },
     { label: 'Operations Final', value: jobs.filter(j => j.status === JobStatus.COMPLETED).length, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50/50' },
-    { label: 'Critical Alerts', value: jobs.filter(j => j.priority === 'HIGH' && j.status === JobStatus.ACTIVE).length, icon: AlertCircle, color: 'text-rose-600', bg: 'bg-rose-50/50' },
+    { label: 'Warehouse Activity', value: jobs.filter(j => j.is_warehouse_activity && j.job_date === today).length, icon: Package, color: 'text-indigo-600', bg: 'bg-indigo-50/50' },
   ];
 
   // Filtered Activities for Summary
@@ -319,19 +367,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-10">
         <div className="lg:col-span-2 bg-white rounded-[2.5rem] p-6 md:p-10 border border-slate-200 shadow-sm relative overflow-hidden group">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 md:mb-12 gap-4">
-            <h3 className="font-black text-xl text-slate-800 uppercase tracking-tight">Throughput Velocity Index</h3>
+            <h3 className="font-black text-xl text-slate-800 uppercase tracking-tight">Daily Cost Incurred</h3>
             <div className="px-4 py-2 bg-slate-50 rounded-2xl border border-slate-100 group-hover:bg-blue-50 transition-colors self-start sm:self-auto">
-              <span className="text-slate-500 font-bold text-[10px] uppercase tracking-widest group-hover:text-blue-600">Daily Efficiency Index</span>
+              <span className="text-slate-500 font-bold text-[10px] uppercase tracking-widest group-hover:text-blue-600">Last 7 Days Cost</span>
             </div>
           </div>
           <div className="w-full" style={{ height: '320px', minHeight: '320px' }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <BarChart data={[
-                { name: 'Sun', v: 35 }, { name: 'Mon', v: 65 }, { name: 'Tue', v: 50 }, 
-                { name: 'Wed', v: 80 }, { name: 'Thu', v: 55 }, { name: 'Fri', v: 25 }, { name: 'Sat', v: 40 }
-              ]}>
+              <BarChart data={dailyCosts}>
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: '700'}} />
-                <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
+                <Tooltip 
+                    cursor={{fill: '#f8fafc'}} 
+                    contentStyle={{borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                    formatter={(value: number) => [`AED ${value.toFixed(2)}`, 'Cost']}
+                />
                 <Bar dataKey="v" radius={[8, 8, 0, 0]} fill="#3b82f6" fillOpacity={0.8} />
               </BarChart>
             </ResponsiveContainer>
