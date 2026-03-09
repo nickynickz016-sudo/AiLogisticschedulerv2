@@ -38,11 +38,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
 
   const today = getUAEToday();
   const currentLimit = settings.daily_job_limits[today] || 10;
-  // Filter out warehouse activities from the capacity count as per user request
+  // Filter out non-schedule activities from the capacity count as per user request
   const currentJobsCount = jobs.filter(j => 
     j.job_date === today && 
     j.status !== JobStatus.REJECTED && 
-    !j.is_warehouse_activity
+    !j.is_warehouse_activity &&
+    !j.is_import_clearance &&
+    !j.is_transporter
   ).length;
 
   const [dailyCosts, setDailyCosts] = useState<{name: string, v: number}[]>([]);
@@ -69,7 +71,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
 
       data?.forEach((sheet: any) => {
         const job = jobs.find(j => j.id === sheet.job_id);
-        if (job && job.job_date) {
+        if (job && job.job_date && !job.is_transporter) {
            // Only aggregate if the date is initialized in our range (last 7 days)
            if (costsByDate[job.job_date] !== undefined) {
              costsByDate[job.job_date] += sheet.total_cost || 0;
@@ -93,15 +95,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
   }, [jobs, today]);
 
   const stats = [
-    { label: 'Units Authorized', value: jobs.filter(j => j.status === JobStatus.ACTIVE).length, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50/50' },
-    { label: 'Pending Pool', value: jobs.filter(j => j.status === JobStatus.PENDING_ADD).length, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50/50' },
-    { label: 'Operations Final', value: jobs.filter(j => j.status === JobStatus.COMPLETED).length, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50/50' },
+    { label: 'Units Authorized', value: jobs.filter(j => j.status === JobStatus.ACTIVE && !j.is_transporter).length, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50/50' },
+    { label: 'Pending Pool', value: jobs.filter(j => j.status === JobStatus.PENDING_ADD && !j.is_transporter).length, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50/50' },
+    { label: 'Operations Final', value: jobs.filter(j => j.status === JobStatus.COMPLETED && !j.is_transporter).length, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50/50' },
     { label: 'Warehouse Activity', value: jobs.filter(j => j.is_warehouse_activity && j.job_date === today).length, icon: Package, color: 'text-indigo-600', bg: 'bg-indigo-50/50' },
   ];
 
   // Filtered Activities for Summary
   const filteredActivities = useMemo(() => {
-    let filtered = jobs.filter(j => j.status !== JobStatus.REJECTED);
+    let filtered = jobs.filter(j => j.status !== JobStatus.REJECTED && !j.is_transporter);
 
     if (summaryFilterType === 'day') {
       filtered = filtered.filter(j => j.job_date === summaryDate);
@@ -140,9 +142,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
       };
 
       // Filter jobs into categories
-      const scheduleJobs = jobs.filter(j => !j.is_warehouse_activity && !j.is_import_clearance);
+      const scheduleJobs = jobs.filter(j => !j.is_warehouse_activity && !j.is_import_clearance && !j.is_transporter);
       const warehouseJobs = jobs.filter(j => j.is_warehouse_activity);
       const importJobs = jobs.filter(j => j.is_import_clearance);
+      const transporterJobs = jobs.filter(j => j.is_transporter);
 
       // 1. Job Schedule Table
       doc.autoTable({

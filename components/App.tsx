@@ -179,7 +179,8 @@ const App: React.FC = () => {
     // Filter jobs where current user is requester and status is decided
     const relevantJobs = jobs.filter(j => 
       j.requester_id === currentUser.employee_id && 
-      (j.status === JobStatus.ACTIVE || j.status === JobStatus.REJECTED)
+      (j.status === JobStatus.ACTIVE || j.status === JobStatus.REJECTED) &&
+      !j.is_transporter
     );
 
     const generatedNotifs = relevantJobs.map(j => {
@@ -289,7 +290,13 @@ const App: React.FC = () => {
 
        // Check capacity for this specific date
        const limit = settings.daily_job_limits[currentDateStr] ?? 10;
-       const currentCount = jobs.filter(j => j.job_date === currentDateStr && j.status !== JobStatus.REJECTED).length;
+       const currentCount = jobs.filter(j => 
+           j.job_date === currentDateStr && 
+           j.status !== JobStatus.REJECTED &&
+           !j.is_warehouse_activity &&
+           !j.is_import_clearance &&
+           !j.is_transporter
+       ).length;
        
        if (currentCount >= limit) {
          alert(`Daily limit of ${limit} reached for ${currentDateStr}. Cannot schedule multi-day job.`);

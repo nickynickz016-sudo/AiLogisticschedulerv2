@@ -36,7 +36,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ jobs, onUpdateJob, l
     !j.id.match(/-D\d+$/) && // Exclude multi-day continuation jobs (e.g. -D2, -D3)
     (j.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
      j.shipper_name.toLowerCase().includes(searchTerm.toLowerCase())) &&
-    j.status !== JobStatus.REJECTED
+    j.status !== JobStatus.REJECTED &&
+    !j.is_transporter
   );
 
   // Sync form data when selecting a step

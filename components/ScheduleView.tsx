@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { getUAEToday } from '../utils';
 import { Job, JobStatus, LoadingType, UserProfile, Personnel, Vehicle, UserRole, ShipmentDetailsType } from '../types';
-import { Plus, Search, Package, Clock, User, X, Calendar as CalendarIcon, CheckCircle2, Truck, Settings2, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Phone, Mail, Briefcase, FileText, AlertCircle, MapPin, RefreshCw, Edit2, Maximize2, Minimize2, Copy } from 'lucide-react';
+import { Plus, Search, Package, Clock, User, X, Calendar as CalendarIcon, CheckCircle2, Truck, Settings2, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Phone, Mail, Briefcase, FileText, AlertCircle, MapPin, RefreshCw, Edit2, Maximize2, Minimize2, Copy, Download } from 'lucide-react';
 import { JobDetailModal } from './JobDetailModal';
+import * as XLSX from 'xlsx';
 
 interface ScheduleViewProps {
   jobs: Job[];
@@ -112,6 +113,65 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   const [newJob, setNewJob] = useState<Partial<Job>>(initialNewJobState);
   const [showCopyModal, setShowCopyModal] = useState<Job | null>(null);
   const [copyDate, setCopyDate] = useState(getUAEToday());
+  
+  // Export State
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportStartDate, setExportStartDate] = useState(getUAEToday());
+  const [exportEndDate, setExportEndDate] = useState(getUAEToday());
+
+  const handleExportExcel = () => {
+    // Filter jobs by date range
+    const jobsToExport = jobs.filter(job => {
+      if (job.is_warehouse_activity || job.is_import_clearance || job.is_transporter) return false;
+      return job.job_date >= exportStartDate && job.job_date <= exportEndDate;
+    });
+
+    if (jobsToExport.length === 0) {
+      alert('No jobs found for the selected date range.');
+      return;
+    }
+
+    // Map to required format
+    const data = jobsToExport.map(job => {
+      const requester = users.find(u => u.employee_id === job.requester_id);
+      return {
+        'Job no.': job.id,
+        'Shipper Name': job.shipper_name,
+        'Location': job.location || '',
+        'Requestor': requester ? requester.name : job.requester_id,
+        'CBM': job.volume_cbm || 0,
+        'Shipment Details': job.shipment_details || '',
+        'Loading Type': job.loading_type
+      };
+    });
+
+    // Create worksheet
+    const ws = XLSX.utils.json_to_sheet(data);
+    
+    // Auto-size columns
+    const colWidths = [
+      { wch: 15 }, // Job no.
+      { wch: 25 }, // Shipper Name
+      { wch: 30 }, // Location
+      { wch: 20 }, // Requestor
+      { wch: 10 }, // CBM
+      { wch: 20 }, // Shipment Details
+      { wch: 20 }  // Loading Type
+    ];
+    ws['!cols'] = colWidths;
+
+    // Create workbook
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Job Schedule');
+
+    // Generate file name
+    const fileName = `Job_Schedule_Report_${exportStartDate}_to_${exportEndDate}.xlsx`;
+
+    // Download file
+    XLSX.writeFile(wb, fileName);
+    
+    setShowExportModal(false);
+  };
 
   const handleCopyJob = (e: React.MouseEvent, job: Job) => {
     e.stopPropagation();
@@ -174,6 +234,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   const filteredJobs = jobs.filter(j => 
     !j.is_warehouse_activity &&
     !j.is_import_clearance &&
+    !j.is_transporter &&
     (filter ? true : j.job_date === selectedDate) && // If filtering, search all dates. Else restrict to selected date.
     (j.id.toLowerCase().includes(filter.toLowerCase()) || 
      j.shipper_name.toLowerCase().includes(filter.toLowerCase())) &&
@@ -352,7 +413,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     }
 
     const jobsForMonth = jobs.filter(job => {
-        if (job.is_warehouse_activity || job.is_import_clearance) return false;
+        if (job.is_warehouse_activity || job.is_import_clearance || job.is_transporter) return false;
         // Apply filter to month view as well if active
         if (filter && !job.id.toLowerCase().includes(filter.toLowerCase()) && !job.shipper_name.toLowerCase().includes(filter.toLowerCase())) return false;
         
@@ -496,6 +557,13 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
               />
             </div>
           )}
+          <button 
+            onClick={() => setShowExportModal(true)}
+            className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-600 px-6 py-3.5 rounded-xl hover:bg-slate-50 transition-all font-bold uppercase text-[11px] tracking-widest shadow-sm whitespace-nowrap"
+          >
+            <Download className="w-4 h-4" />
+            Export Report
+          </button>
           <button 
             onClick={() => { setIsEditingMode(false); setShowModal(true); }}
             className="flex items-center justify-center gap-2 bg-slate-900 text-white px-8 py-3.5 rounded-xl hover:bg-slate-800 transition-all font-bold uppercase text-[11px] tracking-widest shadow-md whitespace-nowrap"
@@ -772,6 +840,59 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
           onClose={() => setSelectedJob(null)}
           users={users}
         />
+      )}
+
+      {/* Export Report Modal */}
+      {showExportModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+           <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden p-6 space-y-6">
+              <div className="text-center">
+                 <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Download className="w-6 h-6 text-blue-600" />
+                 </div>
+                 <h3 className="text-lg font-bold text-slate-800">Export Job Schedule</h3>
+                 <p className="text-sm text-slate-500 mt-2">
+                    Select the date range to generate the Excel report.
+                 </p>
+              </div>
+              
+              <div className="space-y-4">
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">From Date</label>
+                    <input 
+                       type="date" 
+                       value={exportStartDate} 
+                       onChange={(e) => setExportStartDate(e.target.value)}
+                       className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-700"
+                    />
+                 </div>
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">To Date</label>
+                    <input 
+                       type="date" 
+                       value={exportEndDate} 
+                       onChange={(e) => setExportEndDate(e.target.value)}
+                       className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-bold text-slate-700"
+                    />
+                 </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                 <button 
+                    onClick={() => setShowExportModal(false)}
+                    className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-slate-200 transition-colors"
+                 >
+                    Cancel
+                 </button>
+                 <button 
+                    onClick={handleExportExcel}
+                    className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200"
+                 >
+                    Download
+                 </button>
+              </div>
+           </div>
+        </div>
       )}
 
       {/* Copy Job Modal */}

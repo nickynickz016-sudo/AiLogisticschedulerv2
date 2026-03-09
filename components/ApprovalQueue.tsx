@@ -26,7 +26,7 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ jobs, onApproval, 
   const [searchTerm, setSearchTerm] = useState('');
 
   const pendingJobs = jobs.filter(j => 
-    j.status === JobStatus.PENDING_ADD || j.status === JobStatus.PENDING_DELETE
+    (j.status === JobStatus.PENDING_ADD || j.status === JobStatus.PENDING_DELETE) && !j.is_transporter
   );
 
   // Filtered lists based on search
@@ -107,7 +107,13 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ jobs, onApproval, 
         {pendingJobs.map((job) => {
           const requester = users.find(u => u.employee_id === job.requester_id);
           const jobDate = job.job_date;
-          const currentCount = jobs.filter(j => j.job_date === jobDate && j.status !== JobStatus.REJECTED).length;
+          const currentCount = jobs.filter(j => 
+            j.job_date === jobDate && 
+            j.status !== JobStatus.REJECTED &&
+            !j.is_warehouse_activity &&
+            !j.is_import_clearance &&
+            !j.is_transporter
+          ).length;
           const dailyLimit = settings.daily_job_limits[jobDate] ?? 10;
           const isAtCapacity = currentCount >= dailyLimit;
 

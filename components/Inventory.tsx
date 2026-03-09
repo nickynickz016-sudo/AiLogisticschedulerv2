@@ -282,8 +282,9 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
   };
 
   const filteredJobs = jobs.filter(j => 
-    j.id.toLowerCase().includes(jobSearchTerm.toLowerCase()) ||
-    j.shipper_name.toLowerCase().includes(jobSearchTerm.toLowerCase())
+    !j.is_transporter &&
+    (j.id.toLowerCase().includes(jobSearchTerm.toLowerCase()) ||
+    j.shipper_name.toLowerCase().includes(jobSearchTerm.toLowerCase()))
   );
 
   const updateSheetItem = (inventoryId: number, field: 'issued_qty' | 'returned_qty', value: number) => {

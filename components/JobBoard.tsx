@@ -41,7 +41,8 @@ export const JobBoard: React.FC<JobBoardProps> = ({ jobs, onAddJob, onDeleteJob,
     (j.title.toLowerCase().includes(filter.toLowerCase()) || 
      (j.location && j.location.toLowerCase().includes(filter.toLowerCase())) ||
      j.shipper_name.toLowerCase().includes(filter.toLowerCase())) &&
-    j.status !== JobStatus.REJECTED
+    j.status !== JobStatus.REJECTED &&
+    !j.is_transporter
   );
 
   const handleSubmit = (e: React.FormEvent) => {

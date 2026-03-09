@@ -409,13 +409,15 @@ const App: React.FC = () => {
        }
 
        // Check capacity for this specific date
-       // Only enforce limit for non-warehouse jobs
-       if (!job.is_warehouse_activity) {
+       // Only enforce limit for job schedule jobs
+       if (!job.is_warehouse_activity && !job.is_import_clearance && !job.is_transporter) {
            const limit = settings.daily_job_limits[currentDateStr] ?? 10;
            const currentCount = jobs.filter(j => 
                j.job_date === currentDateStr && 
                j.status !== JobStatus.REJECTED &&
-               !j.is_warehouse_activity
+               !j.is_warehouse_activity &&
+               !j.is_import_clearance &&
+               !j.is_transporter
            ).length;
            
            if (currentCount >= limit) {
