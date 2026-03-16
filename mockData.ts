@@ -20,6 +20,7 @@ const FULL_ACCESS = {
   resources: true,
   capacity: true,
   users: true,
+  transporter: true,
   ai: true,
 };
 
@@ -36,6 +37,7 @@ const STANDARD_ACCESS = {
   resources: false,
   capacity: false,
   users: false,
+  transporter: false,
   ai: false,
 };
 
@@ -52,6 +54,7 @@ const WRITER_ACCESS = {
   resources: false,
   capacity: false,
   users: false,
+  transporter: false,
   ai: false,
 };
 
@@ -68,6 +71,7 @@ const SENIOR_OPS_ACCESS = {
   resources: true, // Fleet & Crew
   capacity: false,
   users: false,
+  transporter: true,
   ai: false,
 };
 
@@ -84,6 +88,7 @@ const SANTOSH_ACCESS = {
   resources: false,
   capacity: false,
   users: false,
+  transporter: false,
   ai: false,
 };
 
@@ -100,6 +105,7 @@ const SEMI_ADMIN_ACCESS = {
   resources: true,
   capacity: true, // CHANGED TO TRUE
   users: false,
+  transporter: true,
   ai: true,
 };
 
@@ -116,6 +122,7 @@ const ACCOUNTS_ACCESS = {
   resources: false,
   capacity: false,
   users: false,
+  transporter: false,
   ai: false,
 };
 

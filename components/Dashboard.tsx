@@ -147,6 +147,41 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
       const importJobs = jobs.filter(j => j.is_import_clearance);
       const transporterJobs = jobs.filter(j => j.is_transporter);
 
+      // Color coding helper
+      const getBaseId = (id: string) => {
+        const match = id.match(/^[A-Z]+-\d{4}-\d{2}/);
+        if (match) return match[0];
+        return id.replace(/[-.](D?\d+)$/i, '');
+      };
+
+      const getRowColors = (jobsArray: Job[]) => {
+        const counts: Record<string, number> = {};
+        jobsArray.forEach(j => {
+          const baseId = getBaseId(j.id);
+          counts[baseId] = (counts[baseId] || 0) + 1;
+        });
+
+        const colors = [[255, 242, 204], [217, 234, 211], [201, 218, 248], [244, 204, 204], [217, 210, 233], [252, 229, 205]];
+        let cIdx = 0;
+        const colorMap: Record<string, number[]> = {};
+
+        return jobsArray.map(j => {
+          const baseId = getBaseId(j.id);
+          if (counts[baseId] > 1) {
+            if (!colorMap[baseId]) {
+              colorMap[baseId] = colors[cIdx % colors.length];
+              cIdx++;
+            }
+            return colorMap[baseId];
+          }
+          return null;
+        });
+      };
+
+      const scheduleColors = getRowColors(scheduleJobs);
+      const warehouseColors = getRowColors(warehouseJobs);
+      const importColors = getRowColors(importJobs);
+
       // 1. Job Schedule Table
       doc.autoTable({
         startY: 30,
@@ -158,9 +193,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
         tableWidth: 'auto',
         styles: { fontSize: 8, cellPadding: 2 },
         columnStyles: { 4: { cellWidth: 40 } },
-        didParseCell: function(data) {
+        didParseCell: function(data: any) {
           if (data.section === 'head' && data.column.index === 0) {
             data.cell.text = ['Job Schedule'];
+          }
+          if (data.section === 'body' && scheduleColors[data.row.index]) {
+            data.cell.styles.fillColor = scheduleColors[data.row.index];
           }
         },
       });
@@ -174,9 +212,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
           headStyles: { fillColor: [37, 99, 235] },
           margin: { top: 30 },
           styles: { fontSize: 8, cellPadding: 2 },
-          didParseCell: function(data) {
+          didParseCell: function(data: any) {
             if (data.section === 'head' && data.column.index === 0) {
               data.cell.text = ['Warehouse Activity'];
+            }
+            if (data.section === 'body' && warehouseColors[data.row.index]) {
+              data.cell.styles.fillColor = warehouseColors[data.row.index];
             }
           },
         });
@@ -191,9 +232,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
           headStyles: { fillColor: [79, 70, 229] },
           margin: { top: 30 },
           styles: { fontSize: 8, cellPadding: 2 },
-          didParseCell: function(data) {
+          didParseCell: function(data: any) {
             if (data.section === 'head' && data.column.index === 0) {
               data.cell.text = ['Import Clearance'];
+            }
+            if (data.section === 'body' && importColors[data.row.index]) {
+              data.cell.styles.fillColor = importColors[data.row.index];
             }
           },
         });
@@ -230,6 +274,40 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
         doc.text(`Generated on: ${generationDate}`, doc.internal.pageSize.width - data.settings.margin.right, doc.internal.pageSize.height - 10, { align: 'right' });
     };
 
+    // Color coding helper
+    const getBaseId = (id: string) => {
+      const match = id.match(/^[A-Z]+-\d{4}-\d{2}/);
+      if (match) return match[0];
+      return id.replace(/[-.](D?\d+)$/i, '');
+    };
+
+    const getRowColors = (jobsArray: Job[]) => {
+      const counts: Record<string, number> = {};
+      jobsArray.forEach(j => {
+        const baseId = getBaseId(j.id);
+        counts[baseId] = (counts[baseId] || 0) + 1;
+      });
+
+      const colors = [[255, 242, 204], [217, 234, 211], [201, 218, 248], [244, 204, 204], [217, 210, 233], [252, 229, 205]];
+      let cIdx = 0;
+      const colorMap: Record<string, number[]> = {};
+
+      return jobsArray.map(j => {
+        const baseId = getBaseId(j.id);
+        if (counts[baseId] > 1) {
+          if (!colorMap[baseId]) {
+            colorMap[baseId] = colors[cIdx % colors.length];
+            cIdx++;
+          }
+          return colorMap[baseId];
+        }
+        return null;
+      });
+    };
+
+    const scheduleColors = getRowColors(filteredActivities.schedule);
+    const warehouseColors = getRowColors(filteredActivities.warehouse);
+
     let finalY = 35;
 
     // 1. Job Schedule Table
@@ -245,6 +323,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
             didParseCell: function(data: any) {
                 if (data.section === 'head' && data.column.index === 0) {
                     data.cell.text = ['Job Schedule'];
+                }
+                if (data.section === 'body' && scheduleColors[data.row.index]) {
+                    data.cell.styles.fillColor = scheduleColors[data.row.index];
                 }
             },
         });
@@ -264,6 +345,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
             didParseCell: function(data: any) {
                 if (data.section === 'head' && data.column.index === 0) {
                     data.cell.text = ['Warehouse Activity'];
+                }
+                if (data.section === 'body' && warehouseColors[data.row.index]) {
+                    data.cell.styles.fillColor = warehouseColors[data.row.index];
                 }
             },
         });

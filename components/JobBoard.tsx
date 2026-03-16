@@ -174,6 +174,11 @@ export const JobBoard: React.FC<JobBoardProps> = ({ jobs, onAddJob, onDeleteJob,
                   <span className="text-xs font-semibold text-slate-700">Req by: {requester ? requester.name : `#${job.requester_id}`}</span>
                 </div>
               </div>
+              {job.last_edited_by && (
+                  <div className="mt-4 pt-3 border-t border-slate-50 text-[9px] text-slate-400 font-medium tracking-wide">
+                      Last edited by {job.last_edited_by} on {new Date(job.last_edited_at || 0).toLocaleString()}
+                  </div>
+              )}
             </div>
           )
         })}

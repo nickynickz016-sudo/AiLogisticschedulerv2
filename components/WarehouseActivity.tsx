@@ -9,7 +9,7 @@ import autoTable from 'jspdf-autotable';
 interface WarehouseActivityProps {
   jobs: Job[];
   onAddJob: (job: Partial<Job>) => void;
-  onEditJob: (job: Job) => void;
+  onEditJob: (job: Job, oldId?: string) => void;
   onDeleteJob: (jobId: string) => void;
   currentUser: UserProfile;
   personnel?: Personnel[];
@@ -32,6 +32,7 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [originalId, setOriginalId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(getLocalToday());
   const [viewMode, setViewMode] = useState<'day' | 'month'>('day');
   
@@ -75,6 +76,7 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
         const requester = users ? users.find(u => u.employee_id === activity.requester_id) : null;
         return [
             activity.id,
+            activity.job_date,
             activity.shipper_name,
             activity.activity_name || '-',
             activity.team_leader || '-',
@@ -85,7 +87,7 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
 
     // Add table
     autoTable(doc, {
-        head: [['Unit ID', 'Shipper', 'Activity', 'Team Leader', 'Requested By', 'Status']],
+        head: [['Unit ID', 'Date', 'Shipper', 'Activity', 'Team Leader', 'Requested By', 'Status']],
         body: tableData,
         startY: 40,
         styles: { fontSize: 9 },
@@ -109,13 +111,15 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
         vehicle: newActivity.vehicles.join(', ')
     };
 
-    if (isEditing) {
-        const originalJob = jobs.find(j => j.id === newActivity.id);
+    if (isEditing && originalId) {
+        const originalJob = jobs.find(j => j.id === originalId);
         if (originalJob) {
             onEditJob({
                 ...originalJob,
-                ...payload
-            });
+                ...payload,
+                id: newActivity.id,
+                title: newActivity.id
+            }, originalId);
         }
     } else {
         onAddJob({
@@ -147,6 +151,7 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
         vehicles: []
     });
     setIsEditing(false);
+    setOriginalId(null);
   };
 
   const openAddModal = () => {
@@ -156,6 +161,7 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
   };
 
   const openEditModal = (activity: Job) => {
+    setOriginalId(activity.id);
     setNewActivity({
         id: activity.id,
         shipper_name: activity.shipper_name,
@@ -368,6 +374,11 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
                         <div className="mt-3 text-xs text-slate-400 font-bold uppercase tracking-wide">
                            Requested by: {requester ? requester.name : activity.requester_id}
                         </div>
+                        {activity.last_edited_by && (
+                            <div className="mt-1 text-[10px] text-slate-400 font-medium tracking-wide">
+                                Last edited by {activity.last_edited_by} on {new Date(activity.last_edited_at || 0).toLocaleString()}
+                            </div>
+                        )}
                     </div>
                     <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => openEditModal(activity)} className="p-3 hover:bg-slate-50 rounded-xl text-slate-400 hover:text-blue-600 transition-all"><Edit2 className="w-5 h-5" /></button>
@@ -395,8 +406,8 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Job No. *</label>
                 <div className="relative">
-                    <input required type="text" disabled={isEditing} className="w-full px-5 py-3.5 pr-12 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newActivity.id} onChange={e => setNewActivity({...newActivity, id: e.target.value})} placeholder="WH-..." />
-                    {!isEditing && <button type="button" onClick={generateUniqueId} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 rounded-lg"><RefreshCw className="w-4 h-4" /></button>}
+                    <input required type="text" className="w-full px-5 py-3.5 pr-12 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newActivity.id} onChange={e => setNewActivity({...newActivity, id: e.target.value})} placeholder="WH-..." />
+                    <button type="button" onClick={generateUniqueId} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 rounded-lg"><RefreshCw className="w-4 h-4" /></button>
                 </div>
               </div>
               <div className="space-y-1.5">

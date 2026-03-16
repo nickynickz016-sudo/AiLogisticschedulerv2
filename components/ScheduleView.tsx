@@ -9,7 +9,7 @@ import * as XLSX from 'xlsx';
 interface ScheduleViewProps {
   jobs: Job[];
   onAddJob: (job: Partial<Job>) => void;
-  onEditJob: (job: Job) => void;
+  onEditJob: (job: Job, oldId?: string) => void;
   onDeleteJob: (jobId: string) => void;
   onUpdateAllocation: (jobId: string, allocation: { team_leader: string, vehicles: string[], writer_crew: string[] }) => void;
   onToggleLock: (jobId: string) => void;
@@ -136,6 +136,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
       const requester = users.find(u => u.employee_id === job.requester_id);
       return {
         'Job no.': job.id,
+        'Date': job.job_date,
         'Shipper Name': job.shipper_name,
         'Location': job.location || '',
         'Requestor': requester ? requester.name : job.requester_id,
@@ -151,6 +152,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     // Auto-size columns
     const colWidths = [
       { wch: 15 }, // Job no.
+      { wch: 12 }, // Date
       { wch: 25 }, // Shipper Name
       { wch: 30 }, // Location
       { wch: 20 }, // Requestor
@@ -283,7 +285,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     }
 
     if (isEditingMode) {
-        onEditJob(newJob as Job);
+        onEditJob(newJob as Job, selectedJob?.id);
     } else {
         onAddJob({ ...newJob, title: newJob.id });
     }
@@ -681,6 +683,11 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                     </div>
                                  </div>
                               </div>
+                              {job.last_edited_by && (
+                                 <div className="mt-4 pt-3 border-t border-slate-50 text-[9px] text-slate-400 font-medium tracking-wide">
+                                     Last edited by {job.last_edited_by} on {new Date(job.last_edited_at || 0).toLocaleString()}
+                                 </div>
+                              )}
                            </div>
                          )
                        })}
@@ -734,6 +741,11 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                 <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                                 <span className="text-[10px] text-slate-500 font-bold">{requester ? requester.name : job.requester_id}</span>
                               </div>
+                              {job.last_edited_by && (
+                                <div className="mt-1 text-[9px] text-slate-400 font-medium tracking-wide">
+                                    Last edited by {job.last_edited_by} on {new Date(job.last_edited_at || 0).toLocaleString()}
+                                </div>
+                              )}
                            </div>
                          </td>
                          <td className="p-6">
@@ -1138,22 +1150,19 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                         <input 
                             required 
                             type="text" 
-                            disabled={isEditingMode} // Disable ID editing in edit mode
-                            className={`w-full px-5 py-3.5 pr-12 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none ${isEditingMode ? 'opacity-60 cursor-not-allowed' : ''}`}
+                            className={`w-full px-5 py-3.5 pr-12 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none`}
                             value={newJob.id} 
                             onChange={e => setNewJob({...newJob, id: e.target.value})} 
                             placeholder="AE-XXXX" 
                         />
-                        {!isEditingMode && (
-                            <button 
-                                type="button" 
-                                onClick={generateUniqueId}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                title="Generate Unique ID"
-                            >
-                                <RefreshCw className="w-4 h-4" />
-                            </button>
-                        )}
+                        <button 
+                            type="button" 
+                            onClick={generateUniqueId}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                            title="Generate Unique ID"
+                        >
+                            <RefreshCw className="w-4 h-4" />
+                        </button>
                     </div>
                   </div>
                   <div className="space-y-1.5">

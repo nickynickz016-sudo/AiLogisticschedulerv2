@@ -337,9 +337,14 @@ const App: React.FC = () => {
     setJobs(prevJobs => prevJobs.map(j => j.id === updatedJob.id ? updatedJob : j));
   };
 
-  const handleEditJob = async (job: Job) => {
+  const handleEditJob = async (job: Job, oldId?: string) => {
+    const targetId = oldId || job.id;
+    const oldJob = jobs.find(j => j.id === targetId);
+    
     // Exclude restricted fields or ensure data consistency if needed
     const { error } = await supabase.from('jobs').update({
+        id: job.id,
+        title: job.id,
         shipper_name: job.shipper_name,
         shipper_phone: job.shipper_phone,
         client_email: job.client_email,
@@ -360,14 +365,105 @@ const App: React.FC = () => {
         writer_crew: job.writer_crew,
         vehicles: job.vehicles,
         vehicle: job.vehicles?.join(', '), // Maintain legacy string compatibility
-        activity_name: job.activity_name
-    }).eq('id', job.id);
+        activity_name: job.activity_name,
+        last_edited_by: currentUser?.name || 'Unknown',
+        last_edited_at: Date.now()
+    }).eq('id', targetId);
 
     if (error) {
         alert(`Error updating job: ${error.message}`);
-    } else {
-        await fetchJobs();
+        return;
     }
+
+    // Handle duration or date adjustment for multi-day jobs
+    const baseId = job.id.replace(/-D\d+(-\d+)?$/, '');
+    const isBaseJob = job.id === baseId;
+
+    if (oldJob && (oldJob.duration !== job.duration || (isBaseJob && oldJob.job_date !== job.job_date))) {
+        const relatedJobs = jobs.filter(j => j.id === baseId || j.id.startsWith(`${baseId}-D`));
+        
+        // Find the base job to get the starting date
+        const baseJob = (job.id === baseId ? job : relatedJobs.find(j => j.id === baseId)) || job;
+        const duration = job.duration || 1;
+        
+        // Calculate the required dates based on the new duration
+        let currentDateObj = new Date(baseJob.job_date || getUAEToday());
+        let daysScheduled = 0;
+        const requiredDates: string[] = [];
+        
+        while (daysScheduled < duration) {
+            if (currentDateObj.getUTCDay() === 0) {
+                currentDateObj.setDate(currentDateObj.getDate() + 1);
+                continue;
+            }
+            requiredDates.push(currentDateObj.toISOString().split('T')[0]);
+            daysScheduled++;
+            currentDateObj.setDate(currentDateObj.getDate() + 1);
+        }
+
+        const jobsToCreate: Job[] = [];
+        const jobsToDelete: string[] = [];
+        const jobsToUpdate: Job[] = [];
+        
+        for (let i = 0; i < requiredDates.length; i++) {
+            const expectedId = i === 0 ? baseId : `${baseId}-D${i + 1}`;
+            const existingJob = relatedJobs.find(j => j.id === expectedId);
+            
+            if (existingJob) {
+                // Update its date and duration if needed, but skip the one we just updated
+                if (existingJob.id !== job.id && (existingJob.job_date !== requiredDates[i] || existingJob.duration !== duration)) {
+                    jobsToUpdate.push({
+                        ...existingJob,
+                        job_date: requiredDates[i],
+                        duration: duration,
+                        last_edited_by: currentUser?.name || 'Unknown',
+                        last_edited_at: Date.now()
+                    });
+                }
+            } else {
+                // Create new job for this day
+                jobsToCreate.push({
+                    ...baseJob,
+                    id: expectedId,
+                    title: expectedId,
+                    job_date: requiredDates[i],
+                    duration: duration,
+                    created_at: Date.now(),
+                    last_edited_by: currentUser?.name || 'Unknown',
+                    last_edited_at: Date.now()
+                });
+            }
+        }
+        
+        // Find jobs to delete (those that are beyond the new duration)
+        for (const existingJob of relatedJobs) {
+            const match = existingJob.id.match(/-D(\d+)$/);
+            const dayNum = match ? parseInt(match[1]) : 1;
+            if (dayNum > duration) {
+                jobsToDelete.push(existingJob.id);
+            }
+        }
+        
+        // Execute the changes
+        if (jobsToDelete.length > 0) {
+            await supabase.from('jobs').delete().in('id', jobsToDelete);
+        }
+        if (jobsToUpdate.length > 0) {
+            for (const updateJob of jobsToUpdate) {
+                await supabase.from('jobs').update({
+                    job_date: updateJob.job_date,
+                    duration: updateJob.duration,
+                    last_edited_by: updateJob.last_edited_by,
+                    last_edited_at: updateJob.last_edited_at
+                }).eq('id', updateJob.id);
+            }
+        }
+        if (jobsToCreate.length > 0) {
+            await supabase.from('jobs').insert(jobsToCreate);
+        }
+    }
+
+    await fetchJobs();
   };
 
   const handleAddJob = async (job: Partial<Job>) => {
@@ -490,7 +586,9 @@ const App: React.FC = () => {
     const payload = {
       ...allocation,
       vehicles: allocation.vehicles, // PERSIST ARRAY
-      vehicle: allocation.vehicles.join(', ') // PERSIST LEGACY STRING
+      vehicle: allocation.vehicles.join(', '), // PERSIST LEGACY STRING
+      last_edited_by: currentUser?.name || 'Unknown',
+      last_edited_at: Date.now()
     };
     
     const { error } = await supabase.from('jobs').update(payload).eq('id', jobId);
@@ -515,7 +613,9 @@ const App: React.FC = () => {
 
     const { error } = await supabase.from('jobs').update({ 
         customs_status,
-        customs_history: updatedHistory
+        customs_history: updatedHistory,
+        last_edited_by: currentUser?.name || 'Unknown',
+        last_edited_at: Date.now()
     }).eq('id', jobId);
 
     if (error) alert(`Error: ${error.message}`);
@@ -543,7 +643,11 @@ const App: React.FC = () => {
       const { error } = await supabase.from('jobs').delete().eq('id', jobId);
       if (error) alert(`Error: ${error.message}`);
     } else {
-      const { error } = await supabase.from('jobs').update({ status: JobStatus.PENDING_DELETE }).eq('id', jobId);
+      const { error } = await supabase.from('jobs').update({ 
+        status: JobStatus.PENDING_DELETE,
+        last_edited_by: currentUser?.name || 'Unknown',
+        last_edited_at: Date.now()
+      }).eq('id', jobId);
       if (error) alert(`Error: ${error.message}`);
     }
     await fetchJobs();
@@ -555,7 +659,11 @@ const App: React.FC = () => {
 
     if (job.status === JobStatus.PENDING_ADD) {
       const newStatus = approved ? JobStatus.ACTIVE : JobStatus.REJECTED;
-      let payload: any = { status: newStatus };
+      let payload: any = { 
+        status: newStatus,
+        last_edited_by: currentUser?.name || 'Unknown',
+        last_edited_at: Date.now()
+      };
       
       if (allocation) {
         payload = {
@@ -574,7 +682,11 @@ const App: React.FC = () => {
         const { error } = await supabase.from('jobs').delete().eq('id', jobId);
         if (error) alert(`Error: ${error.message}`);
       } else {
-        const { error } = await supabase.from('jobs').update({ status: JobStatus.ACTIVE }).eq('id', jobId);
+        const { error } = await supabase.from('jobs').update({ 
+          status: JobStatus.ACTIVE,
+          last_edited_by: currentUser?.name || 'Unknown',
+          last_edited_at: Date.now()
+        }).eq('id', jobId);
         if (error) alert(`Error: ${error.message}`);
       }
     }

@@ -26,6 +26,7 @@ const DEFAULT_PERMISSIONS: UserPermissions = {
   resources: false,
   capacity: false,
   users: false,
+  transporter: false,
   ai: false,
 };
 
@@ -42,6 +43,7 @@ const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
   resources: 'Fleet & Crew',
   capacity: 'Capacity Limits',
   users: 'User Management',
+  transporter: 'Transporter',
   ai: 'AI Planner',
 };
 

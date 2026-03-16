@@ -205,6 +205,11 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({ jobs, onAddJob
                       <span className="font-bold text-slate-400">Container / Flight:</span> <span className="text-slate-700 font-bold">{activity.container_number || 'TBA'}</span>
                     </div>
                   </div>
+                  {activity.last_edited_by && (
+                    <div className="mt-4 text-[10px] text-slate-400 font-medium tracking-wide">
+                        Last edited by {activity.last_edited_by} on {new Date(activity.last_edited_at || 0).toLocaleString()}
+                    </div>
+                  )}
                 </div>
                 
                 <div className="flex items-center gap-4 w-full sm:w-auto">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Job, JobStatus, UserProfile, Personnel, Vehicle } from '../types';
-import { Plus, X, Bus, User, MapPin, Navigation, Trash2, Edit2, CheckCircle2, AlertCircle, ArrowRight, Users, Settings, Camera, Loader2 } from 'lucide-react';
+import { Plus, X, Bus, User, MapPin, Navigation, Trash2, Edit2, CheckCircle2, AlertCircle, ArrowRight, Users, Settings, Camera, Loader2, RefreshCw } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { getUAEToday } from '../utils';
 import html2canvas from 'html2canvas';
@@ -8,7 +8,7 @@ import html2canvas from 'html2canvas';
 interface TransporterProps {
   jobs: Job[];
   onAddJob: (job: Partial<Job>) => void;
-  onEditJob: (job: Job) => void;
+  onEditJob: (job: Job, oldId?: string) => void;
   onDeleteJob: (jobId: string) => void;
   currentUser: UserProfile;
   personnel?: Personnel[];
@@ -26,6 +26,7 @@ export const Transporter: React.FC<TransporterProps> = ({
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [originalId, setOriginalId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(getUAEToday());
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [isScreenshotting, setIsScreenshotting] = useState(false);
@@ -83,7 +84,6 @@ export const Transporter: React.FC<TransporterProps> = ({
     setIsOptimizing(true);
     try {
       const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const model = genAI.models.getGenerativeModel({ model: "gemini-2.5-flash" });
 
       const prompt = `
         I have a list of drop-off locations for a van service. Please reorder them in the most logical and efficient driving route sequence, assuming the first location is the starting point (or if not specified, start with the most logical one).
@@ -94,9 +94,11 @@ export const Transporter: React.FC<TransporterProps> = ({
         Return ONLY the reordered list of locations as a JSON array of strings. Do not include any other text or markdown formatting.
       `;
 
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
+      const result = await genAI.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: prompt
+      });
+      const text = result.text || "[]";
       
       // Clean up the response to ensure it's valid JSON
       const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -133,13 +135,15 @@ export const Transporter: React.FC<TransporterProps> = ({
       status: JobStatus.ACTIVE
     };
 
-    if (isEditing) {
-      const originalJob = jobs.find(j => j.id === newService.id);
+    if (isEditing && originalId) {
+      const originalJob = jobs.find(j => j.id === originalId);
       if (originalJob) {
         onEditJob({
           ...originalJob,
-          ...payload
-        });
+          ...payload,
+          id: newService.id,
+          title: newService.id
+        }, originalId);
       }
     } else {
       onAddJob({
@@ -164,9 +168,11 @@ export const Transporter: React.FC<TransporterProps> = ({
     });
     setNewLocation('');
     setIsEditing(false);
+    setOriginalId(null);
   };
 
   const openEditModal = (job: Job) => {
+    setOriginalId(job.id);
     setNewService({
       id: job.id,
       job_date: job.job_date,
@@ -326,6 +332,14 @@ export const Transporter: React.FC<TransporterProps> = ({
                       )}
                    </div>
                 </div>
+
+                {job.last_edited_by && (
+                    <div className="border-t border-slate-100 pt-3 mt-4">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                            Last edited by {job.last_edited_by} on {new Date(job.last_edited_at || 0).toLocaleString()}
+                        </p>
+                    </div>
+                )}
               </div>
             </div>
           ))
@@ -347,7 +361,10 @@ export const Transporter: React.FC<TransporterProps> = ({
                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Service ID</label>
-                    <input type="text" disabled value={newService.id} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-500" />
+                    <div className="relative">
+                        <input type="text" value={newService.id} onChange={e => setNewService({...newService, id: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-1 focus:ring-blue-500 outline-none" />
+                        <button type="button" onClick={generateUniqueId} className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 rounded-lg"><RefreshCw className="w-4 h-4" /></button>
+                    </div>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Status</label>

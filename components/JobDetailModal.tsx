@@ -110,6 +110,12 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({ job, onClose, us
               <DetailItem icon={Clock} label="Time" value={job.job_time} />
               <DetailItem icon={Tag} label="Priority" value={job.priority} />
               <DetailItem icon={MapPin} label="Location" value={job.location} />
+              {job.last_edited_by && (
+                <DetailItem icon={User} label="Last Edited By" value={job.last_edited_by} />
+              )}
+              {job.last_edited_at && (
+                <DetailItem icon={Clock} label="Last Edited At" value={new Date(job.last_edited_at).toLocaleString()} />
+              )}
             </div>
           </section>
 

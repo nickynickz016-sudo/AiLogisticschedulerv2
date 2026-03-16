@@ -162,6 +162,11 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ jobs, onApproval, 
                       <p className="text-sm font-bold text-slate-800">{requester ? requester.name : `ID #${job.requester_id}`}</p>
                    </div>
                 </div>
+                {job.last_edited_by && (
+                  <div className="mt-4 text-[10px] text-slate-400 font-medium tracking-wide">
+                      Last edited by {job.last_edited_by} on {new Date(job.last_edited_at || 0).toLocaleString()}
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-4 shrink-0 self-center lg:self-center w-full lg:w-auto justify-center lg:justify-end mt-4 lg:mt-0">
