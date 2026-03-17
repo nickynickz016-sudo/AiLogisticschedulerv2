@@ -245,6 +245,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
   const handleEditClick = (e: React.MouseEvent, job: Job) => {
     e.stopPropagation();
+    setSelectedJob(job);
     setNewJob(job);
     setIsEditingMode(true);
     setShowModal(true);
@@ -846,7 +847,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         )}
       </div>
 
-      {selectedJob && (
+      {selectedJob && !showModal && (
         <JobDetailModal
           job={selectedJob}
           onClose={() => setSelectedJob(null)}

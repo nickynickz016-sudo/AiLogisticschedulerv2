@@ -3,10 +3,11 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { getUAEToday } from '../utils';
 import { Job, JobStatus, SystemSettings, JobCostSheet } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, Download, Loader2, Activity, Calendar, X, Filter, CalendarRange, ListFilter, Camera, DollarSign } from 'lucide-react';
+import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, Download, Loader2, Activity, Calendar, X, Filter, CalendarRange, ListFilter, Camera, DollarSign, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
+import * as XLSX from 'xlsx';
 import { supabase } from '../supabaseClient';
 
 // Extend jsPDF with the autoTable plugin
@@ -23,6 +24,7 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin }) => {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [showDownloadOptions, setShowDownloadOptions] = useState(false);
   const [isScreenshotting, setIsScreenshotting] = useState(false);
   
   // Summary Modal State
@@ -119,6 +121,61 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
     return { schedule, warehouse };
   }, [jobs, summaryFilterType, summaryDate, summaryStartDate, summaryEndDate, summaryMonth]);
   
+  const handleGenerateExcel = () => {
+    try {
+      const scheduleJobs = jobs.filter(j => !j.is_warehouse_activity && !j.is_import_clearance && !j.is_transporter);
+      const warehouseJobs = jobs.filter(j => j.is_warehouse_activity);
+      const importJobs = jobs.filter(j => j.is_import_clearance);
+
+      const wb = XLSX.utils.book_new();
+
+      // Schedule Sheet
+      const wsSchedule = XLSX.utils.json_to_sheet(scheduleJobs.map(j => ({
+        'Job No.': j.id,
+        'Shipper': j.shipper_name,
+        'Date': j.job_date,
+        'Time': j.job_time || 'N/A',
+        'Location': j.location || 'N/A',
+        'CBM': j.volume_cbm || 0,
+        'Team Leader': j.team_leader || 'N/A',
+        'Vehicles': j.vehicles?.join(', ') || 'N/A',
+        'Status': j.status
+      })));
+      XLSX.utils.book_append_sheet(wb, wsSchedule, "Job Schedule");
+
+      // Warehouse Sheet
+      if (warehouseJobs.length > 0) {
+        const wsWarehouse = XLSX.utils.json_to_sheet(warehouseJobs.map(j => ({
+          'Job No.': j.id,
+          'Shipper': j.shipper_name,
+          'Date': j.job_date,
+          'Requester ID': j.requester_id,
+          'Status': j.status
+        })));
+        XLSX.utils.book_append_sheet(wb, wsWarehouse, "Warehouse Activity");
+      }
+
+      // Import Sheet
+      if (importJobs.length > 0) {
+        const wsImport = XLSX.utils.json_to_sheet(importJobs.map(j => ({
+          'Job No.': j.id,
+          'Shipper': j.shipper_name,
+          'Agent': j.agent_name || 'N/A',
+          'Date': j.job_date,
+          'BOL No.': j.bol_number || 'N/A',
+          'Container No.': j.container_number || 'N/A',
+          'Customs Status': j.customs_status || 'N/A'
+        })));
+        XLSX.utils.book_append_sheet(wb, wsImport, "Import Clearance");
+      }
+
+      XLSX.writeFile(wb, `operations_report_${today}.xlsx`);
+    } catch (error) {
+      console.error("Failed to generate Excel:", error);
+      alert("There was an error generating the Excel report.");
+    }
+  };
+
   const handleGeneratePdf = () => {
     setIsGeneratingPdf(true);
     try {
@@ -406,14 +463,33 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
             <Activity className="w-4 h-4" /> Activities Summary
           </button>
 
-          <button
-            onClick={handleGeneratePdf}
-            disabled={isGeneratingPdf}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl hover:bg-slate-800 transition-all font-bold uppercase text-[10px] tracking-widest shadow-md disabled:opacity-60"
-          >
-            {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            {isGeneratingPdf ? 'Generating...' : 'Download Full Report'}
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setShowDownloadOptions(!showDownloadOptions)}
+              disabled={isGeneratingPdf}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl hover:bg-slate-800 transition-all font-bold uppercase text-[10px] tracking-widest shadow-md disabled:opacity-60"
+            >
+              {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              {isGeneratingPdf ? 'Generating...' : 'Download Full Report'}
+            </button>
+            
+            {showDownloadOptions && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                <button 
+                  onClick={() => { handleGeneratePdf(); setShowDownloadOptions(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition-colors"
+                >
+                  <FileText className="w-4 h-4" /> PDF Document
+                </button>
+                <button 
+                  onClick={() => { handleGenerateExcel(); setShowDownloadOptions(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-emerald-600 transition-colors"
+                >
+                  <BarChart3 className="w-4 h-4" /> Excel Spreadsheet
+                </button>
+              </div>
+            )}
+          </div>
           
           <div className="flex items-center gap-6 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-200 w-full sm:w-auto">
              <div className="text-right flex-1 sm:flex-none">

@@ -332,6 +332,27 @@ const App: React.FC = () => {
 
   const unreadCount = notifications ? notifications.filter(n => !n.read).length : 0;
 
+  // Helper for safe Supabase operations
+  const updateJobInSupabase = async (jobId: string, payload: any) => {
+    let { error } = await supabase.from('jobs').update(payload).eq('id', jobId);
+    if (error && error.message.includes("last_edited_at")) {
+      const { last_edited_by, last_edited_at, ...fallbackPayload } = payload;
+      const { error: retryError } = await supabase.from('jobs').update(fallbackPayload).eq('id', jobId);
+      error = retryError;
+    }
+    return { error };
+  };
+
+  const insertJobsInSupabase = async (jobsToInsert: Job[]) => {
+    let { error } = await supabase.from('jobs').insert(jobsToInsert);
+    if (error && error.message.includes("last_edited_at")) {
+      const fallbackJobs = jobsToInsert.map(({ last_edited_by, last_edited_at, ...j }: any) => j);
+      const { error: retryError } = await supabase.from('jobs').insert(fallbackJobs);
+      error = retryError;
+    }
+    return { error };
+  };
+
   // Data Mutation Handlers
   const handleUpdateJob = (updatedJob: Job) => {
     setJobs(prevJobs => prevJobs.map(j => j.id === updatedJob.id ? updatedJob : j));
@@ -341,8 +362,7 @@ const App: React.FC = () => {
     const targetId = oldId || job.id;
     const oldJob = jobs.find(j => j.id === targetId);
     
-    // Exclude restricted fields or ensure data consistency if needed
-    const { error } = await supabase.from('jobs').update({
+    const updateData: any = {
         id: job.id,
         title: job.id,
         shipper_name: job.shipper_name,
@@ -360,15 +380,16 @@ const App: React.FC = () => {
         special_requests: job.special_requests,
         shuttle: job.shuttle,
         long_carry: job.long_carry,
-        // Ensure allocation and warehouse fields are updated
         team_leader: job.team_leader,
         writer_crew: job.writer_crew,
         vehicles: job.vehicles,
-        vehicle: job.vehicles?.join(', '), // Maintain legacy string compatibility
+        vehicle: job.vehicles?.join(', '),
         activity_name: job.activity_name,
         last_edited_by: currentUser?.name || 'Unknown',
         last_edited_at: Date.now()
-    }).eq('id', targetId);
+    };
+
+    const { error } = await updateJobInSupabase(targetId, updateData);
 
     if (error) {
         alert(`Error updating job: ${error.message}`);
@@ -450,16 +471,17 @@ const App: React.FC = () => {
         }
         if (jobsToUpdate.length > 0) {
             for (const updateJob of jobsToUpdate) {
-                await supabase.from('jobs').update({
+                const updatePayload: any = {
                     job_date: updateJob.job_date,
                     duration: updateJob.duration,
                     last_edited_by: updateJob.last_edited_by,
                     last_edited_at: updateJob.last_edited_at
-                }).eq('id', updateJob.id);
+                };
+                await updateJobInSupabase(updateJob.id, updatePayload);
             }
         }
         if (jobsToCreate.length > 0) {
-            await supabase.from('jobs').insert(jobsToCreate);
+            await insertJobsInSupabase(jobsToCreate);
         }
     }
 
@@ -566,7 +588,7 @@ const App: React.FC = () => {
     }
     
     // Batch Insert
-    const { error } = await supabase.from('jobs').insert(jobsToCreate);
+    const { error } = await insertJobsInSupabase(jobsToCreate);
     
     if (error) {
       if (error.code === '23505') {
@@ -591,7 +613,7 @@ const App: React.FC = () => {
       last_edited_at: Date.now()
     };
     
-    const { error } = await supabase.from('jobs').update(payload).eq('id', jobId);
+    const { error } = await updateJobInSupabase(jobId, payload);
     if (error) alert(`Error: ${error.message}`);
     else await fetchJobs();
   };
@@ -611,12 +633,12 @@ const App: React.FC = () => {
     const currentHistory = Array.isArray(job.customs_history) ? job.customs_history : [];
     const updatedHistory = [...currentHistory, newEntry];
 
-    const { error } = await supabase.from('jobs').update({ 
+    const { error } = await updateJobInSupabase(jobId, { 
         customs_status,
         customs_history: updatedHistory,
         last_edited_by: currentUser?.name || 'Unknown',
         last_edited_at: Date.now()
-    }).eq('id', jobId);
+    });
 
     if (error) alert(`Error: ${error.message}`);
     else await fetchJobs();
@@ -625,7 +647,7 @@ const App: React.FC = () => {
   const handleToggleLock = async (jobId: string) => {
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
-    const { error } = await supabase.from('jobs').update({ is_locked: !job.is_locked }).eq('id', jobId);
+    const { error } = await updateJobInSupabase(jobId, { is_locked: !job.is_locked });
     if (error) alert(`Error: ${error.message}`);
     else await fetchJobs();
   };
@@ -643,11 +665,11 @@ const App: React.FC = () => {
       const { error } = await supabase.from('jobs').delete().eq('id', jobId);
       if (error) alert(`Error: ${error.message}`);
     } else {
-      const { error } = await supabase.from('jobs').update({ 
+      const { error } = await updateJobInSupabase(jobId, { 
         status: JobStatus.PENDING_DELETE,
         last_edited_by: currentUser?.name || 'Unknown',
         last_edited_at: Date.now()
-      }).eq('id', jobId);
+      });
       if (error) alert(`Error: ${error.message}`);
     }
     await fetchJobs();
@@ -674,7 +696,7 @@ const App: React.FC = () => {
         };
       }
 
-      const { error } = await supabase.from('jobs').update(payload).eq('id', jobId);
+      const { error } = await updateJobInSupabase(jobId, payload);
       if (error) alert(`Error: ${error.message}`);
     }
     if (job.status === JobStatus.PENDING_DELETE) {
@@ -682,11 +704,11 @@ const App: React.FC = () => {
         const { error } = await supabase.from('jobs').delete().eq('id', jobId);
         if (error) alert(`Error: ${error.message}`);
       } else {
-        const { error } = await supabase.from('jobs').update({ 
+        const { error } = await updateJobInSupabase(jobId, { 
           status: JobStatus.ACTIVE,
           last_edited_by: currentUser?.name || 'Unknown',
           last_edited_at: Date.now()
-        }).eq('id', jobId);
+        });
         if (error) alert(`Error: ${error.message}`);
       }
     }
