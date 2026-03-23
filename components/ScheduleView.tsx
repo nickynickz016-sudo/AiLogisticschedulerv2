@@ -1172,7 +1172,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Start Date *</label>
-                    <input required type="date" min={today} className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.job_date} onChange={e => setNewJob({...newJob, job_date: e.target.value})} />
+                    <input required type="date" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.job_date} onChange={e => setNewJob({...newJob, job_date: e.target.value})} />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
