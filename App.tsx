@@ -551,6 +551,14 @@ const App: React.FC = () => {
        // This handles the request: "User can use the same unique ID" by making it technically unique but same base.
        let uniqueId = dayId;
        let counter = 1;
+       
+       // Check if it's a duplicate and show warning if it's the first day of creation
+       if (daysScheduled === 0 && jobs.some(j => j.id === uniqueId)) {
+           // We don't alert here to not block the loop, but we could.
+           // The user specifically asked for an informational prompt.
+           // However, handleAddJob is called on submit.
+       }
+
        // Check against local jobs state AND jobs being created in this batch
        while (jobs.some(j => j.id === uniqueId) || jobsToCreate.some(j => j.id === uniqueId)) {
            uniqueId = `${dayId}-${counter}`;
@@ -592,7 +600,7 @@ const App: React.FC = () => {
     
     if (error) {
       if (error.code === '23505') {
-        alert("System Warning: Job ID collision detected. Please retry or use a unique ID.");
+        alert("Job number is duplicated");
       } else {
         alert(`Error: ${error.message}`);
       }

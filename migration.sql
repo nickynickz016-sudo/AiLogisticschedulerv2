@@ -51,5 +51,55 @@ ADD COLUMN IF NOT EXISTS drop_off_locations text[];
 ALTER TABLE public.jobs 
 ADD COLUMN IF NOT EXISTS transporter_status text DEFAULT 'Scheduled';
 
+-- 9. Inventory Enhancements
+ALTER TABLE public.inventory_items 
+ADD COLUMN IF NOT EXISTS opening_stock integer DEFAULT 0,
+ADD COLUMN IF NOT EXISTS purchased_stock integer DEFAULT 0;
+
+-- 10. Create inventory_purchases table
+CREATE TABLE IF NOT EXISTS public.inventory_purchases (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    inventory_id bigint REFERENCES public.inventory_items(id) ON DELETE CASCADE,
+    quantity integer NOT NULL,
+    purchase_date date NOT NULL DEFAULT CURRENT_DATE,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 11. Enable RLS on inventory_purchases
+ALTER TABLE public.inventory_purchases ENABLE ROW LEVEL SECURITY;
+
+-- 12. Create RLS policies for inventory_purchases
+CREATE POLICY "Allow authenticated read access" ON public.inventory_purchases
+    FOR SELECT USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated insert access" ON public.inventory_purchases
+    FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated update access" ON public.inventory_purchases
+    FOR UPDATE USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated delete access" ON public.inventory_purchases
+    FOR DELETE USING (auth.role() = 'authenticated');
+
+-- 13. Create inventory_consumption table
+CREATE TABLE IF NOT EXISTS public.inventory_consumption (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    inventory_id bigint REFERENCES public.inventory_items(id) ON DELETE CASCADE,
+    job_id text,
+    quantity integer NOT NULL,
+    consumption_date date NOT NULL DEFAULT CURRENT_DATE,
+    created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- 14. Enable RLS on inventory_consumption
+ALTER TABLE public.inventory_consumption ENABLE ROW LEVEL SECURITY;
+
+-- 15. Create RLS policies for inventory_consumption
+CREATE POLICY "Allow authenticated read access" ON public.inventory_consumption
+    FOR SELECT USING (auth.role() = 'authenticated');
+
+CREATE POLICY "Allow authenticated insert access" ON public.inventory_consumption
+    FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+
 -- Refresh schema
 NOTIFY pgrst, 'reload schema';

@@ -206,7 +206,20 @@ export const JobBoard: React.FC<JobBoardProps> = ({ jobs, onAddJob, onDeleteJob,
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-1.5">
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Job No. *</label>
-                    <input required type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400" placeholder="e.g., AE-1234" value={newJob.id} onChange={e => setNewJob({...newJob, id: e.target.value})} />
+                    <input 
+                      required 
+                      type="text" 
+                      className={`w-full px-5 py-3.5 bg-slate-50 border ${newJob.id && jobs.some(j => j.id === newJob.id || j.id.startsWith(`${newJob.id}-D`)) ? 'border-orange-500 ring-1 ring-orange-500' : 'border-slate-200'} rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none placeholder:text-slate-400`} 
+                      placeholder="e.g., AE-1234" 
+                      value={newJob.id} 
+                      onChange={e => setNewJob({...newJob, id: e.target.value})} 
+                    />
+                    {newJob.id && jobs.some(j => j.id === newJob.id || j.id.startsWith(`${newJob.id}-D`)) && (
+                      <p className="text-[10px] font-bold text-orange-500 mt-1 flex items-center gap-1 animate-pulse">
+                        <AlertCircle className="w-3 h-3" />
+                        Job number is duplicated
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Shipper Name *</label>

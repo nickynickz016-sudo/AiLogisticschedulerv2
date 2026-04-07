@@ -161,7 +161,39 @@ export interface InventoryItem {
   unit: string;
   price: number;
   stock: number;
+  opening_stock: number;
+  purchased_stock: number;
   critical_stock: number;
+  is_outsource?: boolean;
+  vendor_name?: string;
+  outsource_type?: string;
+  truck_schedule?: string;
+  location?: string;
+}
+
+export interface InventoryPurchase {
+  id: number;
+  inventory_id: number;
+  quantity: number;
+  purchase_date: string;
+  created_at: string;
+}
+
+export interface InventoryConsumption {
+  id: string;
+  inventory_id: number;
+  job_id: string;
+  quantity: number;
+  consumption_date: string;
+  created_at: string;
+}
+
+export interface InventoryPriceHistory {
+  id: string;
+  inventory_id: number;
+  price: number;
+  effective_date: string;
+  created_at: string;
 }
 
 export interface CostSheetItem {
@@ -172,6 +204,11 @@ export interface CostSheetItem {
   price: number;
   issued_qty: number;
   returned_qty: number;
+  is_outsource?: boolean;
+  vendor_name?: string;
+  outsource_type?: string;
+  truck_schedule?: string;
+  location?: string;
 }
 
 export interface JobCostSheet {
@@ -179,6 +216,7 @@ export interface JobCostSheet {
   items: CostSheetItem[];
   status: 'Issued' | 'Returned' | 'Finalized';
   total_cost: number;
+  packing_date?: string;
 }
 
 export interface SystemSettings {
