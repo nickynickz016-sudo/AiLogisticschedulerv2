@@ -17,6 +17,7 @@ const FULL_ACCESS = {
   writerDocs: true,
   inventory: true,
   tracking: true, // Added
+  surveyTracker: true,
   resources: true,
   capacity: true,
   users: true,
@@ -34,6 +35,7 @@ const STANDARD_ACCESS = {
   writerDocs: true,
   inventory: true, 
   tracking: true, // Added
+  surveyTracker: true,
   resources: false,
   capacity: false,
   users: false,
@@ -51,6 +53,7 @@ const WRITER_ACCESS = {
   writerDocs: true,
   inventory: false,
   tracking: false,
+  surveyTracker: false,
   resources: false,
   capacity: false,
   users: false,
@@ -68,6 +71,7 @@ const SENIOR_OPS_ACCESS = {
   writerDocs: true,
   inventory: true,
   tracking: true, // Added
+  surveyTracker: true,
   resources: true, // Fleet & Crew
   capacity: false,
   users: false,
@@ -85,6 +89,7 @@ const SANTOSH_ACCESS = {
   writerDocs: false,
   inventory: false,
   tracking: false,
+  surveyTracker: false,
   resources: false,
   capacity: false,
   users: false,
@@ -102,6 +107,7 @@ const SEMI_ADMIN_ACCESS = {
   writerDocs: true,
   inventory: true,
   tracking: true, // Added
+  surveyTracker: true,
   resources: true,
   capacity: true, // CHANGED TO TRUE
   users: false,
@@ -119,6 +125,7 @@ const ACCOUNTS_ACCESS = {
   writerDocs: true, // Needed for Invoices/Docs
   inventory: true, // Critical for Job Costing
   tracking: true,
+  surveyTracker: true,
   resources: false,
   capacity: false,
   users: false,

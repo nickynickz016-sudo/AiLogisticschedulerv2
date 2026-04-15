@@ -28,6 +28,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ jobs, onUpdateJob, l
   const [showShareModal, setShowShareModal] = useState(false);
   const [isClientPreview, setIsClientPreview] = useState(false);
   const [generatedLink, setGeneratedLink] = useState('');
+  const [isGeneratingLink, setIsGeneratingLink] = useState(false);
 
   // Form State for specific step details
   const [stepNotes, setStepNotes] = useState('');
@@ -128,14 +129,30 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ jobs, onUpdateJob, l
       }
   };
 
-  const handleShare = () => {
+  const handleShare = async () => {
     if (!selectedJob) return;
-    // Simulate a secure link generation
-    const mockToken = btoa(selectedJob.id + Date.now()).substring(0, 12);
+    setIsGeneratingLink(true);
+    
     // Use window.location.origin to use the actual website URL
     const baseUrl = window.location.origin;
-    setGeneratedLink(`${baseUrl}/track/${selectedJob.id}?token=${mockToken}`);
-    setShowShareModal(true);
+    const longUrl = `${baseUrl}/?t=${selectedJob.id}`;
+    
+    try {
+        // Attempt to shorten using TinyURL API
+        const response = await fetch(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(longUrl)}`);
+        if (response.ok) {
+            const shortUrl = await response.text();
+            setGeneratedLink(shortUrl);
+        } else {
+            setGeneratedLink(longUrl);
+        }
+    } catch (err) {
+        console.error("Error shortening URL:", err);
+        setGeneratedLink(longUrl);
+    } finally {
+        setIsGeneratingLink(false);
+        setShowShareModal(true);
+    }
   };
 
   // --- RENDER CLIENT PREVIEW MODE ---
@@ -346,10 +363,15 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ jobs, onUpdateJob, l
                         </div>
                         <button 
                             onClick={handleShare}
-                            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-blue-50 hover:text-blue-600 hover:border-blue-100 transition-all shadow-sm"
+                            disabled={isGeneratingLink}
+                            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-5 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all shadow-sm hover:shadow-lg hover:shadow-blue-100 active:scale-95 group disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <Share2 className="w-4 h-4" />
-                            Share Tracking
+                            {isGeneratingLink ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                                <Share2 className="w-4 h-4 group-hover:rotate-12 transition-transform" />
+                            )}
+                            {isGeneratingLink ? 'Generating...' : 'Share Tracking'}
                         </button>
                     </div>
 

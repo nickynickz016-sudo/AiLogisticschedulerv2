@@ -12,6 +12,7 @@ import { ResourceManager } from './components/ResourceManager';
 import { CapacityManager } from './components/CapacityManager';
 import { UserManagement } from './components/UserManagement';
 import { JobBoard } from './components/JobBoard';
+import { PublicTracking } from './components/PublicTracking';
 import { LoginScreen } from './components/LoginScreen';
 import { HolidayAlertModal } from './components/HolidayAlertModal';
 import { SystemAlertModal } from './components/SystemAlertModal';
@@ -19,7 +20,8 @@ import { WriterDocs } from './components/WriterDocs';
 import { Inventory } from './components/Inventory';
 import { TrackingView } from './components/TrackingView';
 import { Transporter } from './components/Transporter';
-import { UserRole, Job, JobStatus, UserProfile, Personnel, Vehicle, SystemSettings, CustomsStatus } from './types';
+import { SurveyTracker } from './components/SurveyTracker';
+import { UserRole, Job, JobStatus, UserProfile, Personnel, Vehicle, SystemSettings, CustomsStatus, Survey } from './types';
 import { Bell, Search, Menu, LogOut, X, CheckCircle2, XCircle, AlertTriangle, Info } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { USERS, MockUser } from './mockData';
@@ -27,10 +29,11 @@ import { USERS, MockUser } from './mockData';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'job-board' | 'approvals' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'job-board' | 'approvals' | 'survey-tracker' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>('dashboard');
   
   // Local state for app data, fetched from Supabase
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [surveys, setSurveys] = useState<Survey[]>([]);
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
   const [allCredentials, setAllCredentials] = useState<MockUser[]>(USERS); // State to hold login credentials
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
@@ -41,6 +44,10 @@ const App: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // New state for mobile
   const [showHolidayAlert, setShowHolidayAlert] = useState(false);
   const [showSystemAlert, setShowSystemAlert] = useState(false);
+
+  // Check for public tracking link
+  const queryParams = new URLSearchParams(window.location.search);
+  const trackJobId = queryParams.get('track') || queryParams.get('t');
 
   // Notification State
   const [notifications, setNotifications] = useState<{id: string, text: string, time: string, read: boolean, type: 'success'|'error'|'info'|'warning'}[]>([]);
@@ -94,6 +101,16 @@ const App: React.FC = () => {
         else setVehicles(data || []);
     } catch (err) {
         console.error('Unexpected error fetching vehicles:', err);
+    }
+  }, []);
+
+  const fetchSurveys = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.from('surveys').select('*').order('created_at', { ascending: false });
+      if (error) console.error('Error fetching surveys:', error.message);
+      else setSurveys(data || []);
+    } catch (err) {
+      console.error('Unexpected error fetching surveys:', err);
     }
   }, []);
 
@@ -152,6 +169,7 @@ const App: React.FC = () => {
       fetchPersonnel();
       fetchVehicles();
       fetchSettings(); // Re-fetch to ensure sync and show alert if needed
+      fetchSurveys();
 
       // Poll for job updates (alerts)
       const interval = setInterval(fetchJobs, 10000);
@@ -356,6 +374,29 @@ const App: React.FC = () => {
   // Data Mutation Handlers
   const handleUpdateJob = (updatedJob: Job) => {
     setJobs(prevJobs => prevJobs.map(j => j.id === updatedJob.id ? updatedJob : j));
+  };
+
+  const handleAddSurvey = async (survey: Omit<Survey, 'id' | 'created_at'>) => {
+    const newSurvey: Survey = {
+      ...survey,
+      id: `SRV-${Date.now()}`,
+      created_at: Date.now()
+    };
+    const { error } = await supabase.from('surveys').insert([newSurvey]);
+    if (error) alert(`Error adding survey: ${error.message}`);
+    else fetchSurveys();
+  };
+
+  const handleUpdateSurvey = async (survey: Survey) => {
+    const { error } = await supabase.from('surveys').update(survey).eq('id', survey.id);
+    if (error) alert(`Error updating survey: ${error.message}`);
+    else fetchSurveys();
+  };
+
+  const handleDeleteSurvey = async (id: string) => {
+    const { error } = await supabase.from('surveys').delete().eq('id', id);
+    if (error) alert(`Error deleting survey: ${error.message}`);
+    else fetchSurveys();
   };
 
   const handleEditJob = async (job: Job, oldId?: string) => {
@@ -882,6 +923,7 @@ const App: React.FC = () => {
                 warehouse: 'warehouse',
                 importClearance: 'import-clearance',
                 approvals: 'approvals',
+                surveyTracker: 'survey-tracker',
                 writerDocs: 'writer-docs',
                 inventory: 'inventory',
                 tracking: 'tracking',
@@ -903,6 +945,11 @@ const App: React.FC = () => {
   };
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
+
+  // Public Tracking Route
+  if (trackJobId) {
+    return <PublicTracking jobId={trackJobId} />;
+  }
 
   if (!currentUser) {
     return (
@@ -1103,6 +1150,15 @@ const App: React.FC = () => {
                 vehicles={vehicles}
                 users={systemUsers}
                 settings={settings} // Added settings prop
+              />
+            )}
+            {activeTab === 'survey-tracker' && (
+              <SurveyTracker 
+                surveys={surveys}
+                onAddSurvey={handleAddSurvey}
+                onUpdateSurvey={handleUpdateSurvey}
+                onDeleteSurvey={handleDeleteSurvey}
+                currentUser={currentUser}
               />
             )}
             {activeTab === 'writer-docs' && (

@@ -48,6 +48,11 @@ export type Database = {
         Insert: JobCostSheet;
         Update: Partial<JobCostSheet>;
       };
+      surveys: {
+        Row: any;
+        Insert: any;
+        Update: any;
+      };
     };
     Views: {};
     Functions: {};

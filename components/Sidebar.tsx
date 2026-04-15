@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { LayoutDashboard, Calendar, CheckSquare, Zap, Box, Users, SlidersHorizontal, UserCog, FileCheck, ChevronLeft, ChevronRight, ClipboardList, X, FileText, Clipboard, Map, Bus } from 'lucide-react';
+import { LayoutDashboard, Calendar, CheckSquare, Zap, Box, Users, SlidersHorizontal, UserCog, FileCheck, ChevronLeft, ChevronRight, ClipboardList, X, FileText, Clipboard, Map, Bus, ClipboardCheck } from 'lucide-react';
 import { UserProfile, UserRole } from '../types';
 
 interface SidebarProps {
@@ -30,6 +30,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'warehouse', label: 'Warehouse Area', icon: Box, permission: 'warehouse' },
     { id: 'import-clearance', label: 'Import Clearance', icon: FileCheck, permission: 'importClearance' },
     { id: 'approvals', label: 'Approval Pool', icon: CheckSquare, permission: 'approvals' },
+    { id: 'survey-tracker', label: 'Survey Tracker', icon: ClipboardCheck, permission: 'surveyTracker' },
     { id: 'writer-docs', label: 'Writer Docs', icon: FileText, permission: 'writerDocs' },
     { id: 'inventory', label: 'Inventory', icon: Clipboard, permission: 'inventory' },
     { id: 'tracking', label: 'Tracking', icon: Map, permission: 'tracking' },

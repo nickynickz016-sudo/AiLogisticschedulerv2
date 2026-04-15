@@ -47,6 +47,7 @@ export interface UserPermissions {
   writerDocs: boolean;
   inventory: boolean; 
   tracking: boolean; // Added Tracking permission
+  surveyTracker: boolean; // Added Survey Tracker permission
   resources: boolean;
   capacity: boolean;
   users: boolean;
@@ -98,6 +99,34 @@ export interface CustomsHistoryEntry {
 
 // FIX: Made several properties optional to support different job creation contexts (e.g., Warehouse vs. Schedule).
 // This prevents type errors where not all job details are available upon creation.
+export type TransporterStatus = 'Scheduled' | 'In Transit' | 'Completed';
+
+export enum SurveyStatus {
+  SCHEDULED = 'Survey Scheduled',
+  BOOKED = 'Booked',
+  NEGOTIATION = 'Negotiation',
+  LOST = 'Lost'
+}
+
+export type SurveyType = 'Physical' | 'Whatsapp' | 'Video Call';
+export type SurveyMode = 'Export' | 'Import' | 'Domestic' | 'Storage';
+
+export interface Survey {
+  id: string;
+  surveyor_name: string;
+  survey_type: SurveyType;
+  enquiry_number: string;
+  job_number?: string; // Required if status is Booked
+  shipper_name: string;
+  location: string;
+  mode: SurveyMode;
+  status: SurveyStatus;
+  survey_date: string;
+  created_at: number;
+  last_edited_by?: string;
+  last_edited_at?: number;
+}
+
 export interface Job {
   id: string; // Job No.
   title: string;
