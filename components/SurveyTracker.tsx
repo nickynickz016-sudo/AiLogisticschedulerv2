@@ -22,7 +22,8 @@ import {
   ChevronDown,
   LayoutGrid,
   List,
-  Download
+  Download,
+  LogOut
 } from 'lucide-react';
 
 interface SurveyTrackerProps {
@@ -31,6 +32,9 @@ interface SurveyTrackerProps {
   onUpdateSurvey: (survey: Survey) => void;
   onDeleteSurvey: (id: string) => void;
   currentUser: UserProfile;
+  googleTokens: any;
+  onConnectGoogle: () => void;
+  onDisconnectGoogle: () => void;
 }
 
 export const SurveyTracker: React.FC<SurveyTrackerProps> = ({ 
@@ -38,12 +42,17 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
   onAddSurvey, 
   onUpdateSurvey, 
   onDeleteSurvey, 
-  currentUser 
+  currentUser,
+  googleTokens,
+  onConnectGoogle,
+  onDisconnectGoogle
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
   const [editingSurveyId, setEditingSurveyId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState<string | null>(null);
+  const [emailInput, setEmailInput] = useState('');
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ isOpen: boolean; survey: Survey | null; input: string }>({
     isOpen: false,
     survey: null,
@@ -54,6 +63,18 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
   const [selectedSurveyor, setSelectedSurveyor] = useState<string>('All');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
 
+  const timeOptions = useMemo(() => {
+    const options = [];
+    for (let hour = 0; hour < 24; hour++) {
+      for (let min = 0; min < 60; min += 30) {
+        const h = hour.toString().padStart(2, '0');
+        const m = min.toString().padStart(2, '0');
+        options.push(`${h}:${m}`);
+      }
+    }
+    return options;
+  }, []);
+
   const [newSurvey, setNewSurvey] = useState<Omit<Survey, 'id' | 'created_at'>>({
     surveyor_name: currentUser.name,
     survey_type: 'Physical',
@@ -62,7 +83,10 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
     location: '',
     mode: 'Export',
     status: SurveyStatus.SCHEDULED,
-    survey_date: new Date().toISOString().split('T')[0]
+    survey_date: new Date().toISOString().split('T')[0],
+    start_time: '09:00',
+    end_time: '10:00',
+    client_emails: []
   });
 
   const surveyors = useMemo(() => {
@@ -111,7 +135,12 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
     if (modalMode === 'add') {
       onAddSurvey(newSurvey);
     } else if (editingSurveyId) {
-      onUpdateSurvey({ ...newSurvey, id: editingSurveyId, created_at: surveys.find(s => s.id === editingSurveyId)?.created_at || Date.now() });
+      onUpdateSurvey({ 
+        ...newSurvey, 
+        id: editingSurveyId, 
+        created_at: surveys.find(s => s.id === editingSurveyId)?.created_at || Date.now(),
+        google_event_id: surveys.find(s => s.id === editingSurveyId)?.google_event_id
+      });
     }
 
     setIsModalOpen(false);
@@ -125,8 +154,12 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
       location: '',
       mode: 'Export',
       status: SurveyStatus.SCHEDULED,
-      survey_date: new Date().toISOString().split('T')[0]
+      survey_date: new Date().toISOString().split('T')[0],
+      start_time: '09:00',
+      end_time: '10:00',
+      client_emails: []
     });
+    setEmailInput('');
   };
 
   const handleEdit = (survey: Survey) => {
@@ -142,9 +175,33 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
       location: survey.location,
       mode: survey.mode,
       status: survey.status,
-      survey_date: survey.survey_date
+      survey_date: survey.survey_date,
+      start_time: survey.start_time || '09:00',
+      end_time: survey.end_time || '10:00',
+      google_event_id: survey.google_event_id,
+      client_emails: survey.client_emails || []
     });
+    setEmailInput('');
     setIsModalOpen(true);
+  };
+
+  const addEmail = () => {
+    if (emailInput && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailInput)) {
+      if (!newSurvey.client_emails?.includes(emailInput)) {
+        setNewSurvey({
+          ...newSurvey,
+          client_emails: [...(newSurvey.client_emails || []), emailInput]
+        });
+      }
+      setEmailInput('');
+    }
+  };
+
+  const removeEmail = (email: string) => {
+    setNewSurvey({
+      ...newSurvey,
+      client_emails: (newSurvey.client_emails || []).filter(e => e !== email)
+    });
   };
 
   const handleDelete = (survey: Survey) => {
@@ -159,6 +216,38 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
     if (deleteConfirmation.survey && deleteConfirmation.input === 'delete') {
       onDeleteSurvey(deleteConfirmation.survey.id);
       setDeleteConfirmation({ isOpen: false, survey: null, input: '' });
+    }
+  };
+
+  const handleSyncToCalendar = async (survey: Survey) => {
+    if (!googleTokens) {
+      onConnectGoogle();
+      return;
+    }
+
+    setIsSyncing(survey.id);
+    try {
+      const response = await fetch('/api/calendar/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ survey, tokens: googleTokens })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to sync with Google Calendar');
+      }
+
+      const result = await response.json();
+      if (result.eventId) {
+        onUpdateSurvey({ ...survey, google_event_id: result.eventId });
+      }
+
+      alert('Survey synced to Google Calendar successfully!');
+    } catch (error: any) {
+      console.error('Sync error:', error);
+      alert(error.message || 'Failed to sync with Google Calendar');
+    } finally {
+      setIsSyncing(null);
     }
   };
 
@@ -190,6 +279,29 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
           <p className="text-slate-500 text-sm font-medium mt-1">Manage and track all customer surveys</p>
         </div>
         <div className="flex items-center gap-3">
+          {!googleTokens ? (
+            <button 
+              onClick={onConnectGoogle}
+              className="flex items-center gap-2 bg-white text-slate-600 px-6 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-slate-50 transition-all border border-slate-200 shadow-sm active:scale-95"
+            >
+              <Calendar className="w-4 h-4 text-blue-600" />
+              Connect Calendar
+            </button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-2xl">
+                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Calendar Connected</span>
+              </div>
+              <button 
+                onClick={onDisconnectGoogle}
+                className="p-2 hover:bg-rose-50 text-rose-600 rounded-xl transition-colors border border-transparent hover:border-rose-100"
+                title="Disconnect Google Calendar"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <button 
             onClick={() => {
               setModalMode('add');
@@ -201,8 +313,12 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
                 location: '',
                 mode: 'Export',
                 status: SurveyStatus.SCHEDULED,
-                survey_date: new Date().toISOString().split('T')[0]
+                survey_date: new Date().toISOString().split('T')[0],
+                start_time: '09:00',
+                end_time: '10:00',
+                client_emails: []
               });
+              setEmailInput('');
               setIsModalOpen(true);
             }}
             className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 active:scale-95"
@@ -318,7 +434,14 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
                 <tr key={survey.id} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-6 py-5">
                     <p className="text-sm font-bold text-slate-800">{survey.surveyor_name}</p>
-                    <p className="text-[10px] font-bold text-slate-400 mt-1">{new Date(survey.survey_date).toLocaleDateString()}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <p className="text-[10px] font-bold text-slate-400">{new Date(survey.survey_date).toLocaleDateString()}</p>
+                      {survey.start_time && (
+                        <p className="text-[10px] font-bold text-blue-500 bg-blue-50 px-1.5 py-0.5 rounded">
+                          {survey.start_time} - {survey.end_time}
+                        </p>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-5">
                     <p className="text-sm font-bold text-slate-800">{survey.shipper_name}</p>
@@ -355,6 +478,14 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
                             title="Edit Survey"
                           >
                             <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleSyncToCalendar(survey)}
+                            disabled={isSyncing === survey.id}
+                            className={`p-2 hover:bg-emerald-50 text-emerald-600 rounded-xl transition-colors ${isSyncing === survey.id ? 'animate-pulse opacity-50' : ''}`}
+                            title="Sync to Google Calendar"
+                          >
+                            <Calendar className="w-4 h-4" />
                           </button>
                           <button 
                             onClick={() => handleDelete(survey)}
@@ -451,6 +582,34 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
                     onChange={(e) => setNewSurvey({...newSurvey, survey_date: e.target.value})}
                   />
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Start Time *</label>
+                    <select 
+                      required
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
+                      value={newSurvey.start_time}
+                      onChange={(e) => setNewSurvey({...newSurvey, start_time: e.target.value})}
+                    >
+                      {timeOptions.map(time => (
+                        <option key={`start-${time}`} value={time}>{time}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">End Time *</label>
+                    <select 
+                      required
+                      className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-500/20 outline-none transition-all cursor-pointer"
+                      value={newSurvey.end_time}
+                      onChange={(e) => setNewSurvey({...newSurvey, end_time: e.target.value})}
+                    >
+                      {timeOptions.map(time => (
+                        <option key={`end-${time}`} value={time}>{time}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Survey Type *</label>
                   <select 
@@ -502,6 +661,49 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
                     />
                   </div>
                 )}
+                
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Client Emails (Guests)</label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="email" 
+                      className="flex-1 px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-500/20 outline-none transition-all"
+                      placeholder="Enter client email"
+                      value={emailInput}
+                      onChange={(e) => setEmailInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addEmail();
+                        }
+                      }}
+                    />
+                    <button 
+                      type="button"
+                      onClick={addEmail}
+                      className="px-6 bg-slate-800 text-white rounded-2xl font-bold text-xs uppercase tracking-widest hover:bg-slate-900 transition-all active:scale-95"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  
+                  {newSurvey.client_emails && newSurvey.client_emails.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {newSurvey.client_emails.map(email => (
+                        <div key={email} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 animate-in zoom-in-95">
+                          <span className="text-xs font-bold text-slate-600">{email}</span>
+                          <button 
+                            type="button"
+                            onClick={() => removeEmail(email)}
+                            className="text-slate-400 hover:text-rose-500 transition-colors"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-4 pt-4">

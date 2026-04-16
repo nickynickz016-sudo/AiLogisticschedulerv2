@@ -39,6 +39,10 @@ const App: React.FC = () => {
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [settings, setSettings] = useState<SystemSettings>({ daily_job_limits: {}, holidays: [] });
+  const [googleTokens, setGoogleTokens] = useState<any>(() => {
+    const saved = localStorage.getItem('google_calendar_tokens');
+    return saved ? JSON.parse(saved) : null;
+  });
   
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // New state for mobile
@@ -53,6 +57,53 @@ const App: React.FC = () => {
   const [notifications, setNotifications] = useState<{id: string, text: string, time: string, read: boolean, type: 'success'|'error'|'info'|'warning'}[]>([]);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+
+  const addNotification = (text: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    const newNotif = {
+      id: Math.random().toString(36).substring(7),
+      text,
+      time: 'Just now',
+      read: false,
+      type
+    };
+    setNotifications(prev => [newNotif, ...prev]);
+  };
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (!event.origin.endsWith('.run.app') && !event.origin.includes('localhost')) return;
+      
+      if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
+        const tokens = event.data.tokens;
+        setGoogleTokens(tokens);
+        localStorage.setItem('google_calendar_tokens', JSON.stringify(tokens));
+        addNotification(`Google Calendar connected successfully!`, 'success');
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  const handleConnectGoogle = async () => {
+    try {
+      const response = await fetch('/api/auth/google/url');
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to get auth URL');
+      }
+      const { url } = await response.json();
+      window.open(url, 'google_auth', 'width=600,height=700');
+    } catch (error: any) {
+      console.error('Error connecting to Google:', error);
+      addNotification(error.message || 'Failed to connect to Google Calendar', 'error');
+    }
+  };
+
+  const handleDisconnectGoogle = () => {
+    setGoogleTokens(null);
+    localStorage.removeItem('google_calendar_tokens');
+    addNotification('Google Calendar disconnected', 'info');
+  };
 
   // Data Fetching Functions
   const fetchJobs = useCallback(async () => {
@@ -394,6 +445,24 @@ const App: React.FC = () => {
   };
 
   const handleDeleteSurvey = async (id: string) => {
+    const surveyToDelete = surveys.find(s => s.id === id);
+    
+    // If synced to Google Calendar, delete the event first
+    if (surveyToDelete?.google_event_id && googleTokens) {
+      try {
+        await fetch('/api/calendar/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            eventId: surveyToDelete.google_event_id, 
+            tokens: googleTokens 
+          })
+        });
+      } catch (err) {
+        console.error('Failed to delete Google Calendar event:', err);
+      }
+    }
+
     const { error } = await supabase.from('surveys').delete().eq('id', id);
     if (error) alert(`Error deleting survey: ${error.message}`);
     else fetchSurveys();
@@ -1152,13 +1221,16 @@ const App: React.FC = () => {
                 settings={settings} // Added settings prop
               />
             )}
-            {activeTab === 'survey-tracker' && (
+            {activeTab === 'survey-tracker' && currentUser && (
               <SurveyTracker 
                 surveys={surveys}
                 onAddSurvey={handleAddSurvey}
                 onUpdateSurvey={handleUpdateSurvey}
                 onDeleteSurvey={handleDeleteSurvey}
                 currentUser={currentUser}
+                googleTokens={googleTokens}
+                onConnectGoogle={handleConnectGoogle}
+                onDisconnectGoogle={handleDisconnectGoogle}
               />
             )}
             {activeTab === 'writer-docs' && (

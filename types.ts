@@ -122,6 +122,10 @@ export interface Survey {
   mode: SurveyMode;
   status: SurveyStatus;
   survey_date: string;
+  start_time?: string;
+  end_time?: string;
+  client_emails?: string[];
+  google_event_id?: string;
   created_at: number;
   last_edited_by?: string;
   last_edited_at?: number;
