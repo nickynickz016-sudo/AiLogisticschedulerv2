@@ -18,6 +18,7 @@ const FULL_ACCESS = {
   inventory: true,
   tracking: true, // Added
   surveyTracker: true,
+  warehouseChecklist: true,
   resources: true,
   capacity: true,
   users: true,
@@ -36,6 +37,7 @@ const STANDARD_ACCESS = {
   inventory: true, 
   tracking: true, // Added
   surveyTracker: true,
+  warehouseChecklist: true,
   resources: false,
   capacity: false,
   users: false,
@@ -54,6 +56,7 @@ const WRITER_ACCESS = {
   inventory: false,
   tracking: false,
   surveyTracker: false,
+  warehouseChecklist: false,
   resources: false,
   capacity: false,
   users: false,
@@ -72,6 +75,7 @@ const SENIOR_OPS_ACCESS = {
   inventory: true,
   tracking: true, // Added
   surveyTracker: true,
+  warehouseChecklist: true,
   resources: true, // Fleet & Crew
   capacity: false,
   users: false,
@@ -90,6 +94,7 @@ const SANTOSH_ACCESS = {
   inventory: false,
   tracking: false,
   surveyTracker: false,
+  warehouseChecklist: false,
   resources: false,
   capacity: false,
   users: false,
@@ -108,6 +113,7 @@ const SEMI_ADMIN_ACCESS = {
   inventory: true,
   tracking: true, // Added
   surveyTracker: true,
+  warehouseChecklist: true,
   resources: true,
   capacity: true, // CHANGED TO TRUE
   users: false,
@@ -126,6 +132,26 @@ const ACCOUNTS_ACCESS = {
   inventory: true, // Critical for Job Costing
   tracking: true,
   surveyTracker: true,
+  warehouseChecklist: true,
+  resources: false,
+  capacity: false,
+  users: false,
+  transporter: false,
+  ai: false,
+};
+
+const SECURITY_ONLY_ACCESS = {
+  dashboard: false,
+  schedule: false,
+  jobBoard: false,
+  warehouse: false,
+  importClearance: false,
+  approvals: false,
+  writerDocs: false,
+  inventory: false,
+  tracking: false,
+  surveyTracker: false,
+  warehouseChecklist: true,
   resources: false,
   capacity: false,
   users: false,
@@ -313,6 +339,19 @@ export const USERS: MockUser[] = [
       role: UserRole.USER,
       permissions: SENIOR_OPS_ACCESS,
       avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Daryl',
+      status: 'Active',
+    },
+  },
+  {
+    username: 'Security',
+    password: 'Security',
+    profile: {
+      id: 's5e6f7g8-h9i0-1234-5678-90abcdef123456',
+      employee_id: 'SEC-001',
+      name: 'Security Team',
+      role: UserRole.USER,
+      permissions: SECURITY_ONLY_ACCESS,
+      avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Security',
       status: 'Active',
     },
   },

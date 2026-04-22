@@ -21,7 +21,8 @@ import { Inventory } from './components/Inventory';
 import { TrackingView } from './components/TrackingView';
 import { Transporter } from './components/Transporter';
 import { SurveyTracker } from './components/SurveyTracker';
-import { UserRole, Job, JobStatus, UserProfile, Personnel, Vehicle, SystemSettings, CustomsStatus, Survey } from './types';
+import { WarehouseChecklist as WarehouseChecklistComponent } from './components/WarehouseChecklist';
+import { UserRole, Job, JobStatus, UserProfile, Personnel, Vehicle, SystemSettings, CustomsStatus, Survey, WarehouseChecklist, NightPatrollingChecklist, SafetyMonitoringChecklist, SurpriseVisitChecklist, DailyMonitoringChecklist } from './types';
 import { Bell, Search, Menu, LogOut, X, CheckCircle2, XCircle, AlertTriangle, Info } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { USERS, MockUser } from './mockData';
@@ -29,11 +30,16 @@ import { USERS, MockUser } from './mockData';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'job-board' | 'approvals' | 'survey-tracker' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'job-board' | 'approvals' | 'survey-tracker' | 'warehouse-checklist' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>('dashboard');
   
   // Local state for app data, fetched from Supabase
   const [jobs, setJobs] = useState<Job[]>([]);
   const [surveys, setSurveys] = useState<Survey[]>([]);
+  const [checklists, setChecklists] = useState<WarehouseChecklist[]>([]);
+  const [patrolLogs, setPatrolLogs] = useState<NightPatrollingChecklist[]>([]);
+  const [safetyChecks, setSafetyChecks] = useState<SafetyMonitoringChecklist[]>([]);
+  const [surpriseVisits, setSurpriseVisits] = useState<SurpriseVisitChecklist[]>([]);
+  const [dailyMonitoring, setDailyMonitoring] = useState<DailyMonitoringChecklist[]>([]);
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
   const [allCredentials, setAllCredentials] = useState<MockUser[]>(USERS); // State to hold login credentials
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
@@ -58,7 +64,7 @@ const App: React.FC = () => {
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
 
-  const addNotification = (text: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+  const addNotification = useCallback((text: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
     const newNotif = {
       id: Math.random().toString(36).substring(7),
       text,
@@ -67,7 +73,7 @@ const App: React.FC = () => {
       type
     };
     setNotifications(prev => [newNotif, ...prev]);
-  };
+  }, []);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -86,7 +92,7 @@ const App: React.FC = () => {
 
   const handleConnectGoogle = async () => {
     try {
-      const response = await fetch('/api/auth/google/url');
+      const response = await fetch('/api/auth-url');
       if (!response.ok) {
         const err = await response.json();
         throw new Error(err.error || 'Failed to get auth URL');
@@ -128,7 +134,11 @@ const App: React.FC = () => {
   const fetchUsers = useCallback(async () => {
     try {
         // Sync systemUsers with the profiles in allCredentials
-        const userProfiles = allCredentials.map(u => u.profile);
+        const userProfiles = allCredentials.map(u => ({
+            ...u.profile,
+            username: u.username,
+            password: u.password
+        }));
         setSystemUsers(userProfiles);
     } catch (err) {
         console.error('Unexpected error fetching users:', err);
@@ -165,6 +175,183 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const fetchChecklists = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.from('warehouse_checklists').select('*').order('created_at', { ascending: false });
+      if (error) {
+        console.error('Error fetching checklists:', error.message);
+        addNotification(`Error fetching warehouse checklists: ${error.message}`, 'error');
+      } else {
+        setChecklists(data || []);
+      }
+      
+      const { data: patrolData, error: patrolError } = await supabase.from('night_patrolling_checklists').select('*').order('created_at', { ascending: false });
+      if (patrolError) {
+        console.error('Error fetching patrol logs:', patrolError.message);
+        addNotification(`Error fetching patrol logs: ${patrolError.message}`, 'error');
+      } else {
+        setPatrolLogs(patrolData || []);
+      }
+
+      const { data: safetyData, error: safetyError } = await supabase.from('safety_monitoring_checklists').select('*').order('created_at', { ascending: false });
+      if (safetyError) {
+        console.error('Error fetching safety logs:', safetyError.message);
+        addNotification(`Error fetching safety logs: ${safetyError.message}`, 'error');
+      } else {
+        setSafetyChecks(safetyData || []);
+      }
+
+      const { data: surpriseData, error: surpriseError } = await supabase.from('surprise_visits').select('*').order('created_at', { ascending: false });
+      if (surpriseError) {
+        console.error('Error fetching surprise visits:', surpriseError.message);
+        addNotification(`Error fetching surprise visits: ${surpriseError.message}`, 'error');
+      } else {
+        setSurpriseVisits(surpriseData || []);
+      }
+
+      const { data: dailyData, error: dailyError } = await supabase.from('daily_monitoring_checklists').select('*').order('created_at', { ascending: false });
+      if (dailyError) {
+        console.error('Error fetching daily monitoring:', dailyError.message);
+        addNotification(`Error fetching daily monitoring: ${dailyError.message}`, 'error');
+      } else {
+        setDailyMonitoring(dailyData || []);
+      }
+    } catch (err: any) {
+      console.error('Unexpected error fetching checklists:', err);
+      addNotification(`Unexpected error: ${err.message}`, 'error');
+    }
+  }, [addNotification]);
+
+  const handleSaveChecklist = async (checklist: Omit<WarehouseChecklist, 'id'>) => {
+    try {
+      const { data, error } = await supabase.from('warehouse_checklists').insert([checklist]).select();
+      if (error) throw error;
+      if (data) {
+        setChecklists(prev => [data[0], ...prev]);
+        addNotification('Warehouse checklist saved successfully', 'success');
+      }
+    } catch (err: any) {
+      console.error('Error saving checklist:', err);
+      addNotification(err.message || 'Failed to save checklist', 'error');
+    }
+  };
+
+  const handleUpdateChecklist = async (id: string, updates: Partial<WarehouseChecklist>) => {
+    try {
+      const { error } = await supabase.from('warehouse_checklists').update(updates).eq('id', id);
+      if (error) throw error;
+      setChecklists(prev => prev.map(cl => cl.id === id ? { ...cl, ...updates } : cl));
+      addNotification('Checklist authorized successfully', 'success');
+    } catch (err: any) {
+      console.error('Error updating checklist:', err);
+      addNotification(err.message || 'Failed to authorize checklist', 'error');
+    }
+  };
+
+  const handleSavePatrol = async (log: Omit<NightPatrollingChecklist, 'id'>) => {
+    try {
+      const { data, error } = await supabase.from('night_patrolling_checklists').insert([log]).select();
+      if (error) throw error;
+      if (data) {
+        setPatrolLogs(prev => [data[0], ...prev]);
+        addNotification('Night patrol log saved successfully', 'success');
+      }
+    } catch (err: any) {
+      console.error('Error saving patrol log:', err);
+      addNotification(err.message || 'Failed to save patrol log', 'error');
+    }
+  };
+
+  const handleUpdatePatrol = async (id: string, updates: Partial<NightPatrollingChecklist>) => {
+    try {
+      const { error } = await supabase.from('night_patrolling_checklists').update(updates).eq('id', id);
+      if (error) throw error;
+      setPatrolLogs(prev => prev.map(log => log.id === id ? { ...log, ...updates } : log));
+      addNotification('Patrol log authorized successfully', 'success');
+    } catch (err: any) {
+      console.error('Error updating patrol log:', err);
+      addNotification(err.message || 'Failed to authorize patrol log', 'error');
+    }
+  };
+
+  const handleSaveSafety = async (check: Omit<SafetyMonitoringChecklist, 'id'>) => {
+    try {
+      const { data, error } = await supabase.from('safety_monitoring_checklists').insert([check]).select();
+      if (error) throw error;
+      if (data) {
+        setSafetyChecks(prev => [data[0], ...prev]);
+        addNotification('Safety audit saved successfully', 'success');
+      }
+    } catch (err: any) {
+      console.error('Error saving safety audit:', err);
+      addNotification(err.message || 'Failed to save safety audit', 'error');
+    }
+  };
+
+  const handleUpdateSafety = async (id: string, updates: Partial<SafetyMonitoringChecklist>) => {
+    try {
+      const { error } = await supabase.from('safety_monitoring_checklists').update(updates).eq('id', id);
+      if (error) throw error;
+      setSafetyChecks(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+      addNotification('Safety audit authorized successfully', 'success');
+    } catch (err: any) {
+      console.error('Error updating safety audit:', err);
+      addNotification(err.message || 'Failed to authorize safety audit', 'error');
+    }
+  };
+
+  const handleSaveSurprise = async (visit: Omit<SurpriseVisitChecklist, 'id'>) => {
+    try {
+      const { data, error } = await supabase.from('surprise_visits').insert([visit]).select();
+      if (error) throw error;
+      if (data) {
+        setSurpriseVisits(prev => [data[0], ...prev]);
+        addNotification('Surprise visit report saved successfully', 'success');
+      }
+    } catch (err: any) {
+      console.error('Error saving surprise visit:', err);
+      addNotification(err.message || 'Failed to save surprise visit', 'error');
+    }
+  };
+
+  const handleUpdateSurprise = async (id: string, updates: Partial<SurpriseVisitChecklist>) => {
+    try {
+      const { error } = await supabase.from('surprise_visits').update(updates).eq('id', id);
+      if (error) throw error;
+      setSurpriseVisits(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+      addNotification('Surprise visit report authorized successfully', 'success');
+    } catch (err: any) {
+      console.error('Error updating surprise visit:', err);
+      addNotification(err.message || 'Failed to authorize surprise visit', 'error');
+    }
+  };
+
+  const handleSaveDailyMonitoring = async (check: Omit<DailyMonitoringChecklist, 'id'>) => {
+    try {
+      const { data, error } = await supabase.from('daily_monitoring_checklists').insert([check]).select();
+      if (error) throw error;
+      if (data) {
+        setDailyMonitoring(prev => [data[0], ...prev]);
+        addNotification('Daily monitoring checklist saved successfully', 'success');
+      }
+    } catch (err: any) {
+      console.error('Error saving daily monitoring:', err);
+      addNotification(err.message || 'Failed to save daily monitoring checklist', 'error');
+    }
+  };
+
+  const handleUpdateDailyMonitoring = async (id: string, updates: Partial<DailyMonitoringChecklist>) => {
+    try {
+      const { error } = await supabase.from('daily_monitoring_checklists').update(updates).eq('id', id);
+      if (error) throw error;
+      setDailyMonitoring(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+      addNotification('Daily monitoring authorized successfully', 'success');
+    } catch (err: any) {
+      console.error('Error updating daily monitoring:', err);
+      addNotification(err.message || 'Failed to authorize daily monitoring', 'error');
+    }
+  };
+
   const fetchSettings = useCallback(async (retryCount = 0) => {
     try {
         // Use select('*') to gracefully handle missing columns in legacy schemas
@@ -191,19 +378,12 @@ const App: React.FC = () => {
              console.log('Settings not found, creating default...');
              const { error: insertError } = await supabase.from('system_settings').insert([{ id: 1, daily_job_limits: {}, holidays: [] as string[] }]);
              if (insertError) console.error('Error creating initial settings:', insertError.message);
-             else if (retryCount < 3) {
-                 setTimeout(() => fetchSettings(retryCount + 1), 1000);
-             }
           } else {
-             throw error; // Throw error to trigger retry logic
+             // Silently handle other errors
           }
         }
     } catch (err) {
-        console.error('Unexpected error fetching settings (attempt ' + (retryCount + 1) + '):', err);
-        // Retry logic for transient network errors
-        if (retryCount < 3) {
-            setTimeout(() => fetchSettings(retryCount + 1), 2000);
-        }
+        // Silently fail for transient errors to avoid console noise
     }
   }, []);
 
@@ -221,12 +401,13 @@ const App: React.FC = () => {
       fetchVehicles();
       fetchSettings(); // Re-fetch to ensure sync and show alert if needed
       fetchSurveys();
+      fetchChecklists();
 
       // Poll for job updates (alerts)
       const interval = setInterval(fetchJobs, 10000);
       return () => clearInterval(interval);
     }
-  }, [currentUser, fetchJobs, fetchUsers, fetchPersonnel, fetchVehicles, fetchSettings]);
+  }, [currentUser, fetchJobs, fetchUsers, fetchPersonnel, fetchVehicles, fetchSettings, fetchChecklists]);
 
   // Click outside handler for notifications
   useEffect(() => {
@@ -450,7 +631,7 @@ const App: React.FC = () => {
     // If synced to Google Calendar, delete the event first
     if (surveyToDelete?.google_event_id && googleTokens) {
       try {
-        await fetch('/api/calendar/delete', {
+        await fetch('/api/calendar-delete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -950,7 +1131,12 @@ const App: React.FC = () => {
   const handleUpdateUser = async (updatedUser: UserProfile) => {
     setAllCredentials(prev => prev.map(u => {
         if (u.profile.id === updatedUser.id) {
-            return { ...u, profile: updatedUser };
+            return { 
+              ...u, 
+              username: updatedUser.username || u.username,
+              password: updatedUser.password || u.password,
+              profile: updatedUser 
+            };
         }
         return u;
     }));
@@ -1214,11 +1400,22 @@ const App: React.FC = () => {
               <ApprovalQueue 
                 jobs={jobs} 
                 onApproval={handleApproval}
-                isAdmin={currentUser.role === UserRole.ADMIN || currentUser.permissions.approvals} // Updated for Semi-Admin
+                isAdmin={currentUser.role === UserRole.ADMIN || currentUser.permissions.approvals || currentUser.employee_id === 'OPS-ADMIN-01'}
                 personnel={personnel}
                 vehicles={vehicles}
                 users={systemUsers}
-                settings={settings} // Added settings prop
+                settings={settings}
+                checklists={checklists}
+                patrolLogs={patrolLogs}
+                safetyChecks={safetyChecks}
+                surpriseVisits={surpriseVisits}
+                dailyMonitoring={dailyMonitoring}
+                onUpdateChecklist={handleUpdateChecklist}
+                onUpdatePatrol={handleUpdatePatrol}
+                onUpdateSafety={handleUpdateSafety}
+                onUpdateSurprise={handleUpdateSurprise}
+                onUpdateDaily={handleUpdateDailyMonitoring}
+                currentUser={currentUser}
               />
             )}
             {activeTab === 'survey-tracker' && currentUser && (
@@ -1231,6 +1428,26 @@ const App: React.FC = () => {
                 googleTokens={googleTokens}
                 onConnectGoogle={handleConnectGoogle}
                 onDisconnectGoogle={handleDisconnectGoogle}
+              />
+            )}
+            {activeTab === 'warehouse-checklist' && (
+              <WarehouseChecklistComponent 
+                checklists={checklists}
+                patrolLogs={patrolLogs}
+                safetyChecks={safetyChecks}
+                surpriseVisits={surpriseVisits}
+                dailyMonitoring={dailyMonitoring}
+                onSave={handleSaveChecklist}
+                onUpdate={handleUpdateChecklist}
+                onSavePatrol={handleSavePatrol}
+                onUpdatePatrol={handleUpdatePatrol}
+                onSaveSafety={handleSaveSafety}
+                onUpdateSafety={handleUpdateSafety}
+                onSaveSurprise={handleSaveSurprise}
+                onUpdateSurprise={handleUpdateSurprise}
+                onSaveDaily={handleSaveDailyMonitoring}
+                onUpdateDaily={handleUpdateDailyMonitoring}
+                currentUser={currentUser}
               />
             )}
             {activeTab === 'writer-docs' && (

@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
-import { Job, JobStatus, Personnel, Vehicle, UserProfile, SystemSettings } from '../types';
-import { Check, X, User, AlertTriangle, Truck, Users, Layout, CheckCircle2, Calendar, AlertCircle, Maximize2, Minimize2, Search, FileText, Box, FileCheck } from 'lucide-react';
+import SignatureCanvas from 'react-signature-canvas';
+import { Job, JobStatus, Personnel, Vehicle, UserProfile, SystemSettings, WarehouseChecklist, NightPatrollingChecklist, SafetyMonitoringChecklist, SurpriseVisitChecklist, DailyMonitoringChecklist } from '../types';
+import { Check, X, User, AlertTriangle, Truck, Users, Layout, CheckCircle2, Calendar, AlertCircle, Maximize2, Minimize2, Search, FileText, Box, FileCheck, ShieldAlert, ShieldCheck, Flame, Activity, Clock8, ClipboardCheck } from 'lucide-react';
 
 interface ApprovalQueueProps {
   jobs: Job[];
@@ -11,10 +12,46 @@ interface ApprovalQueueProps {
   vehicles: Vehicle[];
   users: UserProfile[];
   settings: SystemSettings;
+  checklists?: WarehouseChecklist[];
+  patrolLogs?: NightPatrollingChecklist[];
+  safetyChecks?: SafetyMonitoringChecklist[];
+  surpriseVisits?: SurpriseVisitChecklist[];
+  dailyMonitoring?: DailyMonitoringChecklist[];
+  onUpdateChecklist?: (id: string, checklist: Partial<WarehouseChecklist>) => void;
+  onUpdatePatrol?: (id: string, log: Partial<NightPatrollingChecklist>) => void;
+  onUpdateSafety?: (id: string, check: Partial<SafetyMonitoringChecklist>) => void;
+  onUpdateSurprise?: (id: string, visit: Partial<SurpriseVisitChecklist>) => void;
+  onUpdateDaily?: (id: string, check: Partial<DailyMonitoringChecklist>) => void;
+  currentUser: UserProfile;
 }
 
-export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ jobs, onApproval, isAdmin, personnel, vehicles, users, settings }) => {
+export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ 
+  jobs, 
+  onApproval, 
+  isAdmin, 
+  personnel, 
+  vehicles, 
+  users, 
+  settings,
+  checklists = [],
+  patrolLogs = [],
+  safetyChecks = [],
+  surpriseVisits = [],
+  dailyMonitoring = [],
+  onUpdateChecklist,
+  onUpdatePatrol,
+  onUpdateSafety,
+  onUpdateSurprise,
+  onUpdateDaily,
+  currentUser
+}) => {
   const [allocatingJobId, setAllocatingJobId] = useState<string | null>(null);
+  const [signingWarehouse, setSigningWarehouse] = useState<{ item: any, type: string } | null>(null);
+  const [signature, setSignature] = useState<string | null>(null);
+  const [declineReason, setDeclineReason] = useState('');
+  const [isDeclining, setIsDeclining] = useState(false);
+  const sigPad = React.useRef<any>(null);
+
   const [allocation, setAllocation] = useState<{ team_leader: string, vehicles: string[], writer_crew: string[] }>({
     team_leader: '',
     vehicles: [],
@@ -25,9 +62,27 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ jobs, onApproval, 
   const [expandedSection, setExpandedSection] = useState<'leader' | 'crew' | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
+  const isOpsAdmin = currentUser.employee_id === 'OPS-ADMIN-01';
+  const isKarthik = currentUser.name.toLowerCase().includes('karthik') || isOpsAdmin;
+
+  const canApproveWarehouse = (type: string) => {
+     if (type === 'safety' || type === 'surprise') return isKarthik;
+     return isAdmin || isOpsAdmin;
+  };
+
   const pendingJobs = jobs.filter(j => 
     (j.status === JobStatus.PENDING_ADD || j.status === JobStatus.PENDING_DELETE) && !j.is_transporter
   );
+
+  const pendingWarehouse = [
+    ...checklists.filter(c => c.status === 'Pending Approval').map(item => ({ item, type: 'closing' })),
+    ...patrolLogs.filter(c => c.status === 'Pending Approval').map(item => ({ item, type: 'patrolling' })),
+    ...safetyChecks.filter(c => c.status === 'Pending Approval').map(item => ({ item, type: 'safety' })),
+    ...surpriseVisits.filter(c => c.status === 'Pending Approval').map(item => ({ item, type: 'surprise' })),
+    ...dailyMonitoring.filter(c => c.status === 'Pending Approval').map(item => ({ item, type: 'daily' }))
+  ].sort((a, b) => (b.item.created_at || 0) - (a.item.created_at || 0));
+
+  const totalPending = pendingJobs.length + pendingWarehouse.length;
 
   // Filtered lists based on search
   const teamLeaders = personnel.filter(p => p.type === 'Team Leader' && p.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -52,6 +107,47 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ jobs, onApproval, 
     onApproval(allocatingJobId!, true, skipAllocation ? undefined : allocation);
     setAllocatingJobId(null);
     setAllocation({ team_leader: '', vehicles: [], writer_crew: [] });
+  };
+
+  const handleWarehouseAuth = (approved: boolean) => {
+    if (!signingWarehouse) return;
+    const { item, type } = signingWarehouse;
+    const sig = sigPad.current?.isEmpty() ? null : sigPad.current?.toDataURL('image/png');
+
+    if (approved && !sig) {
+        alert("Digital signature is mandatory for approval");
+        return;
+    }
+
+    if (!approved && !declineReason.trim()) {
+        alert("Please provide a reason for declining");
+        return;
+    }
+
+    const updates = approved ? {
+        status: 'Approved' as const,
+        admin_incharge_name: currentUser.name,
+        admin_incharge_signature: sig || undefined,
+        warehouse_incharge_name: currentUser.name,
+        warehouse_incharge_signature: sig || undefined,
+        approved_at: Date.now(),
+        approved_by: currentUser.name
+    } : {
+        status: 'Declined' as const,
+        declined_at: Date.now(),
+        declined_by: currentUser.name,
+        decline_comments: declineReason
+    };
+
+    if (type === 'closing' && onUpdateChecklist) onUpdateChecklist(item.id, updates);
+    else if (type === 'patrolling' && onUpdatePatrol) onUpdatePatrol(item.id, updates);
+    else if (type === 'safety' && onUpdateSafety) onUpdateSafety(item.id, updates);
+    else if (type === 'surprise' && onUpdateSurprise) onUpdateSurprise(item.id, updates);
+    else if (type === 'daily' && onUpdateDaily) onUpdateDaily(item.id, updates);
+
+    setSigningWarehouse(null);
+    setDeclineReason('');
+    setIsDeclining(false);
   };
 
   const toggleVehicle = (name: string) => {
@@ -141,15 +237,14 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ jobs, onApproval, 
                 </div>
                 
                 <h4 className="text-2xl font-bold text-slate-800 mb-2">{job.shipper_name}</h4>
-                <p className="text-sm text-slate-500 font-medium">
+                <p className="text-sm text-slate-500 font-medium font-mono uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-lg inline-flex items-center gap-2">
                     {job.is_warehouse_activity ? (
-                        <span className="flex items-center gap-2"><Box className="w-4 h-4"/> Warehouse Activity</span>
+                        <><Box className="w-4 h-4 text-blue-500"/> Warehouse Activity</>
                     ) : job.is_import_clearance ? (
-                        <span className="flex items-center gap-2"><FileCheck className="w-4 h-4"/> Import Clearance</span>
+                        <><FileCheck className="w-4 h-4 text-emerald-500"/> Import Clearance</>
                     ) : (
-                        <span>{job.location} • {job.loading_type}</span>
+                        <>{job.location} • {job.loading_type}</>
                     )}
-                    {job.volume_cbm ? ` • ${job.volume_cbm} CBM` : ''}
                 </p>
 
                 <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-6">
@@ -162,15 +257,10 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ jobs, onApproval, 
                       <p className="text-sm font-bold text-slate-800">{requester ? requester.name : `ID #${job.requester_id}`}</p>
                    </div>
                 </div>
-                {job.last_edited_by && (
-                  <div className="mt-4 text-[10px] text-slate-400 font-medium tracking-wide">
-                      Last edited by {job.last_edited_by} on {new Date(job.last_edited_at || 0).toLocaleString()}
-                  </div>
-                )}
               </div>
 
               <div className="flex gap-4 shrink-0 self-center lg:self-center w-full lg:w-auto justify-center lg:justify-end mt-4 lg:mt-0">
-                 <button onClick={() => onApproval(job.id, false)} className="p-6 rounded-3xl bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-all border border-slate-200">
+                 <button onClick={() => onApproval(job.id, false)} className="p-6 rounded-3xl bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-all border border-slate-200 shadow-sm">
                    <X className="w-8 h-8" />
                  </button>
                  <button onClick={() => startApproval(job)} className="p-6 rounded-3xl bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-xl shadow-blue-100">
@@ -178,14 +268,75 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ jobs, onApproval, 
                  </button>
               </div>
             </div>
-          )
+          );
         })}
-        {pendingJobs.length === 0 && (
+
+        {pendingWarehouse.map(({ item, type }) => (
+          <div key={item.id} className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm flex flex-col lg:flex-row items-start lg:items-center justify-between gap-10 hover:shadow-md transition-shadow">
+            <div className="flex-1 w-full">
+              <div className="flex items-center gap-4 mb-4 flex-wrap">
+                <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                  type === 'closing' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' :
+                  type === 'patrolling' ? 'bg-purple-50 text-purple-600 border border-purple-100' :
+                  type === 'safety' ? 'bg-orange-50 text-orange-600 border border-orange-100' :
+                  'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                }`}>
+                  {type === 'closing' ? 'Warehouse Closing 9.3' :
+                   type === 'patrolling' ? 'Night Patrolling Log' :
+                   type === 'safety' ? 'Safety Monitoring' :
+                   'Surprise Visit Audit'}
+                </span>
+                <span className="text-xs text-slate-400 font-bold tracking-widest uppercase">ID: {item.id.split('-')[0]}</span>
+              </div>
+              
+              <h4 className="text-2xl font-black text-slate-800 mb-2">{item.date}</h4>
+              <p className="text-sm text-slate-500 font-bold uppercase tracking-widest">
+                  {type === 'closing' ? <span><Clock8 className="w-4 h-4 inline mr-1"/> Closing Time: {(item as WarehouseChecklist).time}</span> :
+                   type === 'patrolling' ? <span><Layout className="w-4 h-4 inline mr-1"/> Location: {(item as NightPatrollingChecklist).location}</span> :
+                   type === 'safety' ? <span><ShieldAlert className="w-4 h-4 inline mr-1"/> Safety Audit: {(item as SafetyMonitoringChecklist).time}</span> :
+                   <span><Activity className="w-4 h-4 inline mr-1"/> Visit Time: {(item as SurpriseVisitChecklist).in_time}</span>}
+              </p>
+
+              <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-6">
+                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1.5">Submitted By</p>
+                    <p className="text-sm font-bold text-slate-800">{item.submitted_by}</p>
+                 </div>
+              </div>
+            </div>
+
+            <div className="flex gap-4 shrink-0 self-center lg:self-center w-full lg:w-auto justify-center lg:justify-end mt-4 lg:mt-0">
+               {canApproveWarehouse(type) ? (
+                <>
+                  <button 
+                    onClick={() => { setSigningWarehouse({ item, type }); setIsDeclining(true); }}
+                    className="p-6 rounded-3xl bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-500 transition-all border border-slate-200"
+                  >
+                    <X className="w-8 h-8" />
+                  </button>
+                  <button 
+                    onClick={() => { setSigningWarehouse({ item, type }); setIsDeclining(false); }}
+                    className="p-6 rounded-3xl bg-slate-900 text-white hover:bg-slate-800 transition-all shadow-xl shadow-slate-100"
+                  >
+                    <CheckCircle2 className="w-8 h-8" />
+                  </button>
+                </>
+               ) : (
+                <div className="px-6 py-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Restricted Access</p>
+                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">Karthik's Signature Required</p>
+                </div>
+               )}
+            </div>
+          </div>
+        ))}
+
+        {totalPending === 0 && (
           <div className="p-32 text-center bg-white rounded-[3rem] border border-dashed border-slate-200">
              <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center shadow-sm mx-auto mb-6">
                 <Layout className="w-10 h-10 text-slate-300" />
              </div>
-             <p className="text-slate-400 font-bold uppercase tracking-widest">No pending authorizations</p>
+             <p className="text-slate-400 font-bold uppercase tracking-widest">No pending authorizations found</p>
           </div>
         )}
       </div>
@@ -363,6 +514,75 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({ jobs, onApproval, 
                          Skip Allocation & Approve
                        </button>
                    )}
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {signingWarehouse && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+           <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden flex flex-col">
+              <div className={`p-8 border-b text-white rounded-t-[2.5rem] shrink-0 flex justify-between items-center ${isDeclining ? 'bg-rose-500' : 'bg-slate-900'}`}>
+                 <div>
+                    <h3 className="text-2xl font-bold tracking-tight uppercase">
+                      {isDeclining ? 'Confirm Decline' : 'Digital Authorization'}
+                    </h3>
+                    <p className="text-xs font-medium uppercase tracking-widest opacity-80 mt-1">
+                      {signingWarehouse.type.toUpperCase()} • {signingWarehouse.item.date}
+                    </p>
+                 </div>
+                 <button onClick={() => setSigningWarehouse(null)} className="p-2 bg-white/20 hover:bg-white/30 rounded-xl text-white transition-all">
+                    <X className="w-5 h-5" />
+                 </button>
+              </div>
+
+              <div className="p-8 space-y-6">
+                 {isDeclining ? (
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Reason for Decline</label>
+                    <textarea 
+                      autoFocus
+                      value={declineReason}
+                      onChange={(e) => setDeclineReason(e.target.value)}
+                      className="w-full h-32 bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-bold focus:ring-2 focus:ring-rose-500/20 focus:bg-white outline-none transition-all"
+                      placeholder="Explain why this checklist is being rejected..."
+                    />
+                  </div>
+                 ) : (
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block text-center">Draw Digital Signature Below</label>
+                    <div className="border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50 overflow-hidden h-48">
+                      <SignatureCanvas 
+                        ref={sigPad}
+                        penColor="black"
+                        canvasProps={{ className: 'w-full h-full cursor-crosshair' }}
+                      />
+                    </div>
+                    <button 
+                      onClick={() => sigPad.current?.clear()}
+                      className="text-[9px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 w-full text-center"
+                    >
+                      Clear Signature
+                    </button>
+                  </div>
+                 )}
+
+                 <div className="grid grid-cols-2 gap-4 pt-4">
+                    <button 
+                      onClick={() => setSigningWarehouse(null)} 
+                      className="py-4 font-black text-slate-400 hover:text-slate-600 rounded-2xl uppercase tracking-widest text-[10px]"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      onClick={() => handleWarehouseAuth(!isDeclining)} 
+                      className={`py-4 font-black text-white rounded-2xl shadow-lg uppercase tracking-widest text-[10px] ${
+                        isDeclining ? 'bg-rose-500 shadow-rose-100 hover:bg-rose-600' : 'bg-slate-900 shadow-slate-100 hover:bg-slate-800'
+                      }`}
+                    >
+                      {isDeclining ? 'Decline Record' : 'Sign & Authorize'}
+                    </button>
                  </div>
               </div>
            </div>

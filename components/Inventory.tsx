@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Edit2, Save, X, Plus, Package, AlertTriangle, Loader2, Database, FileInput, ClipboardList, ChevronRight, Calculator, Truck, User, MapPin, RefreshCw, Trash2, Printer, ChevronDown, FileText, FileDown, Calendar, Info, CheckCircle2 } from 'lucide-react';
+import { Search, Edit2, Save, X, Plus, Package, AlertTriangle, Loader2, Database, FileInput, ClipboardList, ChevronRight, Calculator, Truck, User, MapPin, RefreshCw, Trash2, Printer, ChevronDown, FileText, FileDown, Calendar, Info, CheckCircle2, BarChart2 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { InventoryItem, Job, JobCostSheet, CostSheetItem, UserProfile, InventoryConsumption, InventoryPriceHistory } from '../types';
 import jsPDF from 'jspdf';
@@ -97,7 +97,38 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
   // Job Search State
   const [jobSearchTerm, setJobSearchTerm] = useState('');
   const [showJobSuggestions, setShowJobSuggestions] = useState(false);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [summaryData, setSummaryData] = useState<any[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const fetchSummary = async () => {
+    setIsSaving(true);
+    try {
+      const { data, error } = await supabase
+        .from('job_cost_sheets')
+        .select('*');
+      
+      if (error) throw error;
+      
+      const summary = (data || []).map(sheet => {
+        const job = jobs.find(j => j.id === sheet.job_id);
+        return {
+          jobId: sheet.job_id,
+          shipperName: job?.shipper_name || 'N/A',
+          cbm: sheet.cbm || 0,
+          category: sheet.job_category || '-',
+          totalCost: sheet.total_cost || 0
+        };
+      });
+      
+      setSummaryData(summary);
+      setShowSummaryModal(true);
+    } catch (error: any) {
+      setNotification({ message: "Failed to load summary: " + error.message, type: 'error' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const fetchInventory = async () => {
     setLoading(true);
@@ -605,6 +636,8 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
         const rate = Number(item.price || 0);
         return {
           'Packing Date': currentSheet.packing_date || '-',
+          'Category': currentSheet.job_category || '-',
+          'CBM': currentSheet.cbm || 0,
           'Item Code': item.code || '-',
           'Product Description': item.description,
           'Qty Consumed': consumed,
@@ -625,6 +658,8 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
     // Set column widths
     const wscols = [
       { wch: 15 }, // Packing Date
+      { wch: 15 }, // Category
+      { wch: 10 }, // CBM
       { wch: 15 }, // Item Code
       { wch: 40 }, // Product Description
       { wch: 15 }, // Qty Consumed
@@ -1051,7 +1086,9 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
             items: itemsToSave,
             status: status,
             total_cost: calculateTotalCost(),
-            packing_date: currentSheet.packing_date || null
+            packing_date: currentSheet.packing_date || null,
+            cbm: currentSheet.cbm || 0,
+            job_category: currentSheet.job_category || null
         };
 
         const { error: saveError } = await supabase
@@ -1454,14 +1491,24 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
             )}
 
             {viewMode === 'costing' && (
-              <button
-                onClick={handleExportAllJobCosting}
-                disabled={isExporting}
-                className="flex items-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-700 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50 shadow-md border border-emerald-500/20"
-              >
-                {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
-                Export All Job Costing
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleExportAllJobCosting}
+                  disabled={isExporting}
+                  className="flex items-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-700 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50 shadow-md border border-emerald-500/20"
+                >
+                  {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
+                  Export All
+                </button>
+                <button
+                  onClick={fetchSummary}
+                  disabled={isSaving}
+                  className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all shadow-md border border-blue-500/20"
+                >
+                  {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BarChart2 className="w-3.5 h-3.5" />}
+                  Summary
+                </button>
+              </div>
             )}
 
            {viewMode === 'inventory' && (
@@ -1589,13 +1636,93 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                         </td>
                         <td className="p-6 font-bold text-slate-800">
                         {editingId === item.id ? (
-                            <input 
-                                type="text"
-                                value={editDescription}
-                                onChange={(e) => setEditDescription(e.target.value)}
-                                className="w-full px-3 py-2 bg-white border border-blue-500 rounded-lg focus:outline-none font-bold text-slate-800"
-                                autoFocus
-                            />
+                            <div className="space-y-3 min-w-[300px]">
+                                <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-200">
+                                    <div className="flex items-center gap-2">
+                                        <Truck className={`w-4 h-4 ${editIsOutsource ? 'text-blue-600' : 'text-slate-400'}`} />
+                                        <span className="text-[10px] font-bold uppercase text-slate-600">Outsource</span>
+                                    </div>
+                                    <button 
+                                        type="button"
+                                        onClick={() => setEditIsOutsource(!editIsOutsource)}
+                                        className={`w-10 h-5 rounded-full transition-all relative ${editIsOutsource ? 'bg-blue-600' : 'bg-slate-200'}`}
+                                    >
+                                        <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${editIsOutsource ? 'left-5.5' : 'left-0.5'}`} />
+                                    </button>
+                                </div>
+
+                                <input 
+                                    type="text"
+                                    value={editDescription}
+                                    onChange={(e) => setEditDescription(e.target.value)}
+                                    className="w-full px-3 py-2 bg-white border border-blue-500 rounded-lg focus:outline-none font-bold text-slate-800"
+                                    placeholder="Item Description"
+                                />
+
+                                {editIsOutsource && (
+                                    <div className="grid grid-cols-2 gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                                        <div className="space-y-1">
+                                            <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest ml-1">Vendor</label>
+                                            <div className="relative">
+                                                <select 
+                                                    className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold focus:ring-1 focus:ring-blue-500 outline-none appearance-none" 
+                                                    value={editVendorName} 
+                                                    onChange={e => setEditVendorName(e.target.value)}
+                                                >
+                                                    <option value="">Select Vendor</option>
+                                                    {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                                                </select>
+                                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest ml-1">Type</label>
+                                            <div className="relative">
+                                                <select 
+                                                    className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold focus:ring-1 focus:ring-blue-500 outline-none appearance-none" 
+                                                    value={editOutsourceType} 
+                                                    onChange={e => setEditOutsourceType(e.target.value)}
+                                                >
+                                                    <option value="">Select Type</option>
+                                                    {outsourceTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                                                </select>
+                                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest ml-1">Location</label>
+                                            <div className="relative">
+                                                <select 
+                                                    className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold focus:ring-1 focus:ring-blue-500 outline-none appearance-none" 
+                                                    value={editLocation} 
+                                                    onChange={e => setEditLocation(e.target.value)}
+                                                >
+                                                    <option value="">Select Location</option>
+                                                    {locations.map(l => <option key={l} value={l}>{l}</option>)}
+                                                </select>
+                                                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
+                                            </div>
+                                        </div>
+                                        {editOutsourceType.startsWith('Truck') && (
+                                            <div className="space-y-1">
+                                                <label className="text-[8px] font-bold text-slate-400 uppercase tracking-widest ml-1">Schedule</label>
+                                                <div className="flex gap-1">
+                                                    {['Per trip', 'Full Day'].map(s => (
+                                                        <button
+                                                            key={s}
+                                                            type="button"
+                                                            onClick={() => setEditTruckSchedule(s)}
+                                                            className={`flex-1 py-1 rounded-md text-[8px] font-bold uppercase tracking-wider transition-all border ${editTruckSchedule === s ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-white border-slate-200 text-slate-400'}`}
+                                                        >
+                                                            {s === 'Per trip' ? 'Trip' : 'Day'}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         ) : (
                             <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2">
@@ -1965,14 +2092,41 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
 
                             <div className="mt-8 flex flex-col md:flex-row items-center justify-between gap-4">
                                 {costingStage === 'Final' && currentSheet && (
-                                    <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 w-full md:w-auto">
-                                        <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 whitespace-nowrap">Date of Packing:</label>
-                                        <input 
-                                            type="date" 
-                                            className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-1 focus:ring-blue-500"
-                                            value={currentSheet.packing_date || ''}
-                                            onChange={e => setCurrentSheet({...currentSheet, packing_date: e.target.value})}
-                                        />
+                                    <div className="flex flex-wrap items-center gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 w-full md:w-auto">
+                                        <div className="flex items-center gap-3">
+                                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 whitespace-nowrap">Date of Packing:</label>
+                                            <input 
+                                                type="date" 
+                                                className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-1 focus:ring-blue-500"
+                                                value={currentSheet.packing_date || ''}
+                                                onChange={e => setCurrentSheet({...currentSheet, packing_date: e.target.value})}
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-3 border-l border-slate-200 pl-3">
+                                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 whitespace-nowrap">CBM:</label>
+                                            <input 
+                                                type="number"
+                                                step="0.01"
+                                                placeholder="0.00"
+                                                className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-1 focus:ring-blue-500 w-24"
+                                                value={currentSheet.cbm || ''}
+                                                onChange={e => setCurrentSheet({...currentSheet, cbm: parseFloat(e.target.value) || 0})}
+                                            />
+                                        </div>
+                                        <div className="flex items-center gap-3 border-l border-slate-200 pl-3">
+                                            <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500 whitespace-nowrap">Category:</label>
+                                            <select 
+                                                className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm font-bold outline-none focus:ring-1 focus:ring-blue-500"
+                                                value={currentSheet.job_category || ''}
+                                                onChange={e => setCurrentSheet({...currentSheet, job_category: e.target.value as any})}
+                                            >
+                                                <option value="">Select Category</option>
+                                                <option value="Import">Import</option>
+                                                <option value="Export">Export</option>
+                                                <option value="Storage">Storage</option>
+                                                <option value="Domestic">Domestic</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 )}
                                 <div className="flex justify-end gap-3 w-full md:w-auto">
@@ -2545,6 +2699,122 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                 className="flex-1 px-4 py-3 bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 rounded-xl shadow-lg shadow-blue-200 transition-all"
               >
                 Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Summary Modal */}
+      {showSummaryModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+          <div className="bg-white rounded-[2rem] w-full max-w-4xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col scale-in-center">
+            <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-white">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center">
+                  <BarChart2 className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 leading-none">Job Costing Summary</h3>
+                  <p className="text-slate-400 text-xs font-bold mt-1 uppercase tracking-widest">Aggregate report of all finalized jobs</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowSummaryModal(false)}
+                className="p-3 hover:bg-slate-100 rounded-xl transition-all"
+              >
+                <X className="w-5 h-5 text-slate-400" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-slate-50/50">
+              <div className="grid gap-3">
+                {summaryData.length > 0 ? (
+                  summaryData.map((data, idx) => {
+                    const cbm = Number(data.cbm || 0);
+                    const cost = Number(data.totalCost || 0);
+                    let threshold = Infinity;
+                    
+                    if (data.category === 'Export') threshold = cbm * 50 + 200;
+                    else if (data.category === 'Domestic') threshold = cbm * 35 + 200;
+                    else if (data.category === 'Storage') threshold = cbm * 40 + 200;
+                    
+                    const isOverBudget = cost > threshold;
+
+                    return (
+                      <div key={idx} className={`flex flex-col md:flex-row md:items-center justify-between p-5 bg-white border rounded-2xl transition-all group ${isOverBudget ? 'border-rose-200 bg-rose-50/30' : 'border-slate-200 hover:border-blue-400 hover:shadow-lg hover:shadow-blue-500/5'}`}>
+                        <div className="flex items-center gap-5">
+                          <div className={`w-10 h-10 rounded-xl border flex items-center justify-center font-black text-xs transition-all ${isOverBudget ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-slate-50 text-slate-400 border-slate-100 group-hover:bg-blue-600 group-hover:text-white group-hover:border-blue-600'}`}>
+                            {idx + 1}
+                          </div>
+                          <div className="flex flex-col">
+                            <div className="flex items-center flex-wrap gap-2">
+                               <span className={`text-sm font-black px-2 py-0.5 rounded-lg ${isOverBudget ? 'bg-rose-600 text-white' : 'bg-slate-900/5 text-slate-900'}`}>{data.jobId}</span>
+                               <span className="text-slate-300 font-light">•</span>
+                               <span className="text-sm font-black text-slate-700">{data.shipperName}</span>
+                               {isOverBudget && (
+                                 <span className="flex items-center gap-1 px-2 py-0.5 bg-rose-600 text-white text-[8px] font-black uppercase rounded-full shadow-sm animate-pulse">
+                                   <AlertTriangle className="w-2.5 h-2.5" /> High Cost
+                                 </span>
+                               )}
+                            </div>
+                            <div className="flex items-center gap-3 mt-2">
+                               <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-100 shadow-sm">
+                                 <Package className="w-3 h-3 text-slate-400" />
+                                 <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                                   {cbm.toFixed(2)} CBM
+                                 </span>
+                               </div>
+                               <div className="flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-100 shadow-sm">
+                                 <MapPin className="w-3 h-3 text-slate-400" />
+                                 <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                                   {data.category}
+                                 </span>
+                               </div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mt-4 md:mt-0 flex flex-col items-end">
+                          <div className={`text-sm font-black px-5 py-2.5 rounded-2xl border shadow-sm transition-all ${isOverBudget ? 'text-white bg-rose-600 border-rose-500 shadow-rose-200' : 'text-emerald-600 bg-emerald-50 border-emerald-100 shadow-emerald-500/5 group-hover:bg-emerald-600 group-hover:text-white'}`}>
+                            {cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-[9px] opacity-70">AED</span>
+                          </div>
+                          {isOverBudget && (
+                            <span className="text-[9px] font-bold text-rose-500 mt-1 uppercase tracking-widest">
+                              Exceeds {threshold.toFixed(2)} Limit
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-20">
+                    <div className="w-20 h-20 bg-slate-100 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                      <BarChart2 className="w-10 h-10 text-slate-300" />
+                    </div>
+                    <p className="font-black text-slate-400 uppercase tracking-widest text-xs">No job records found in the system</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-8 bg-white border-t border-slate-100 flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-4 p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
+                <div className="w-10 h-10 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-emerald-200">
+                  <Calculator className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex flex-col">
+                   <span className="text-[10px] font-black text-emerald-700/60 uppercase tracking-widest">Aggregate Job Cost</span>
+                   <span className="text-2xl font-black text-emerald-700 leading-none mt-1">
+                     {summaryData.reduce((acc, curr) => acc + curr.totalCost, 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs">AED</span>
+                   </span>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowSummaryModal(false)}
+                className="w-full md:w-auto px-10 py-4 bg-slate-900 text-white font-black uppercase text-xs tracking-widest rounded-2xl hover:bg-slate-800 hover:shadow-xl hover:-translate-y-1 transition-all active:translate-y-0"
+              >
+                Close Summary
               </button>
             </div>
           </div>

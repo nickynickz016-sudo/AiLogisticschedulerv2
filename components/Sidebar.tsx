@@ -31,6 +31,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'import-clearance', label: 'Import Clearance', icon: FileCheck, permission: 'importClearance' },
     { id: 'approvals', label: 'Approval Pool', icon: CheckSquare, permission: 'approvals' },
     { id: 'survey-tracker', label: 'Survey Tracker', icon: ClipboardCheck, permission: 'surveyTracker' },
+    { id: 'warehouse-checklist', label: 'Warehouse Checklist', icon: FileCheck, permission: 'warehouseChecklist' },
     { id: 'writer-docs', label: 'Writer Docs', icon: FileText, permission: 'writerDocs' },
     { id: 'inventory', label: 'Inventory', icon: Clipboard, permission: 'inventory' },
     { id: 'tracking', label: 'Tracking', icon: Map, permission: 'tracking' },

@@ -227,7 +227,7 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
 
     setIsSyncing(survey.id);
     try {
-      const response = await fetch('/api/calendar/sync', {
+      const response = await fetch('/api/calendar-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ survey, tokens: googleTokens })

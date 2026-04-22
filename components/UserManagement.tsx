@@ -24,6 +24,7 @@ const DEFAULT_PERMISSIONS: UserPermissions = {
   inventory: false,
   tracking: false,
   surveyTracker: true,
+  warehouseChecklist: false,
   resources: false,
   capacity: false,
   users: false,
@@ -42,6 +43,7 @@ const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
   inventory: 'Inventory Control',
   tracking: 'Shipment Tracking',
   surveyTracker: 'Survey Tracker',
+  warehouseChecklist: 'Warehouse Checklist',
   resources: 'Fleet & Crew',
   capacity: 'Capacity Limits',
   users: 'User Management',
@@ -263,6 +265,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
               <th className="p-6">Employee ID</th>
               <th className="p-6">User Details</th>
               <th className="p-6">Role</th>
+              <th className="p-6">Credentials</th>
               <th className="p-6">Access Modules</th>
               <th className="p-6">Status</th>
               <th className="p-6 text-center">Actions</th>
@@ -292,6 +295,18 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                   }`}>
                     {user.role}
                   </span>
+                </td>
+                <td className="p-6">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600">
+                      <User className="w-3 h-3 text-slate-400" />
+                      {user.username}
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 text-nowrap">
+                      <Lock className="w-3 h-3" />
+                      {user.password || '••••••••'}
+                    </div>
+                  </div>
                 </td>
                 <td className="p-6">
                    <div className="flex flex-wrap gap-1 max-w-xs">
@@ -450,6 +465,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Employee ID</label>
                             <input required className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-medium" value={editingUser.employee_id} onChange={e => setEditingUser({...editingUser, employee_id: e.target.value})} />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Username *</label>
+                            <input required className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-medium" value={editingUser.username || ''} onChange={e => setEditingUser({...editingUser, username: e.target.value})} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Password *</label>
+                            <input required className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-blue-500 font-medium" value={editingUser.password || ''} onChange={e => setEditingUser({...editingUser, password: e.target.value})} />
                         </div>
                     </div>
 

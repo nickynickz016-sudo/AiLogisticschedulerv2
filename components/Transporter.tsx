@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Job, JobStatus, UserProfile, Personnel, Vehicle } from '../types';
+import { Job, JobStatus, UserProfile, Personnel, Vehicle, Priority } from '../types';
 import { Plus, X, Bus, User, MapPin, Navigation, Trash2, Edit2, CheckCircle2, AlertCircle, ArrowRight, Users, Settings, Camera, Loader2, RefreshCw } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { getUAEToday } from '../utils';
@@ -131,8 +131,8 @@ export const Transporter: React.FC<TransporterProps> = ({
       transporter_status: newService.status,
       is_transporter: true,
       loading_type: 'Local Storage', // Default
-      priority: 'MEDIUM',
-      status: JobStatus.ACTIVE
+      priority: 'MEDIUM' as Priority,
+      status: JobStatus.ACTIVE as JobStatus
     };
 
     if (isEditing && originalId) {
@@ -143,14 +143,14 @@ export const Transporter: React.FC<TransporterProps> = ({
           ...payload,
           id: newService.id,
           title: newService.id
-        }, originalId);
+        } as Job, originalId);
       }
     } else {
       onAddJob({
         ...payload,
         id: newService.id,
         title: newService.id,
-      });
+      } as Partial<Job>);
     }
     setShowModal(false);
     resetForm();
