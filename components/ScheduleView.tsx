@@ -73,6 +73,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
   // Define permissions: Admin OR OPS-ADMIN-01 can manage schedule details (allocation/locks)
   const canManageSchedule = currentUser.role === UserRole.ADMIN || currentUser.employee_id === 'OPS-ADMIN-01';
+  const isOps106 = currentUser.employee_id === 'OPS-106';
 
   const selectedDate = getLocalDateString(currentDate);
 
@@ -107,7 +108,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     job_time: '08:00',
     job_date: today,
     duration: 1,
-    assigned_to: 'Unassigned'
+    assigned_to: 'Unassigned',
+    is_transporter: false
   };
 
   const [newJob, setNewJob] = useState<Partial<Job>>(initialNewJobState);
@@ -642,28 +644,32 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                         </button>
                                       </>
                                     )}
-                                    {job.status === JobStatus.ACTIVE && (
-                                      <button 
-                                        onClick={(e) => handleEditClick(e, job)}
-                                        className="p-1.5 hover:bg-blue-50 rounded-lg text-slate-400 hover:text-blue-600 transition-all"
-                                        title="Edit Job Details"
-                                      >
-                                        <Edit2 className="w-4 h-4" />
-                                      </button>
+                                    {!isOps106 && (
+                                      <>
+                                        {job.status === JobStatus.ACTIVE && (
+                                          <button 
+                                            onClick={(e) => handleEditClick(e, job)}
+                                            className="p-1.5 hover:bg-blue-50 rounded-lg text-slate-400 hover:text-blue-600 transition-all"
+                                            title="Edit Job Details"
+                                          >
+                                            <Edit2 className="w-4 h-4" />
+                                          </button>
+                                        )}
+                                        <button 
+                                          onClick={(e) => handleCopyJob(e, job)}
+                                          className="p-1.5 hover:bg-emerald-50 rounded-lg text-slate-400 hover:text-emerald-600 transition-all"
+                                          title="Copy to Next Schedule"
+                                        >
+                                          <Copy className="w-4 h-4" />
+                                        </button>
+                                        <button 
+                                          onClick={(e) => handleDeleteJobClick(job.id, e)} 
+                                          className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-300 hover:text-rose-500 transition-all opacity-100 lg:opacity-0 lg:group-hover/job:opacity-100"
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </button>
+                                      </>
                                     )}
-                                    <button 
-                                      onClick={(e) => handleCopyJob(e, job)}
-                                      className="p-1.5 hover:bg-emerald-50 rounded-lg text-slate-400 hover:text-emerald-600 transition-all"
-                                      title="Copy to Next Schedule"
-                                    >
-                                      <Copy className="w-4 h-4" />
-                                    </button>
-                                    <button 
-                                      onClick={(e) => handleDeleteJobClick(job.id, e)} 
-                                      className="p-1.5 hover:bg-rose-50 rounded-lg text-slate-300 hover:text-rose-500 transition-all opacity-100 lg:opacity-0 lg:group-hover/job:opacity-100"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
                                  </div>
                               </div>
                               <div className="space-y-3 mb-4">
@@ -813,29 +819,33 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                  </button>
                                </>
                              )}
-                             {job.status === JobStatus.ACTIVE && (
-                                <button 
-                                  onClick={(e) => handleEditClick(e, job)}
-                                  className="p-2 bg-slate-100 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all shadow-sm"
-                                  title="Edit Job Details"
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </button>
+                             {!isOps106 && (
+                               <>
+                                 {job.status === JobStatus.ACTIVE && (
+                                    <button 
+                                      onClick={(e) => handleEditClick(e, job)}
+                                      className="p-2 bg-slate-100 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-xl transition-all shadow-sm"
+                                      title="Edit Job Details"
+                                    >
+                                      <Edit2 className="w-4 h-4" />
+                                    </button>
+                                 )}
+                                 <button 
+                                    onClick={(e) => handleCopyJob(e, job)}
+                                    className="p-2 bg-slate-100 hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 rounded-xl transition-all shadow-sm"
+                                    title="Copy to Next Schedule"
+                                 >
+                                    <Copy className="w-4 h-4" />
+                                 </button>
+                                 <button 
+                                   onClick={(e) => handleDeleteJobClick(job.id, e)}
+                                   disabled={job.is_locked && !canManageSchedule}
+                                   className={`p-2 rounded-xl transition-all ${job.is_locked && !canManageSchedule ? 'opacity-20 cursor-not-allowed' : 'bg-rose-50 text-rose-300 hover:text-rose-600 hover:bg-rose-100'}`}
+                                 >
+                                    <Trash2 className="w-4 h-4" />
+                                 </button>
+                               </>
                              )}
-                             <button 
-                                onClick={(e) => handleCopyJob(e, job)}
-                                className="p-2 bg-slate-100 hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 rounded-xl transition-all shadow-sm"
-                                title="Copy to Next Schedule"
-                             >
-                                <Copy className="w-4 h-4" />
-                             </button>
-                             <button 
-                               onClick={(e) => handleDeleteJobClick(job.id, e)}
-                               disabled={job.is_locked && !canManageSchedule}
-                               className={`p-2 rounded-xl transition-all ${job.is_locked && !canManageSchedule ? 'opacity-20 cursor-not-allowed' : 'bg-rose-50 text-rose-300 hover:text-rose-600 hover:bg-rose-100'}`}
-                             >
-                                <Trash2 className="w-4 h-4" />
-                             </button>
                            </div>
                          </td>
                       </tr>
@@ -852,6 +862,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
           job={selectedJob}
           onClose={() => setSelectedJob(null)}
           users={users}
+          currentUser={currentUser}
         />
       )}
 
@@ -1293,6 +1304,28 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                           <button type="button" onClick={() => setNewJob({...newJob, long_carry: 'No'})} className={`flex-1 py-2 text-center rounded-lg text-xs font-bold transition-all ${newJob.long_carry === 'No' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`}>No</button>
                           <button type="button" onClick={() => setNewJob({...newJob, long_carry: 'Yes'})} className={`flex-1 py-2 text-center rounded-lg text-xs font-bold transition-all ${newJob.long_carry === 'Yes' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`}>Yes</button>
                       </div>
+                    </div>
+
+                    <div className="md:col-span-2 space-y-2">
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Transporter Module Integration</label>
+                      <button 
+                        type="button" 
+                        onClick={() => setNewJob({...newJob, is_transporter: !newJob.is_transporter})}
+                        className={`w-full flex items-center justify-between px-5 py-4 border-2 rounded-2xl transition-all duration-300 ${newJob.is_transporter ? 'bg-blue-50 border-blue-600 shadow-lg shadow-blue-100' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={`p-2.5 rounded-xl transition-colors ${newJob.is_transporter ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                            <Truck className="w-5 h-5" />
+                          </div>
+                          <div className="text-left">
+                            <p className={`text-sm font-black uppercase tracking-tight ${newJob.is_transporter ? 'text-blue-900' : 'text-slate-700'}`}>Enable Transporter Service</p>
+                            <p className="text-[10px] text-slate-500 font-bold">This job will appear in the Transporter Module</p>
+                          </div>
+                        </div>
+                        <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${newJob.is_transporter ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
+                          {newJob.is_transporter && <CheckCircle2 className="w-4 h-4 text-white" />}
+                        </div>
+                      </button>
                     </div>
                     
                     <div className="md:col-span-2 space-y-1.5">

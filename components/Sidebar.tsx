@@ -36,6 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'inventory', label: 'Inventory', icon: Clipboard, permission: 'inventory' },
     { id: 'tracking', label: 'Tracking', icon: Map, permission: 'tracking' },
     { id: 'transporter', label: 'Transporter', icon: Bus, permission: 'transporter' }, // New Transporter Module
+    { id: 'digital-packing-list', label: 'Digitial Packing', icon: ClipboardList, permission: 'digitalPackingList' },
     { id: 'resources', label: 'Fleet & Crew', icon: Users, permission: 'resources' },
     { id: 'capacity', label: 'Capacity Settings', icon: SlidersHorizontal, permission: 'capacity' },
     { id: 'users', label: 'User Access', icon: UserCog, permission: 'users' },

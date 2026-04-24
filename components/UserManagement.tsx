@@ -30,6 +30,7 @@ const DEFAULT_PERMISSIONS: UserPermissions = {
   users: false,
   transporter: false,
   ai: false,
+  digitalPackingList: true,
 };
 
 const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
@@ -49,6 +50,7 @@ const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
   users: 'User Management',
   transporter: 'Transporter',
   ai: 'AI Planner',
+  digitalPackingList: 'Digital Packing List',
 };
 
 export const UserManagement: React.FC<UserManagementProps> = ({ 

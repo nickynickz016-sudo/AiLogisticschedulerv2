@@ -8,6 +8,7 @@ interface JobDetailModalProps {
   job: Job;
   onClose: () => void;
   users: UserProfile[];
+  currentUser?: UserProfile;
 }
 
 const DetailItem: React.FC<{ icon: React.ElementType; label: string; value: React.ReactNode; className?: string }> = ({ icon: Icon, label, value, className }) => (
@@ -29,9 +30,10 @@ const RequestItem: React.FC<{ label: string; requested: boolean }> = ({ label, r
   </div>
 );
 
-export const JobDetailModal: React.FC<JobDetailModalProps> = ({ job, onClose, users }) => {
+export const JobDetailModal: React.FC<JobDetailModalProps> = ({ job, onClose, users, currentUser }) => {
   const [isSending, setIsSending] = useState(false);
   const requester = users.find(u => u.employee_id === job.requester_id);
+  const isOps106 = currentUser?.employee_id === 'OPS-106';
 
   const getStatusInfo = () => {
     switch (job.status) {
@@ -140,6 +142,28 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({ job, onClose, us
               <DetailItem icon={Users} label="Assigned Crew" value={job.writer_crew?.join(', ')} />
             </div>
           </section>
+
+          {/* Additional Comments - Specifically requested for Ops-106 but useful for all */}
+          {(job.description || isOps106) && (
+            <section>
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 pt-8 border-t border-slate-100 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-blue-600" />
+                Additional Comments / Notes
+                {isOps106 && <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-600 text-[8px] font-black rounded-full uppercase">Ops Review</span>}
+              </h4>
+              <div className={`p-6 rounded-2xl border ${isOps106 ? 'bg-blue-50/30 border-blue-200 shadow-sm' : 'bg-slate-50 border-slate-100'}`}>
+                {job.description ? (
+                  <p className="text-sm font-medium text-slate-700 whitespace-pre-wrap leading-relaxed italic">
+                    "{job.description}"
+                  </p>
+                ) : (
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest text-center py-4">
+                    No additional comments provided
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
 
           {/* Requests */}
           <section>

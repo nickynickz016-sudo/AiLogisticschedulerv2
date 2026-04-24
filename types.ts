@@ -54,6 +54,50 @@ export interface UserPermissions {
   users: boolean;
   transporter: boolean;
   ai: boolean;
+  digitalPackingList: boolean;
+}
+
+export interface PackageDetail {
+  number: string;
+  contents: string;
+  comments: string;
+}
+
+export interface PackingListItem {
+  id: string;
+  article: string;
+  qty: number;
+  vol_cft?: number;
+  vol_cbm?: number;
+  tvol_cft?: number;
+  tvol_cbm?: number;
+  pbo?: boolean;
+  dismantle_assemble?: boolean;
+  room?: string;
+  packages: PackageDetail[];
+}
+
+export interface PackingList {
+  id: string;
+  client: string;
+  ref_no: string;
+  shipment_id: string;
+  mode: string;
+  origin_city: string;
+  destination_city: string;
+  survey_date: string;
+  items: PackingListItem[];
+  created_at: number;
+  signatures?: {
+    writerSupervisorName: string;
+    writerSupervisorSig: string; // Base64
+    clientName: string;
+    clientSig: string; // Base64
+    companySupervisorName: string;
+    companySupervisorSig: string; // Base64
+    secondClientName: string;
+    secondClientSig: string; // Base64
+  };
 }
 
 export interface UserProfile {

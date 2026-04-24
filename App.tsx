@@ -21,16 +21,25 @@ import { Inventory } from './components/Inventory';
 import { TrackingView } from './components/TrackingView';
 import { Transporter } from './components/Transporter';
 import { SurveyTracker } from './components/SurveyTracker';
+import { DigitalPackingList } from './components/DigitalPackingList';
 import { WarehouseChecklist as WarehouseChecklistComponent } from './components/WarehouseChecklist';
 import { UserRole, Job, JobStatus, UserProfile, Personnel, Vehicle, SystemSettings, CustomsStatus, Survey, WarehouseChecklist, NightPatrollingChecklist, SafetyMonitoringChecklist, SurpriseVisitChecklist, DailyMonitoringChecklist } from './types';
-import { Bell, Search, Menu, LogOut, X, CheckCircle2, XCircle, AlertTriangle, Info } from 'lucide-react';
+import { Bell, Search, Menu, LogOut, X, CheckCircle2, XCircle, AlertTriangle, Info, Lock, Unlock } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { USERS, MockUser } from './mockData';
 
 
 const App: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'job-board' | 'approvals' | 'survey-tracker' | 'warehouse-checklist' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>('dashboard');
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
+    const saved = localStorage.getItem('writer_current_user');
+    return saved ? JSON.parse(saved) : null;
+  });
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'job-board' | 'approvals' | 'survey-tracker' | 'digital-packing-list' | 'warehouse-checklist' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>(() => {
+    const saved = localStorage.getItem('writer_active_tab');
+    if (saved === 'digital-packing-list') return 'dashboard'; // Reset if coming back from refresh to avoid lock weirdness if needed, but we typically want persistent tabs
+    return (saved as any) || 'dashboard';
+  });
+  const [isNavigationLocked, setIsNavigationLocked] = useState(false);
   
   // Local state for app data, fetched from Supabase
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -41,7 +50,56 @@ const App: React.FC = () => {
   const [surpriseVisits, setSurpriseVisits] = useState<SurpriseVisitChecklist[]>([]);
   const [dailyMonitoring, setDailyMonitoring] = useState<DailyMonitoringChecklist[]>([]);
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
-  const [allCredentials, setAllCredentials] = useState<MockUser[]>(USERS); // State to hold login credentials
+  const [allCredentials, setAllCredentials] = useState<MockUser[]>(() => {
+    const saved = localStorage.getItem('writer_system_users');
+    return saved ? JSON.parse(saved) : USERS;
+  }); // State to hold login credentials
+
+  // Navigation Lock Logic (Tablet Safety - Global)
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isNavigationLocked) {
+        e.preventDefault();
+        e.returnValue = 'Guard Mode is ON: Are you sure you want to leave? Unsaved changes may be lost.';
+        return e.returnValue;
+      }
+    };
+
+    const handlePopState = (e: PopStateEvent) => {
+      if (isNavigationLocked) {
+        window.history.pushState(null, '', window.location.href);
+        alert("Guard Mode is Active: Navigation is locked to prevent data loss. Please unlock the Guard icon in the header to leave this section.");
+      }
+    };
+
+    if (isNavigationLocked) {
+      window.addEventListener('beforeunload', handleBeforeUnload);
+      window.history.pushState(null, '', window.location.href);
+      window.addEventListener('popstate', handlePopState);
+    }
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [isNavigationLocked]);
+
+  // Persist users and session whenever they change
+  useEffect(() => {
+    localStorage.setItem('writer_system_users', JSON.stringify(allCredentials));
+  }, [allCredentials]);
+
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('writer_current_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('writer_current_user');
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    localStorage.setItem('writer_active_tab', activeTab);
+  }, [activeTab]);
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [settings, setSettings] = useState<SystemSettings>({ daily_job_limits: {}, holidays: [] });
@@ -1140,6 +1198,11 @@ const App: React.FC = () => {
         }
         return u;
     }));
+
+    // If we're updating the currently logged in user, refresh their session data too
+    if (currentUser && currentUser.id === updatedUser.id) {
+        setCurrentUser(updatedUser);
+    }
   };
 
   const handleAddSystemUser = async (newUser: any) => {
@@ -1179,6 +1242,8 @@ const App: React.FC = () => {
                 importClearance: 'import-clearance',
                 approvals: 'approvals',
                 surveyTracker: 'survey-tracker',
+                digitalPackingList: 'digital-packing-list',
+                warehouseChecklist: 'warehouse-checklist',
                 writerDocs: 'writer-docs',
                 inventory: 'inventory',
                 tracking: 'tracking',
@@ -1291,6 +1356,22 @@ const App: React.FC = () => {
 
             <button className="md:hidden p-2 text-slate-500">
               <Search className="w-5 h-5" />
+            </button>
+
+            {/* Navigation Lock (Guard Mode) */}
+            <button 
+              onClick={() => setIsNavigationLocked(!isNavigationLocked)}
+              className={`p-2 md:p-2.5 rounded-xl transition-all shadow-sm flex items-center gap-2 border ${
+                isNavigationLocked 
+                ? 'bg-rose-600 border-rose-500 text-white shadow-rose-200' 
+                : 'bg-white border-slate-100 text-slate-400 hover:border-emerald-200 hover:text-emerald-600'
+              }`}
+              title={isNavigationLocked ? 'Unlock Navigation' : 'Lock Navigation (Guard Mode)'}
+            >
+              {isNavigationLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
+              <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest leading-none">
+                {isNavigationLocked ? 'Locked' : 'Guard'}
+              </span>
             </button>
 
             {/* Notification Bell */}
@@ -1429,6 +1510,9 @@ const App: React.FC = () => {
                 onConnectGoogle={handleConnectGoogle}
                 onDisconnectGoogle={handleDisconnectGoogle}
               />
+            )}
+            {activeTab === 'digital-packing-list' && (
+              <DigitalPackingList currentUser={currentUser} />
             )}
             {activeTab === 'warehouse-checklist' && (
               <WarehouseChecklistComponent 

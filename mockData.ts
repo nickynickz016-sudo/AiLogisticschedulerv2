@@ -24,6 +24,7 @@ const FULL_ACCESS = {
   users: true,
   transporter: true,
   ai: true,
+  digitalPackingList: true,
 };
 
 const STANDARD_ACCESS = {
@@ -43,6 +44,7 @@ const STANDARD_ACCESS = {
   users: false,
   transporter: false,
   ai: false,
+  digitalPackingList: true,
 };
 
 const WRITER_ACCESS = {
@@ -62,6 +64,7 @@ const WRITER_ACCESS = {
   users: false,
   transporter: false,
   ai: false,
+  digitalPackingList: true,
 };
 
 const SENIOR_OPS_ACCESS = {
@@ -81,6 +84,7 @@ const SENIOR_OPS_ACCESS = {
   users: false,
   transporter: true,
   ai: false,
+  digitalPackingList: true,
 };
 
 const SANTOSH_ACCESS = {
@@ -100,6 +104,7 @@ const SANTOSH_ACCESS = {
   users: false,
   transporter: false,
   ai: false,
+  digitalPackingList: false,
 };
 
 const SEMI_ADMIN_ACCESS = {
@@ -119,6 +124,7 @@ const SEMI_ADMIN_ACCESS = {
   users: false,
   transporter: true,
   ai: true,
+  digitalPackingList: true,
 };
 
 const ACCOUNTS_ACCESS = {
@@ -138,6 +144,7 @@ const ACCOUNTS_ACCESS = {
   users: false,
   transporter: false,
   ai: false,
+  digitalPackingList: true,
 };
 
 const SECURITY_ONLY_ACCESS = {
@@ -157,6 +164,7 @@ const SECURITY_ONLY_ACCESS = {
   users: false,
   transporter: false,
   ai: false,
+  digitalPackingList: false,
 };
 
 export const USERS: MockUser[] = [
