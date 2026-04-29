@@ -1,9 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { Job, Personnel, SystemSettings, UserProfile, Vehicle, InventoryItem, JobCostSheet } from './types';
 
-// Provided Supabase project details
-const supabaseUrl = 'https://dtlpmlwvfsebirzzmniq.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR0bHBtbHd2ZnNlYmlyenptbmlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcyNzM3MjQsImV4cCI6MjA4Mjg0OTcyNH0.wZtQ3os_ab7aaJDKITE64oU242-tkbC1VC7yy2c7Ehk';
+// Use environment variables for Supabase configuration, falling back to provided project details
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://dtlpmlwvfsebirzzmniq.supabase.co';
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR0bHBtbHd2ZnNlYmlyenptbmlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcyNzM3MjQsImV4cCI6MjA4Mjg0OTcyNH0.wZtQ3os_ab7aaJDKITE64oU242-tkbC1VC7yy2c7Ehk';
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error("Supabase URL and Anon Key are required.");

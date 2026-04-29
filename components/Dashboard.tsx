@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { getUAEToday } from '../utils';
-import { Job, JobStatus, SystemSettings, JobCostSheet } from '../types';
+import { Job, JobStatus, SystemSettings, JobCostSheet, CustomsStatus } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, Download, Loader2, Activity, Calendar, X, Filter, CalendarRange, ListFilter, Camera, DollarSign, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -49,57 +49,78 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
     !j.is_transporter
   ).length;
 
-  const [dailyCosts, setDailyCosts] = useState<{name: string, v: number}[]>([]);
+  const [timeframe, setTimeframe] = useState<'weekly' | 'monthly' | 'yearly'>('weekly');
+  const [chartData, setChartData] = useState<{name: string, v: number}[]>([]);
 
   useEffect(() => {
-    const fetchCosts = async () => {
-      const { data, error } = await supabase.from('job_cost_sheets').select('job_id, total_cost');
-      if (error) {
-        console.error('Error fetching costs:', error);
-        return;
-      }
-      
-      // Group by date
-      const costsByDate: Record<string, number> = {};
-      
-      // Initialize last 7 days with 0
+    const calculateTrend = () => {
+      const counts: Record<string, number> = {};
       const todayDate = new Date(today);
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(todayDate);
-        d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split('T')[0];
-        costsByDate[dateStr] = 0;
-      }
-
-      data?.forEach((sheet: any) => {
-        const job = jobs.find(j => j.id === sheet.job_id);
-        if (job && job.job_date && !job.is_transporter) {
-           // Only aggregate if the date is initialized in our range (last 7 days)
-           if (costsByDate[job.job_date] !== undefined) {
-             costsByDate[job.job_date] += sheet.total_cost || 0;
-           }
-        }
-      });
-
-      const chartData = Object.entries(costsByDate)
-        .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
-        .map(([date, cost]) => ({
-          name: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }), // Mon, Tue
-          v: cost
-        }));
       
-      setDailyCosts(chartData);
+      if (timeframe === 'weekly' || timeframe === 'monthly') {
+        const days = timeframe === 'weekly' ? 7 : 30;
+        
+        // Initialize range with 0
+        for (let i = days - 1; i >= 0; i--) {
+          const d = new Date(todayDate);
+          d.setDate(d.getDate() - i);
+          const dateStr = d.toISOString().split('T')[0];
+          counts[dateStr] = 0;
+        }
+
+        // Fill counts
+        jobs.forEach(job => {
+          if (job.job_date && counts[job.job_date] !== undefined && !job.is_transporter) {
+            counts[job.job_date]++;
+          }
+        });
+
+        const data = Object.entries(counts)
+          .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
+          .map(([date, count]) => ({
+            name: timeframe === 'weekly' 
+              ? new Date(date).toLocaleDateString('en-US', { weekday: 'short' })
+              : new Date(date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
+            v: count
+          }));
+        
+        setChartData(data);
+      } else if (timeframe === 'yearly') {
+        // Monthly breakdown for the last 12 months
+        for (let i = 11; i >= 0; i--) {
+          const d = new Date(todayDate);
+          d.setMonth(d.getMonth() - i);
+          const monthStr = d.toISOString().slice(0, 7); // YYYY-MM
+          counts[monthStr] = 0;
+        }
+
+        jobs.forEach(job => {
+          if (job.job_date && !job.is_transporter) {
+            const monthStr = job.job_date.slice(0, 7);
+            if (counts[monthStr] !== undefined) {
+              counts[monthStr]++;
+            }
+          }
+        });
+
+        const data = Object.entries(counts)
+          .sort(([monthA], [monthB]) => monthA.localeCompare(monthB))
+          .map(([month, count]) => ({
+            name: new Date(month + '-01').toLocaleDateString('en-US', { month: 'short' }),
+            v: count
+          }));
+        
+        setChartData(data);
+      }
     };
 
-    if (jobs.length > 0) {
-        fetchCosts();
-    }
-  }, [jobs, today]);
+    calculateTrend();
+  }, [jobs, today, timeframe]);
 
   const stats = [
-    { label: 'Units Authorized', value: jobs.filter(j => j.status === JobStatus.ACTIVE && !j.is_transporter).length, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50/50' },
+    { label: 'Job Executed', value: jobs.filter(j => j.status === JobStatus.ACTIVE && !j.is_transporter).length, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50/50' },
     { label: 'Pending Pool', value: jobs.filter(j => j.status === JobStatus.PENDING_ADD && !j.is_transporter).length, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50/50' },
-    { label: 'Operations Final', value: jobs.filter(j => j.status === JobStatus.COMPLETED && !j.is_transporter).length, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50/50' },
+    { label: 'Import Clearance', value: jobs.filter(j => j.is_import_clearance && j.customs_status !== CustomsStatus.CLEARED).length, icon: AlertCircle, color: 'text-rose-600', bg: 'bg-rose-50/50' },
     { label: 'Warehouse Activity', value: jobs.filter(j => j.is_warehouse_activity && j.job_date === today).length, icon: Package, color: 'text-indigo-600', bg: 'bg-indigo-50/50' },
   ];
 
@@ -511,71 +532,65 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-8">
         {stats.map((stat, i) => (
-          <div key={i} className="bg-white p-6 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl transition-all group cursor-default">
-            <div className="flex items-center gap-6 md:gap-8">
-              <div className={`${stat.bg} p-4 md:p-5 rounded-2xl transition-all group-hover:scale-110 border border-transparent group-hover:border-slate-100 shadow-sm`}>
-                <stat.icon className={`w-6 h-6 md:w-8 md:h-8 ${stat.color}`} />
+          <div key={i} className="bg-white p-4 md:p-8 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl transition-all group cursor-default">
+            <div className="flex flex-col md:flex-row items-center md:items-center gap-3 md:gap-8 text-center md:text-left">
+              <div className={`${stat.bg} p-3 md:p-5 rounded-xl md:rounded-2xl transition-all group-hover:scale-110 border border-transparent group-hover:border-slate-100 shadow-sm`}>
+                <stat.icon className={`w-5 h-5 md:w-8 md:h-8 ${stat.color}`} />
               </div>
-              <div>
-                <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{stat.label}</p>
-                <p className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">{stat.value}</p>
+              <div className="min-w-0 w-full overflow-hidden">
+                <p className="text-[8px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1.5 truncate">{stat.label}</p>
+                <p className="text-xl md:text-3xl font-black text-slate-900 tracking-tight truncate">{stat.value}</p>
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-10">
-        <div className="lg:col-span-2 bg-white rounded-[2.5rem] p-6 md:p-10 border border-slate-200 shadow-sm relative overflow-hidden group">
+      <div className="grid grid-cols-1 gap-8 md:gap-10">
+        <div className="bg-white rounded-[2.5rem] p-6 md:p-10 border border-slate-200 shadow-sm relative overflow-hidden group">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 md:mb-12 gap-4">
-            <h3 className="font-black text-xl text-slate-800 uppercase tracking-tight">Daily Cost Incurred</h3>
-            <div className="px-4 py-2 bg-slate-50 rounded-2xl border border-slate-100 group-hover:bg-blue-50 transition-colors self-start sm:self-auto">
-              <span className="text-slate-500 font-bold text-[10px] uppercase tracking-widest group-hover:text-blue-600">Last 7 Days Cost</span>
+            <div>
+              <h3 className="font-black text-xl text-slate-800 uppercase tracking-tight">Job Trend Analysis</h3>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">Scheduled jobs frequency</p>
+            </div>
+            <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
+               <button 
+                onClick={() => setTimeframe('weekly')}
+                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${timeframe === 'weekly' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+               >
+                 Weekly
+               </button>
+               <button 
+                onClick={() => setTimeframe('monthly')}
+                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${timeframe === 'monthly' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+               >
+                 Monthly
+               </button>
+               <button 
+                onClick={() => setTimeframe('yearly')}
+                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${timeframe === 'yearly' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+               >
+                 Yearly
+               </button>
             </div>
           </div>
-          <div className="w-full" style={{ height: '320px', minHeight: '320px' }}>
+          <div className="w-full" style={{ height: '400px', minHeight: '400px' }}>
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <BarChart data={dailyCosts}>
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: '700'}} />
+              <BarChart data={chartData}>
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: '800'}} />
                 <Tooltip 
                     cursor={{fill: '#f8fafc'}} 
                     contentStyle={{borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                    formatter={(value: number) => [`AED ${value.toFixed(2)}`, 'Cost']}
+                    labelStyle={{fontWeight: '900', color: '#1e293b', marginBottom: '4px', textTransform: 'uppercase', fontSize: '10px'}}
+                    formatter={(value: number) => [`${value} Jobs`, 'Volume']}
                 />
-                <Bar dataKey="v" radius={[8, 8, 0, 0]} fill="#3b82f6" fillOpacity={0.8} />
+                <Bar dataKey="v" radius={[12, 12, 0, 0]} fill="#3b82f6" fillOpacity={0.8} />
               </BarChart>
             </ResponsiveContainer>
           </div>
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 blur-[100px] rounded-full"></div>
-        </div>
-
-        <div className="bg-white p-6 md:p-10 rounded-[2.5rem] shadow-sm border border-slate-200 flex flex-col">
-           <h3 className="font-black text-xl text-slate-800 mb-8 md:mb-10 flex items-center gap-4 uppercase tracking-tight">
-             <Clock className="w-6 h-6 text-blue-500" />
-             Pipeline Units
-           </h3>
-           <div className="space-y-6 md:space-y-8 flex-1">
-             {jobs.slice(0, 6).map((job) => (
-               <div key={job.id} className="flex gap-4 md:gap-6 relative group cursor-pointer hover:bg-slate-50 p-3 -mx-3 rounded-2xl transition-all duration-300">
-                  <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center font-black text-xs md:text-sm text-slate-400 group-hover:bg-white group-hover:shadow-md transition-all shrink-0">
-                    {job.job_time}
-                  </div>
-                  <div className="overflow-hidden">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">{job.id}</p>
-                    <h4 className="font-black text-slate-800 leading-none mb-2 truncate group-hover:text-blue-600 transition-colors">{job.shipper_name}</h4>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight truncate">{job.location}</p>
-                  </div>
-               </div>
-             ))}
-             {jobs.length === 0 && (
-               <div className="h-full flex flex-col items-center justify-center text-center py-12">
-                 <Package className="w-12 h-12 text-slate-200 mb-4" />
-                 <p className="text-slate-400 font-bold uppercase text-xs tracking-widest italic">Zero pipeline activity</p>
-               </div>
-             )}
-           </div>
         </div>
       </div>
 
@@ -584,63 +599,64 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
           <div ref={summaryRef} className="bg-white rounded-[2rem] w-full max-w-5xl shadow-2xl flex flex-col h-[90vh] overflow-hidden">
             {/* Modal Header */}
-            <div className="p-6 md:p-8 border-b bg-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-6 shrink-0">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200">
+            <div className="p-4 md:p-8 border-b bg-slate-50 flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6 shrink-0 relative overflow-hidden">
+              <div className="flex items-center gap-3 md:gap-4 z-10">
+                <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-200 shrink-0">
                   <Activity className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-slate-800 tracking-tight uppercase">Activities Summary</h3>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Consolidated Operational View</p>
+                  <h3 className="text-lg md:text-xl font-black text-slate-800 tracking-tight uppercase">Activities Summary</h3>
+                  <p className="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5 md:mt-1">Operational View</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3 self-end md:self-auto">
+              <div className="flex items-center gap-2 self-end md:self-auto z-10">
                 <button 
                     onClick={handleDownloadSummaryPdf}
-                    className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 transition-all"
+                    className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-[9px] md:text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm"
                 >
-                    <Download className="w-4 h-4" />
-                    PDF
+                    <Download className="w-3.5 h-3.5 md:w-4 md:h-4 text-blue-600" /> <span className="hidden md:inline">PDF</span>
                 </button>
                 <button 
                     onClick={handleScreenshot}
                     disabled={isScreenshotting}
-                    className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 transition-all disabled:opacity-50"
+                    className="flex items-center gap-2 bg-white border border-slate-200 text-slate-600 px-3 md:px-4 py-2 md:py-2.5 rounded-xl text-[9px] md:text-[10px] font-bold uppercase tracking-widest hover:bg-slate-50 transition-all disabled:opacity-50 shadow-sm"
                 >
-                    {isScreenshotting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-                    Screenshot
+                    {isScreenshotting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Camera className="w-3.5 h-3.5 text-blue-600" />}
+                    <span className="hidden md:inline">Screenshot</span>
                 </button>
-                <button id="summary-close-btn" onClick={() => setShowSummary(false)} className="p-2 hover:bg-white rounded-xl transition-all text-slate-400"><X className="w-6 h-6" /></button>
+                <button id="summary-close-btn" onClick={() => setShowSummary(false)} className="p-2 hover:bg-slate-200 bg-slate-100 rounded-xl transition-all text-slate-400 ml-1">
+                  <X className="w-4 h-4 md:w-6 md:h-6" />
+                </button>
               </div>
             </div>
 
             {/* Controls */}
-            <div className="p-6 border-b border-slate-100 flex flex-col md:flex-row gap-6 items-center bg-white shrink-0">
-               <div className="flex bg-slate-100 p-1 rounded-xl">
-                  <button onClick={() => setSummaryFilterType('day')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${summaryFilterType === 'day' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+            <div className="p-4 md:p-6 border-b border-slate-100 flex flex-col items-stretch lg:flex-row gap-4 md:gap-6 lg:items-center bg-white shrink-0">
+               <div className="flex bg-slate-100 p-1 rounded-xl w-full lg:w-auto">
+                  <button onClick={() => setSummaryFilterType('day')} className={`flex-1 lg:flex-none flex items-center justify-center gap-2 px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-widest transition-all ${summaryFilterType === 'day' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                     <Calendar className="w-3.5 h-3.5" /> Day
                   </button>
-                  <button onClick={() => setSummaryFilterType('range')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${summaryFilterType === 'range' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                  <button onClick={() => setSummaryFilterType('range')} className={`flex-1 lg:flex-none flex items-center justify-center gap-2 px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-widest transition-all ${summaryFilterType === 'range' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                     <CalendarRange className="w-3.5 h-3.5" /> Range
                   </button>
-                  <button onClick={() => setSummaryFilterType('month')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${summaryFilterType === 'month' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                  <button onClick={() => setSummaryFilterType('month')} className={`flex-1 lg:flex-none flex items-center justify-center gap-2 px-3 md:px-4 py-2 rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-widest transition-all ${summaryFilterType === 'month' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                     <ListFilter className="w-3.5 h-3.5" /> Month
                   </button>
                </div>
 
-               <div className="flex-1 flex items-center gap-4">
+               <div className="flex-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                   {summaryFilterType === 'day' && (
-                    <input type="date" value={summaryDate} onChange={(e) => setSummaryDate(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input type="date" value={summaryDate} onChange={(e) => setSummaryDate(e.target.value)} className="w-full sm:w-auto px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500" />
                   )}
                   {summaryFilterType === 'range' && (
-                    <div className="flex items-center gap-2">
-                      <input type="date" value={summaryStartDate} onChange={(e) => setSummaryStartDate(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500" />
-                      <span className="text-slate-400 font-bold">-</span>
-                      <input type="date" value={summaryEndDate} onChange={(e) => setSummaryEndDate(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500" />
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
+                      <input type="date" value={summaryStartDate} onChange={(e) => setSummaryStartDate(e.target.value)} className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500" />
+                      <span className="hidden sm:inline text-slate-400 font-bold">-</span>
+                      <input type="date" value={summaryEndDate} onChange={(e) => setSummaryEndDate(e.target.value)} className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500" />
                     </div>
                   )}
                   {summaryFilterType === 'month' && (
-                    <input type="month" value={summaryMonth} onChange={(e) => setSummaryMonth(e.target.value)} className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500" />
+                    <input type="month" value={summaryMonth} onChange={(e) => setSummaryMonth(e.target.value)} className="w-full sm:w-auto px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500" />
                   )}
                </div>
             </div>

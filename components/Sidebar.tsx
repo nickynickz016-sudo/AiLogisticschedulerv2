@@ -52,7 +52,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Base classes for sidebar
   const sidebarClasses = `
     fixed inset-y-0 left-0 z-50 bg-white shadow-2xl lg:shadow-xl border-r border-slate-200 
-    transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:h-screen lg:flex lg:flex-col
+    transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static h-screen flex flex-col
     ${isMobileOpen ? 'translate-x-0 w-80' : '-translate-x-full lg:translate-x-0'}
     ${isCollapsed ? 'lg:w-24' : 'lg:w-80'}
   `;

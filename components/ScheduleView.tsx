@@ -500,35 +500,42 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
-      {/* ... (previous JSX code for header and tables remains unchanged) ... */}
-      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-slate-200">
-        <div className="flex-1 w-full">
-          <h2 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-3">
-            <Truck className="w-8 h-8 text-blue-600" />
-            Job Allocation Board
-          </h2>
-          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-4 mt-3">
-             <div className="flex gap-2">
-                 <button onClick={() => setCurrentDate(new Date())} className="flex-1 sm:flex-none px-4 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white p-4 md:p-8 rounded-[2rem] shadow-sm border border-slate-200">
+        <div className="flex-1 w-full translate-y-1">
+          <div className="flex items-center gap-4 mb-4 md:mb-6">
+            <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center rotate-3 transform shadow-xl shadow-slate-200">
+                <Truck className="w-6 h-6 text-white -rotate-3" />
+            </div>
+            <div>
+                <h2 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight uppercase">Job Allocation Board</h2>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Fleet & Crew Synchronization</p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-4">
+             <div className="flex gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
+                 <button onClick={() => setCurrentDate(new Date())} className="flex-1 sm:flex-none px-4 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-700 hover:bg-slate-50 transition-all shadow-sm">
                     Today
                   </button>
                  <div className="flex items-center gap-1">
-                    <button onClick={handlePrev} className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors text-slate-500"><ChevronLeft className="w-4 h-4" /></button>
-                    <button onClick={handleNext} className="p-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors text-slate-500"><ChevronRight className="w-4 h-4" /></button>
+                    <button onClick={handlePrev} className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all text-slate-500 shadow-sm"><ChevronLeft className="w-4 h-4" /></button>
+                    <button onClick={handleNext} className="p-2 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all text-slate-500 shadow-sm"><ChevronRight className="w-4 h-4" /></button>
                  </div>
              </div>
              
-             <div className="flex flex-col sm:flex-row gap-4">
-                 {viewMode === 'month' ? (
-                    <h3 className="text-sm font-bold text-slate-700 w-full sm:w-40 text-left sm:text-center self-center">
-                      {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
-                    </h3>
+             <div className="flex flex-col sm:flex-row gap-4 flex-1">
+                  {viewMode === 'month' ? (
+                    <div className="px-5 py-2.5 bg-slate-50 border border-slate-100 rounded-xl flex items-center justify-center sm:justify-start">
+                        <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight">
+                            {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
+                        </h3>
+                    </div>
                   ) : (
-                    <div className="relative w-full sm:w-auto">
-                        <div className="flex items-center gap-3 cursor-pointer bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 hover:bg-slate-100 transition-colors w-full sm:w-auto">
-                            <CalendarIcon className="w-4 h-4 text-slate-500" />
-                            <span className="text-sm font-bold text-slate-700">
-                                {currentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                    <div className="relative w-full sm:w-auto min-w-[200px]">
+                        <div className="flex items-center gap-3 cursor-pointer bg-slate-50 border border-slate-200 rounded-xl px-5 py-2.5 hover:bg-slate-100 transition-colors w-full sm:w-auto">
+                            <CalendarIcon className="w-4 h-4 text-blue-600" />
+                            <span className="text-xs font-black text-slate-700 uppercase tracking-tight">
+                                {currentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                             </span>
                         </div>
                         <input 
@@ -541,22 +548,22 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                     </div>
                   )}
                 <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
-                  <button onClick={() => setViewMode('list')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>List</button>
-                  <button onClick={() => setViewMode('calendar')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${viewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Day</button>
-                  <button onClick={() => setViewMode('month')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${viewMode === 'month' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Month</button>
+                  <button onClick={() => setViewMode('list')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>List</button>
+                  <button onClick={() => setViewMode('calendar')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === 'calendar' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Day</button>
+                  <button onClick={() => setViewMode('month')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === 'month' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Month</button>
                 </div>
              </div>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full xl:w-auto">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto shrink-0 border-t lg:border-t-0 pt-6 lg:pt-0">
           {viewMode !== 'month' && (
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <div className="relative w-full sm:w-56 group">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
               <input 
                 type="text" 
-                placeholder="Search ID or Shipper..."
-                className="pl-11 pr-6 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-1 focus:ring-blue-500 outline-none w-full"
+                placeholder="Search..."
+                className="pl-11 pr-5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 outline-none w-full transition-all"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
               />
@@ -564,23 +571,30 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
           )}
           <button 
             onClick={() => setShowExportModal(true)}
-            className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-600 px-6 py-3.5 rounded-xl hover:bg-slate-50 transition-all font-bold uppercase text-[11px] tracking-widest shadow-sm whitespace-nowrap"
+            className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-600 px-5 py-3 rounded-xl hover:bg-slate-50 transition-all font-black uppercase text-[9px] tracking-widest shadow-sm whitespace-nowrap"
           >
-            <Download className="w-4 h-4" />
-            Export Report
+            <Download className="w-3.5 h-3.5 text-blue-600" />
+            <span className="hidden xl:inline">Export</span> Report
           </button>
           <button 
             onClick={() => { setIsEditingMode(false); setShowModal(true); }}
-            className="flex items-center justify-center gap-2 bg-slate-900 text-white px-8 py-3.5 rounded-xl hover:bg-slate-800 transition-all font-bold uppercase text-[11px] tracking-widest shadow-md whitespace-nowrap"
+            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all font-black uppercase text-[9px] tracking-widest shadow-lg shadow-blue-100 whitespace-nowrap"
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="w-4 h-4" />
             Submit Request
           </button>
         </div>
       </div>
 
       {/* Main Content (Table/Calendar) */}
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden relative group">
+        {/* Scroll Indication for Mobile */}
+        {viewMode === 'list' && (
+          <div className="lg:hidden absolute top-4 right-4 z-10 flex items-center gap-1 bg-blue-600/90 text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-tighter animate-pulse backdrop-blur-sm pointer-events-none shadow-lg">
+              <ChevronRight className="w-2.5 h-2.5" /> Scroll Right
+          </div>
+        )}
+        
         {viewMode === 'month' ? (
           <MonthView />
         ) : viewMode === 'calendar' ? (
@@ -596,7 +610,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                     <div className="p-6 text-sm font-bold text-slate-300 text-center bg-slate-50/20 border-r border-slate-100">
                       {hour}
                     </div>
-                    <div className="p-4 md:p-6 flex flex-wrap gap-6 items-start">
+                    <div className="p-4 md:p-6 flex flex-wrap gap-6 items-start overflow-hidden">
                        {hourJobs.length === 0 && (
                          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center text-slate-300 text-[10px] font-bold uppercase py-6">
                             Available Slot
@@ -606,7 +620,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                          const requester = users.find(u => u.employee_id === job.requester_id);
                          const dayLabel = getJobDayLabel(job);
                          return (
-                           <div key={job.id} onClick={() => setSelectedJob(job)} className={`w-full md:min-w-[340px] md:max-w-sm rounded-2xl p-6 border shadow-sm hover:shadow-md transition-all bg-white relative group/job cursor-pointer ${job.is_locked ? 'border-amber-200 bg-amber-50/10' : 'border-slate-200'}`}>
+                           <div key={job.id} onClick={() => setSelectedJob(job)} className={`w-full md:min-w-[340px] md:max-w-sm rounded-2xl p-6 border shadow-sm hover:shadow-md transition-all bg-white relative group/job cursor-pointer shrink-0 ${job.is_locked ? 'border-amber-200 bg-amber-50/10' : 'border-slate-200'}`}>
                               <div className="flex justify-between items-start mb-4">
                                  <div>
                                     <div className="flex items-center gap-2 mb-1">

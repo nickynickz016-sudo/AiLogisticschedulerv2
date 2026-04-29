@@ -278,45 +278,45 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-8">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-3">
-            <Box className="w-8 h-8 text-blue-600" />
-            Warehouse Activity Area
+    <div className="space-y-6 md:space-y-8 animate-in fade-in duration-500">
+      <div className="bg-white p-4 md:p-8 rounded-[2rem] shadow-sm border border-slate-200 flex flex-col md:flex-row items-center justify-between gap-6 md:gap-8 overflow-hidden relative">
+        <div className="w-full md:w-auto relative z-10">
+          <h2 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight flex items-center gap-3 uppercase">
+            <Box className="w-6 h-6 md:w-8 md:h-8 text-blue-600" />
+            Warehouse Ops
           </h2>
-          <p className="text-sm text-slate-500 font-medium mt-1">Operational slot management for loading docks</p>
+          <p className="text-[10px] md:text-sm text-slate-400 font-bold mt-1 uppercase tracking-widest hidden sm:block">Operation Dock Management</p>
         </div>
         
-        <div className="flex items-center gap-4">
-            <button onClick={handleDownloadPDF} className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-600 hover:text-blue-600 hover:border-blue-200 transition-all uppercase tracking-widest shadow-sm">
-                <FileDown className="w-4 h-4" /> Export PDF
+        <div className="flex flex-wrap items-center justify-center md:justify-end gap-3 md:gap-4 w-full md:w-auto relative z-10">
+            <button onClick={handleDownloadPDF} className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 hover:text-blue-600 hover:border-blue-200 transition-all uppercase tracking-widest shadow-sm">
+                <FileDown className="w-4 h-4 text-blue-600" /> <span className="hidden sm:inline">Export</span> PDF
             </button>
-            <div className="flex bg-slate-100 p-1 rounded-xl">
-                <button onClick={() => setViewMode('day')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${viewMode === 'day' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+            <div className="flex bg-slate-100 p-1 rounded-xl flex-1 md:flex-none">
+                <button onClick={() => setViewMode('day')} className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === 'day' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                     <LayoutList className="w-4 h-4" /> Day
                 </button>
-                <button onClick={() => setViewMode('month')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest transition-all ${viewMode === 'month' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                <button onClick={() => setViewMode('month')} className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === 'month' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                     <CalendarDays className="w-4 h-4" /> Month
                 </button>
             </div>
-            <div className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-right">
-                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Daily Capacity</p>
-                <p className="text-sm font-black text-slate-800">{slotsRemaining} Slots Available</p>
+            <div className="px-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-center md:text-right flex-1 md:flex-none">
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest text-center">Remaining</p>
+                <p className="text-sm font-black text-white leading-none mt-0.5">{slotsRemaining} Slots</p>
             </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
-        <div className="lg:col-span-1 space-y-6 sticky top-24">
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 block">Operation Date</label>
+        <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-24">
+          <div className="bg-white p-5 md:p-6 rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden relative">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 block">Operation Date</label>
             <div className="flex items-center gap-2">
-                <button onClick={handlePrevDate} className="p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors text-slate-500"><ChevronLeft className="w-5 h-5" /></button>
+                <button onClick={handlePrevDate} className="p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-all text-slate-500 shadow-sm"><ChevronLeft className="w-5 h-4" /></button>
                 <div className="relative flex-1">
-                    <div className="flex items-center justify-between w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 cursor-pointer hover:bg-slate-100 transition-colors">
-                        <span>{new Date(selectedDate).toLocaleDateString()}</span>
-                        <Calendar className="w-5 h-5 text-slate-400" />
+                    <div className="flex items-center justify-between w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-black text-slate-700 cursor-pointer hover:bg-slate-100 transition-all shadow-sm uppercase tracking-tight">
+                        <span>{new Date(selectedDate).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'})}</span>
+                        <Calendar className="w-4 h-4 text-blue-600" />
                     </div>
                     <input 
                         type="date" 
@@ -325,16 +325,16 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
                         className="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer"
                     />
                 </div>
-                <button onClick={handleNextDate} className="p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-colors text-slate-500"><ChevronRight className="w-5 h-5" /></button>
+                <button onClick={handleNextDate} className="p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-all text-slate-500 shadow-sm"><ChevronRight className="w-5 h-4" /></button>
             </div>
           </div>
 
           <button 
             disabled={slotsRemaining <= 0}
             onClick={openAddModal}
-            className="w-full flex items-center justify-center gap-3 bg-blue-600 text-white p-5 rounded-3xl font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed group uppercase text-xs tracking-widest"
+            className="w-full flex items-center justify-center gap-3 bg-blue-600 text-white p-5 rounded-[2rem] font-black shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed group uppercase text-[10px] tracking-widest scale-100 active:scale-95 duration-200"
           >
-            <Plus className="w-5 h-5" /> Book Slot
+            <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" /> Book Slot
           </button>
         </div>
 
@@ -351,52 +351,54 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
                 dailyActivities.map((activity, index) => {
                   const requester = users ? users.find(u => u.employee_id === activity.requester_id) : null;
                   return (
-                  <div key={activity.id} className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6 group hover:border-blue-200 transition-all">
-                    <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-1">
-                          <span className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">UNIT {activity.id}</span>
+                  <div key={activity.id} className="bg-white p-5 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-5 md:gap-6 group hover:border-blue-200 transition-all relative overflow-hidden">
+                    <div className="flex-1 w-full translate-z-0">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="text-[9px] font-black text-blue-600 uppercase tracking-[0.2em] bg-blue-50 px-2 py-0.5 rounded border border-blue-100">UNIT {activity.id}</span>
                           {activity.status === JobStatus.PENDING_ADD && (
-                             <span className="text-[9px] font-bold bg-amber-50 text-amber-600 px-2.5 py-1 rounded-full uppercase border border-amber-100">Pending</span>
+                             <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full uppercase border border-amber-200 shadow-sm shadow-amber-50">Pending</span>
                           )}
                         </div>
-                        <h4 className="font-bold text-xl text-slate-800">{activity.shipper_name}</h4>
-                        <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <h4 className="font-black text-lg md:text-xl text-slate-800 tracking-tight uppercase leading-tight">{activity.shipper_name}</h4>
+                        <div className="flex flex-wrap items-center gap-2 mt-3">
                             {activity.activity_name && (
-                                <div className="flex items-center gap-2 text-sm font-bold text-slate-600 mr-2">
-                                    <Activity className="w-4 h-4 text-slate-400" /> {activity.activity_name}
+                                <div className="flex items-center gap-2 text-[10px] font-black text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
+                                    <Activity className="w-3.5 h-3.5 text-blue-600" /> {activity.activity_name}
                                 </div>
                             )}
                             {activity.team_leader && (
-                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
-                                    <User className="w-3 h-3 text-slate-400" /> 
+                                <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-600 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-100 shadow-sm shadow-emerald-50">
+                                    <User className="w-3.5 h-3.5 text-emerald-600" /> 
                                     <span className="uppercase tracking-tight">TL: {activity.team_leader}</span>
                                 </div>
                             )}
                             {activity.vehicles && activity.vehicles.length > 0 && (
-                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
-                                    <Truck className="w-3 h-3 text-slate-400" /> 
-                                    <span className="uppercase tracking-tight">Truck: {activity.vehicles.join(', ')}</span>
+                                <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-600 bg-violet-50 px-3 py-1.5 rounded-xl border border-violet-100 shadow-sm shadow-violet-50">
+                                    <Truck className="w-3.5 h-3.5 text-violet-600" /> 
+                                    <span className="uppercase tracking-tight">{activity.vehicles.join(', ')}</span>
                                 </div>
                             )}
                             {activity.writer_crew && activity.writer_crew.length > 0 && (
-                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">
-                                    <Users className="w-3 h-3 text-slate-400" /> 
-                                    <span className="uppercase tracking-tight">Crew: {activity.writer_crew.join(', ')}</span>
+                                <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-600 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 italic">
+                                    <Users className="w-3.5 h-3.5 text-slate-400" /> 
+                                    <span className="uppercase tracking-tight text-[8px]">{activity.writer_crew.join(', ')}</span>
                                 </div>
                             )}
                         </div>
-                        <div className="mt-3 text-xs text-slate-400 font-bold uppercase tracking-wide">
-                           Requested by: {requester ? requester.name : activity.requester_id}
-                        </div>
-                        {activity.last_edited_by && (
-                            <div className="mt-1 text-[10px] text-slate-400 font-medium tracking-wide">
-                                Last edited by {activity.last_edited_by} on {new Date(activity.last_edited_at || 0).toLocaleString()}
+                        <div className="mt-4 pt-4 border-t border-slate-50 flex items-center justify-between">
+                            <div className="text-[9px] text-slate-400 font-bold uppercase tracking-[0.1em] flex items-center gap-1.5">
+                                <Plus className="w-3 h-3" /> Requested by: {requester ? <span className="text-slate-600">{requester.name}</span> : <span className="text-slate-600">{activity.requester_id}</span>}
                             </div>
-                        )}
+                            {activity.last_edited_by && (
+                                <div className="hidden sm:block text-[8px] text-slate-300 font-bold uppercase tracking-widest">
+                                    Updated: {new Date(activity.last_edited_at || 0).toLocaleDateString()}
+                                </div>
+                            )}
+                        </div>
                     </div>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => openEditModal(activity)} className="p-3 hover:bg-slate-50 rounded-xl text-slate-400 hover:text-blue-600 transition-all"><Edit2 className="w-5 h-5" /></button>
-                        <button onClick={() => onDeleteJob(activity.id)} className="p-3 hover:bg-slate-50 rounded-xl text-slate-400 hover:text-rose-600 transition-all"><X className="w-5 h-5" /></button>
+                    <div className="flex gap-2 self-end md:self-center bg-slate-50 p-1 rounded-xl md:opacity-0 md:group-hover:opacity-100 transition-all border border-slate-100">
+                        <button onClick={() => openEditModal(activity)} className="p-2.5 hover:bg-white rounded-lg text-slate-400 hover:text-blue-600 transition-all hover:shadow-sm"><Edit2 className="w-4 h-4" /></button>
+                        <button onClick={() => onDeleteJob(activity.id)} className="p-2.5 hover:bg-white rounded-lg text-slate-400 hover:text-rose-600 transition-all hover:shadow-sm"><X className="w-4 h-4" /></button>
                     </div>
                   </div>
                 )})

@@ -47,37 +47,37 @@ export const AIPlanner: React.FC<AIPlannerProps> = ({ jobs }) => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-700">
-      <div className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] rounded-[2.5rem] p-10 text-white shadow-2xl relative overflow-hidden border border-white/5">
-        <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-12">
-          <div className="max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-500/10 border border-blue-500/20 rounded-xl mb-6 backdrop-blur-md">
-              <BrainCircuit className="w-5 h-5 text-blue-400" />
-              <span className="font-bold text-[10px] uppercase tracking-widest text-blue-300">Logistic AI Engine</span>
+      <div className="bg-gradient-to-br from-[#1e293b] to-[#0f172a] rounded-[2rem] md:rounded-[2.5rem] p-6 md:p-12 text-white shadow-2xl relative overflow-hidden border border-white/5">
+        <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-10 md:gap-14">
+          <div className="w-full lg:max-w-2xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-xl mb-6 backdrop-blur-md">
+              <BrainCircuit className="w-4 h-4 text-blue-400" />
+              <span className="font-black text-[9px] uppercase tracking-[0.2em] text-blue-300">Logistic AI Engine</span>
             </div>
-            <h2 className="text-4xl font-black mb-6 leading-tight">Sync your fleet<br/><span className="text-blue-400">with UAE smart logic.</span></h2>
-            <p className="text-slate-400 text-lg leading-relaxed mb-8 max-w-lg font-medium">
-              Analyze CBM volumes, region proximity, and crew requirements instantly to reduce empty-mile transit and maximize daily throughput.
+            <h2 className="text-3xl md:text-5xl font-black mb-6 leading-[1.1] tracking-tight uppercase">Sync your fleet<br/><span className="text-blue-400">with UAE logic.</span></h2>
+            <p className="text-slate-400 text-base md:text-lg leading-relaxed mb-8 max-w-lg font-bold">
+              Analyze CBM volumes, regions, and crew requirements instantly to reduce empty-mile transit.
             </p>
             <button 
               onClick={optimizeSchedule}
               disabled={loading}
-              className="flex items-center gap-4 bg-blue-600 text-white px-10 py-5 rounded-[1.25rem] font-black text-lg hover:bg-blue-700 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 shadow-xl shadow-blue-900/40"
+              className="w-full sm:w-auto flex items-center justify-center md:justify-start gap-4 bg-blue-600 text-white px-8 md:px-12 py-4 md:py-5 rounded-2xl font-black text-sm md:text-lg hover:bg-blue-700 transition-all hover:scale-105 active:scale-95 disabled:opacity-50 shadow-2xl shadow-blue-900/40 uppercase tracking-widest"
             >
-              {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Play className="w-6 h-6 fill-current" />}
-              {loading ? 'CALCULATING ROUTES...' : 'OPTIMIZE UAE FLEET'}
+              {loading ? <Loader2 className="w-5 h-5 md:w-6 md:h-6 animate-spin" /> : <Play className="w-5 h-5 md:w-6 md:h-6 fill-current" />}
+              {loading ? 'CALCULATING...' : 'OPTIMIZE FLEET'}
             </button>
           </div>
           
-          <div className="grid grid-cols-2 gap-4 w-full max-w-md">
-            <div className="p-6 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-sm">
-              <Ruler className="w-8 h-8 text-blue-400 mb-3" />
-              <p className="text-2xl font-black mb-1">{jobs.reduce((acc, j) => acc + j.volume_cbm, 0).toFixed(1)}</p>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Total CBM Volume</p>
+          <div className="grid grid-cols-2 gap-4 w-full md:max-w-xs shrink-0">
+            <div className="p-5 md:p-8 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-sm shadow-inner group transition-all hover:bg-white/10">
+              <Ruler className="w-6 h-6 md:w-8 md:h-8 text-blue-400 mb-4 group-hover:scale-110 transition-transform" />
+              <p className="text-xl md:text-3xl font-black mb-1">{jobs.reduce((acc, j) => acc + j.volume_cbm, 0).toFixed(1)}</p>
+              <p className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest">Total CBM</p>
             </div>
-            <div className="p-6 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-sm">
-              <Truck className="w-8 h-8 text-cyan-400 mb-3" />
-              <p className="text-2xl font-black mb-1">{jobs.length}</p>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Active Bookings</p>
+            <div className="p-5 md:p-8 bg-white/5 border border-white/10 rounded-3xl backdrop-blur-sm shadow-inner group transition-all hover:bg-white/10">
+              <Truck className="w-6 h-6 md:w-8 md:h-8 text-cyan-400 mb-4 group-hover:scale-110 transition-transform" />
+              <p className="text-xl md:text-3xl font-black mb-1">{jobs.length}</p>
+              <p className="text-[8px] md:text-[9px] font-black text-slate-500 uppercase tracking-widest">Active Jobs</p>
             </div>
           </div>
         </div>

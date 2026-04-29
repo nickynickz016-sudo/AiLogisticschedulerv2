@@ -79,17 +79,17 @@ export const JobBoard: React.FC<JobBoardProps> = ({ jobs, onAddJob, onDeleteJob,
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">Simple Job Board</h2>
-          <p className="text-slate-500">A quick-view of current day operations.</p>
+          <h2 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight uppercase">Simple Job Board</h2>
+          <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Operational Quick-view</p>
         </div>
         <button 
           onClick={() => setShowModal(true)}
-          className="flex items-center justify-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 w-full sm:w-auto"
+          className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3.5 rounded-2xl hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 w-full sm:w-auto font-black uppercase text-[10px] tracking-widest active:scale-95 duration-200"
         >
           <Plus className="w-5 h-5" />
-          <span className="font-semibold">Request Job</span>
+          Request Job
         </button>
       </div>
 

@@ -816,11 +816,13 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
       }
     };
 
-    const addField = (label: string, value: string, x: number, y: number) => {
+    const addField = (label: string, value: string, x: number, y: number, width: number = 80) => {
        doc.setFontSize(7); doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]); doc.setFont("helvetica", "bold");
        doc.text(label.toUpperCase(), x, y);
-       doc.setFontSize(10); doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]); doc.setFont("helvetica", "normal");
-       doc.text(value || '—', x, y + 5);
+       doc.setFontSize(9); doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]); doc.setFont("helvetica", "normal");
+       const splitValue = doc.splitTextToSize(value || '—', width);
+       doc.text(splitValue, x, y + 5);
+       return splitValue.length * 4 + 7;
     };
 
     const addSectionDivider = (label: string, y: number) => {
@@ -846,10 +848,11 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
          const data = isPacking ? packingData : unpackingData;
          addTitle(isPacking ? "Packing Services Walk Through" : "Unpacking Services Walk Through");
          
-         addField("Client Name", data.clientName, margin, yPos);
-         addField("Job Reference", data.jobId, margin + 90, yPos);
-         addField("Date", data.date, margin + 140, yPos);
-         yPos += 25;
+         const h1 = addField("Client Name", data.clientName, margin, yPos, 80);
+         const h2 = addField("Job Reference", data.jobId, margin + 90, yPos, 45);
+         const h3 = addField("Date", data.date, margin + 145, yPos, 40);
+         yPos += Math.max(h1, h2, h3) + 5;
+
          yPos = addSectionDivider("Walk Through Verification", yPos); yPos += 5;
          
          doc.setFontSize(9);
@@ -871,16 +874,14 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
          }
     } else if (activeForm === 'delivery') {
          addTitle("Delivery Report");
-         addField("Client Name", deliveryData.clientName, margin, yPos);
-         addField("Job Ref", deliveryData.jobId, margin + 90, yPos);
-         addField("Truck No", deliveryData.truckNo, margin + 140, yPos);
-         yPos += 15;
+         const h1 = addField("Client Name", deliveryData.clientName, margin, yPos, 80);
+         const h2 = addField("Job Ref", deliveryData.jobId, margin + 90, yPos, 45);
+         const h3 = addField("Truck No", deliveryData.truckNo, margin + 145, yPos, 40);
+         yPos += Math.max(h1, h2, h3) + 5;
          
-         addField("Delivery Address", deliveryData.deliveryAddress, margin, yPos);
-         yPos += 15;
-         
-         addField("Mode of Shipment", deliveryData.modeOfShipment, margin, yPos);
-         yPos += 25;
+         const h4 = addField("Delivery Address", deliveryData.deliveryAddress, margin, yPos, 120);
+         const h5 = addField("Mode of Shipment", deliveryData.modeOfShipment, margin + 130, yPos, 50);
+         yPos += Math.max(h4, h5) + 10;
          
          doc.autoTable({
             startY: yPos,
@@ -901,19 +902,17 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
     } else if (activeForm === 'crating') {
          addTitle("Crating Specification Sheet");
          
-         addField("Client Name", cratingData.clientName, margin, yPos);
-         addField("Job Ref", cratingData.jobId, margin + 90, yPos);
-         yPos += 15;
+         const h1 = addField("Client Name", cratingData.clientName, margin, yPos, 85);
+         const h2 = addField("Job Ref", cratingData.jobId, margin + 90, yPos, 85);
+         yPos += Math.max(h1, h2) + 5;
          
-         addField("Address", cratingData.address, margin, yPos);
-         yPos += 15;
+         yPos += addField("Address", cratingData.address, margin, yPos, 170);
          
-         addField("Packing Date", cratingData.packingDate, margin, yPos);
-         addField("Loading Date", cratingData.loadingDate, margin + 50, yPos);
-         addField("Final Dest.", cratingData.finalDestination, margin + 100, yPos);
-         addField("Mode", cratingData.modeOfShipment, margin + 150, yPos);
-         
-         yPos += 20;
+         const h3 = addField("Packing Date", cratingData.packingDate, margin, yPos, 40);
+         const h4 = addField("Loading Date", cratingData.loadingDate, margin + 45, yPos, 40);
+         const h5 = addField("Final Dest.", cratingData.finalDestination, margin + 90, yPos, 50);
+         const h6 = addField("Mode", cratingData.modeOfShipment, margin + 145, yPos, 35);
+         yPos += Math.max(h3, h4, h5, h6) + 10;
 
          doc.autoTable({
             startY: yPos,
@@ -936,18 +935,16 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
          }
     } else if (activeForm === 'electronicList') {
          addTitle("Electronic Items Inventory");
-         addField("Client Name", electronicData.clientName, margin, yPos);
-         addField("Job Ref", electronicData.jobId, margin + 90, yPos);
-         yPos += 15;
+         const h1 = addField("Client Name", electronicData.clientName, margin, yPos, 85);
+         const h2 = addField("Job Ref", electronicData.jobId, margin + 95, yPos, 80);
+         yPos += Math.max(h1, h2) + 5;
 
-         addField("Address", electronicData.address, margin, yPos);
-         yPos += 15;
+         yPos += addField("Address", electronicData.address, margin, yPos, 170);
 
-         addField("Packing Date", electronicData.packingDate, margin, yPos);
-         addField("Loading Date", electronicData.loadingDate, margin + 50, yPos);
-         addField("Mode", electronicData.modeOfShipment, margin + 100, yPos);
-
-         yPos += 20;
+         const h3 = addField("Packing Date", electronicData.packingDate, margin, yPos, 55);
+         const h4 = addField("Loading Date", electronicData.loadingDate, margin + 60, yPos, 55);
+         const h5 = addField("Mode", electronicData.modeOfShipment, margin + 120, yPos, 55);
+         yPos += Math.max(h3, h4, h5) + 10;
          doc.autoTable({
             startY: yPos,
             head: [['Item Description', 'Make', 'Model', 'Serial No', 'Condition']],
@@ -966,42 +963,70 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
             yPos += splitRemarks.length * 5 + 5;
          }
     } else if (activeForm === 'accessorial') {
-         addTitle("Accessorial Services Sheet");
-         addField("Client Name", accessorialData.clientName, margin, yPos);
-         addField("Job Ref", accessorialData.jobId, margin + 90, yPos);
-         yPos += 25;
-         
-         const services = Object.entries(accessorialData.services).filter(([_, v]) => v).map(([k]) => k.replace(/([A-Z])/g, ' $1').toUpperCase());
-         doc.text("Authorized Services:", margin, yPos);
-         yPos += 10;
-         services.forEach(s => { doc.text(`• ${s}`, margin + 5, yPos); yPos += 6; });
-         yPos += 10;
-         if (accessorialData.details.stairCarryFloors) doc.text(`Stair Carry: ${accessorialData.details.stairCarryFloors} Floors`, margin, yPos += 6);
-         if (accessorialData.details.longCarryDistance) doc.text(`Long Carry: ${accessorialData.details.longCarryDistance} Meters`, margin, yPos += 6);
-         
-         yPos += 10;
-         if (accessorialData.remarks) {
+          const serviceTypeStr = accessorialData.serviceType.packing ? " (PACKING/ORIGIN)" : accessorialData.serviceType.delivery ? " (DELIVERY/DESTINATION)" : "";
+          addTitle("Accessorial Services Sheet" + serviceTypeStr);
+          const h1 = addField("Client Name", accessorialData.clientName, margin, yPos, 85);
+          const h2 = addField("Job Ref", accessorialData.jobId, margin + 95, yPos, 80);
+          yPos += Math.max(h1, h2) + 10;
+          
+          const selectedServices = Object.entries(accessorialData.services)
+            .filter(([_, v]) => v)
+            .map(([k]) => accessorialItems.find(item => item.key === k));
+
+          doc.setFont("helvetica", "bold");
+          doc.text("Authorized Services:", margin, yPos);
+          doc.setFont("helvetica", "normal");
+          yPos += 10;
+          
+          selectedServices.forEach(item => { 
+            if (!item) return;
+            if (yPos > pageHeight - 40) { doc.addPage(); yPos = 20; }
             doc.setFont("helvetica", "bold");
-            doc.text("Remarks:", margin, yPos);
+            doc.text(`• ${item.label.toUpperCase()}`, margin + 5, yPos);
             yPos += 5;
             doc.setFont("helvetica", "normal");
-            const splitRemarks = doc.splitTextToSize(accessorialData.remarks, pageWidth - margin * 2);
-            doc.text(splitRemarks, margin, yPos);
-            yPos += splitRemarks.length * 5 + 5;
-         }
+            doc.setFontSize(8);
+            const desc = item.description;
+            const splitDesc = doc.splitTextToSize(`(${desc})`, pageWidth - margin * 3);
+            doc.text(splitDesc, margin + 10, yPos);
+            yPos += splitDesc.length * 4 + 4;
+            doc.setFontSize(10);
+          });
+          
+          yPos += 4;
+          if (accessorialData.details.stairCarryFloors) doc.text(`Stair Carry: ${accessorialData.details.stairCarryFloors} Floors`, margin, yPos += 6);
+          if (accessorialData.details.longCarryDistance) doc.text(`Long Carry: ${accessorialData.details.longCarryDistance} Meters`, margin, yPos += 6);
+          if (accessorialData.details.handymanType) doc.text(`Handyman Type: ${accessorialData.details.handymanType}`, margin, yPos += 6);
+          if (accessorialData.details.otherDescription) doc.text(`Other Details: ${accessorialData.details.otherDescription}`, margin, yPos += 6);
+          
+          yPos += 10;
+          if (accessorialData.remarks) {
+             if (yPos > pageHeight - 30) { doc.addPage(); yPos = 20; }
+             doc.setFont("helvetica", "bold");
+             doc.text("Remarks:", margin, yPos);
+             yPos += 5;
+             doc.setFont("helvetica", "normal");
+             const splitRemarks = doc.splitTextToSize(accessorialData.remarks, pageWidth - margin * 2);
+             doc.text(splitRemarks, margin, yPos);
+             yPos += splitRemarks.length * 5 + 5;
+          }
     } else if (activeForm === 'warehouseReceipt') {
         addTitle("Warehouse Receipt / Tally Sheet");
         
-        // --- Updated PDF Layout for Warehouse Receipt ---
-        // Header Grid
-        addField("Client Name", warehouseReceiptData.clientName, margin, yPos);
-        addField("File No", warehouseReceiptData.fileNo, margin + 70, yPos);
-        addField("Total Pkgs", warehouseReceiptData.totalPkgs, margin + 140, yPos);
-        yPos += 15;
-        addField("Volume", warehouseReceiptData.volume, margin, yPos);
-        addField("Container No", warehouseReceiptData.containerNo, margin + 70, yPos);
-        addField("Seal No", warehouseReceiptData.sealNo, margin + 140, yPos);
-        yPos += 20;
+        const h1 = addField("Client Name", warehouseReceiptData.clientName, margin, yPos, 65);
+        const h2 = addField("File No", warehouseReceiptData.fileNo, margin + 70, yPos, 65);
+        const h3 = addField("Type", warehouseReceiptData.type, margin + 140, yPos, 45);
+        yPos += Math.max(h1, h2, h3) + 10;
+
+        const h4 = addField("Mode", warehouseReceiptData.mode, margin, yPos, 65);
+        const h5 = addField("Wh Location", warehouseReceiptData.whLocation, margin + 70, yPos, 65);
+        const h6 = addField("Total Pkgs", warehouseReceiptData.totalPkgs, margin + 140, yPos, 45);
+        yPos += Math.max(h4, h5, h6) + 10;
+
+        const h7 = addField("Volume", warehouseReceiptData.volume, margin, yPos, 65);
+        const h8 = addField("Container No", warehouseReceiptData.containerNo, margin + 70, yPos, 65);
+        const h9 = addField("Seal No", warehouseReceiptData.sealNo, margin + 140, yPos, 45);
+        yPos += Math.max(h7, h8, h9) + 15;
         
         // Selected Packages
         doc.text("Package Selection:", margin, yPos);
@@ -1031,17 +1056,17 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
         
     } else if (activeForm === 'handyman') {
         addTitle("Handyman Completion Report");
-        addField("Client Name", handymanData.clientName, margin, yPos);
-        addField("File No", handymanData.fileNo, margin + 90, yPos);
-        yPos += 15;
+        const h1 = addField("Client Name", handymanData.clientName, margin, yPos, 85);
+        const h2 = addField("File No", handymanData.fileNo, margin + 90, yPos, 85);
+        yPos += Math.max(h1, h2) + 5;
         
-        addField("Address", handymanData.address, margin, yPos);
-        addField("Date", handymanData.date, margin + 90, yPos);
-        yPos += 15;
+        const h3 = addField("Address", handymanData.address, margin, yPos, 85);
+        const h4 = addField("Date", handymanData.date, margin + 90, yPos, 85);
+        yPos += Math.max(h3, h4) + 5;
         
-        addField("Handyman Assigned", handymanData.handymanAssigned, margin, yPos);
-        addField("Day Assigned", handymanData.dayAssigned, margin + 90, yPos);
-        yPos += 20;
+        const h5 = addField("Handyman Assigned", handymanData.handymanAssigned, margin, yPos, 85);
+        const h6 = addField("Day Assigned", handymanData.dayAssigned, margin + 90, yPos, 85);
+        yPos += Math.max(h5, h6) + 15;
         
         // List Services Grouped
         const handymanGroups = [
@@ -1087,41 +1112,71 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
             doc.setFont("helvetica", "normal");
             const splitNotes = doc.splitTextToSize(handymanData.remarks, pageWidth - margin * 2);
             doc.text(splitNotes, margin, yPos);
+            yPos += splitNotes.length * 5 + 10;
         }
     } else if (activeForm === 'containerInspection') {
         addTitle("7-Point Container Inspection");
-        addField("Container No", containerInspectionData.containerNo, margin, yPos);
-        addField("Seal No", containerInspectionData.sealNo, margin + 90, yPos);
-        addField("Date", containerInspectionData.date, margin + 140, yPos);
-        yPos += 20;
+        const h1 = addField("Container No", containerInspectionData.containerNo, margin, yPos, 85);
+        const h2 = addField("Seal No", containerInspectionData.sealNo, margin + 90, yPos, 45);
+        const h3 = addField("Date", containerInspectionData.date, margin + 140, yPos, 40);
+        yPos += Math.max(h1, h2, h3) + 10;
         
-        // Flatten checkpoints for simple PDF listing
-        const points = [];
-        if(containerInspectionData.checkpoints.outsideUndercarriage.structuralDamage) points.push("Outside: Structural Damage Found");
-        // ... listing meaningful data ... 
-        // For simplicity in this fix, we just state certification
-        doc.text(containerInspectionData.certified ? "CERTIFIED: CONTAINER INSPECTION PASSED" : "NOT CERTIFIED", margin, yPos);
+        doc.setFont("helvetica", "bold");
+        doc.text("Inspection Checklist Status:", margin, yPos);
+        yPos += 8;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
+
+        Object.entries(containerInspectionData.checkpoints).forEach(([section, points]) => {
+            const sectionLabel = section.replace(/([A-Z])/g, ' $1').trim().toUpperCase();
+            if (yPos > pageHeight - 40) { doc.addPage(); yPos = 20; }
+            
+            doc.setFont("helvetica", "bold");
+            doc.text(sectionLabel, margin + 5, yPos);
+            yPos += 5;
+            doc.setFont("helvetica", "normal");
+            
+            Object.entries(points).forEach(([point, checked]) => {
+                const pointLabel = point.replace(/([A-Z])/g, ' $1').trim();
+                doc.text(`${checked ? '[X]' : '[ ]'} ${pointLabel}`, margin + 10, yPos);
+                yPos += 5;
+            });
+            yPos += 2;
+        });
+
+        yPos += 5;
+        if (yPos > pageHeight - 30) { doc.addPage(); yPos = 20; }
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.text(containerInspectionData.certified ? "STATUS: CERTIFIED - Container Inspection Passed" : "STATUS: NOT CERTIFIED", margin, yPos);
         yPos += 10;
-        if(containerInspectionData.remarks) doc.text(`Remarks: ${containerInspectionData.remarks}`, margin, yPos);
+        
+        if (containerInspectionData.remarks) {
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(9);
+            const splitRemarks = doc.splitTextToSize(`Remarks: ${containerInspectionData.remarks}`, pageWidth - margin * 2);
+            doc.text(splitRemarks, margin, yPos);
+            yPos += splitRemarks.length * 5 + 5;
+        }
     } else if (activeForm === 'vehicleInspection') {
         addTitle("Vehicle Condition Report");
-        addField("Client Name", vehicleInspectionData.clientName, margin, yPos);
-        addField("Job Ref", vehicleInspectionData.jobId, margin + 90, yPos);
-        addField("Date", vehicleInspectionData.date, margin + 140, yPos);
-        yPos += 15;
+        const h1 = addField("Client Name", vehicleInspectionData.clientName, margin, yPos, 85);
+        const h2 = addField("Job Ref", vehicleInspectionData.jobId, margin + 90, yPos, 45);
+        const h3 = addField("Date", vehicleInspectionData.date, margin + 140, yPos, 40);
+        yPos += Math.max(h1, h2, h3) + 5;
         
         // Vehicle Specs
-        addField("Make", vehicleInspectionData.vehicle.make, margin, yPos);
-        addField("Model", vehicleInspectionData.vehicle.model, margin + 50, yPos);
-        addField("Year", vehicleInspectionData.vehicle.year, margin + 100, yPos);
-        addField("Color", vehicleInspectionData.vehicle.color, margin + 140, yPos);
-        yPos += 15;
+        const h4 = addField("Make", vehicleInspectionData.vehicle.make, margin, yPos, 45);
+        const h5 = addField("Model", vehicleInspectionData.vehicle.model, margin + 50, yPos, 45);
+        const h6 = addField("Year", vehicleInspectionData.vehicle.year, margin + 100, yPos, 35);
+        const h7 = addField("Color", vehicleInspectionData.vehicle.color, margin + 140, yPos, 45);
+        yPos += Math.max(h4, h5, h6, h7) + 5;
         
-        addField("Plate No", vehicleInspectionData.vehicle.plate, margin, yPos);
-        addField("VIN/Chassis", vehicleInspectionData.vehicle.vin, margin + 50, yPos);
-        addField("Mileage", vehicleInspectionData.vehicle.mileage, margin + 100, yPos);
-        addField("Fuel Level", vehicleInspectionData.vehicle.fuelLevel, margin + 140, yPos);
-        yPos += 20;
+        const h8 = addField("Plate No", vehicleInspectionData.vehicle.plate, margin, yPos, 45);
+        const h9 = addField("VIN/Chassis", vehicleInspectionData.vehicle.vin, margin + 50, yPos, 45);
+        const h10 = addField("Mileage", vehicleInspectionData.vehicle.mileage, margin + 100, yPos, 35);
+        const h11 = addField("Fuel Level", vehicleInspectionData.vehicle.fuelLevel, margin + 140, yPos, 45);
+        yPos += Math.max(h8, h9, h10, h11) + 15;
         
         // Checklist
         yPos = addSectionDivider("Accessories & Equipment", yPos);

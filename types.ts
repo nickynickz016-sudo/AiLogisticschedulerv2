@@ -61,6 +61,7 @@ export interface PackageDetail {
   number: string;
   contents: string;
   comments: string;
+  photo?: string;
 }
 
 export interface PackingListItem {
@@ -80,6 +81,11 @@ export interface PackingListItem {
 export interface PackingList {
   id: string;
   client: string;
+  job_no?: string;
+  logo?: string;
+  packing_date?: string;
+  origin_address?: string;
+  destination_address?: string;
   ref_no: string;
   shipment_id: string;
   mode: string;

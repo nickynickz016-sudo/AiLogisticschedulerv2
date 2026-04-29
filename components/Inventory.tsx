@@ -1443,50 +1443,52 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-12">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div>
-          <h2 className="text-3xl font-bold text-slate-800 tracking-tight">
+          <h2 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight uppercase">
             {viewMode === 'inventory' ? 'Inventory Control' : 'Job Costing'}
           </h2>
-          <p className="text-slate-500 text-sm font-medium mt-1">
-            {viewMode === 'inventory' ? 'Packing material consumption sheet, pricing & stock levels' : 'Material issuance, returns, and final assessment'}
+          <p className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">
+            {viewMode === 'inventory' ? 'Packing material consumption & stock' : 'Material issuance & appraisal'}
           </p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
             {viewMode === 'inventory' && (
-              <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
-                <div className="flex items-center gap-2 px-3 border-r border-slate-100">
-                    <Calendar className="w-4 h-4 text-slate-400" />
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm w-full lg:w-auto">
+                <div className="flex items-center gap-2 px-3 sm:border-r border-slate-100 py-1 sm:py-0">
+                    <Calendar className="w-4 h-4 text-slate-400 shrink-0" />
                     <input 
                         type="date" 
                         value={reportStartDate}
                         onChange={(e) => setReportStartDate(e.target.value)}
-                        className="text-xs font-bold text-slate-600 outline-none bg-transparent"
+                        className="text-[10px] font-black text-slate-600 outline-none bg-transparent"
                     />
-                    <span className="text-slate-300 text-xs">to</span>
+                    <span className="text-slate-300 text-[10px] font-bold">to</span>
                     <input 
                         type="date" 
                         value={reportEndDate}
                         onChange={(e) => setReportEndDate(e.target.value)}
-                        className="text-xs font-bold text-slate-600 outline-none bg-transparent"
+                        className="text-[10px] font-black text-slate-600 outline-none bg-transparent"
                     />
                 </div>
-                <button 
-                    onClick={handleExportExcel}
-                    disabled={isExporting}
-                    className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-700 transition-all disabled:opacity-50"
-                >
-                    {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3" />}
-                    Export Excel
-                </button>
-                <button 
-                    onClick={handleExportOutsourceExcel}
-                    disabled={isExporting}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-50"
-                >
-                    {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <ClipboardList className="w-3 h-3" />}
-                    Labour Report
-                </button>
+                <div className="flex items-center gap-2">
+                  <button 
+                      onClick={handleExportExcel}
+                      disabled={isExporting}
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all disabled:opacity-50 active:scale-95 shadow-lg shadow-emerald-100"
+                  >
+                      {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3" />}
+                      Export
+                  </button>
+                  <button 
+                      onClick={handleExportOutsourceExcel}
+                      disabled={isExporting}
+                      className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all disabled:opacity-50 active:scale-95 shadow-lg shadow-blue-100"
+                  >
+                      {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <ClipboardList className="w-3 h-3" />}
+                      Labour
+                  </button>
+                </div>
               </div>
             )}
 
@@ -1574,9 +1576,14 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
 
       {/* --- INVENTORY MASTER VIEW --- */}
       {viewMode === 'inventory' && (
-        <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 px-6 sm:hidden text-slate-400 animate-pulse">
+            <ChevronRight className="w-4 h-4" />
+            <span className="text-[10px] font-black uppercase tracking-widest">Scroll right to view more</span>
+          </div>
+          <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto relative custom-scrollbar">
+              <table className="w-full text-left border-collapse min-w-[1000px]">
                 <thead>
                 <tr className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase tracking-widest border-b border-slate-200">
                     <th className="p-6 w-20 text-center">SR#</th>
@@ -1874,21 +1881,22 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                 </tbody>
             </table>
             </div>
+          </div>
         </div>
       )}
 
       {/* --- JOB COSTING VIEW --- */}
       {viewMode === 'costing' && (
         <div className="space-y-6">
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Select Active Job</label>
-                <div className="flex flex-col md:flex-row gap-4">
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative z-50">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">Select Active Job</label>
+                <div className="flex flex-col lg:flex-row gap-4">
                     <div className="flex-1 relative" ref={dropdownRef}>
                         <div className="relative">
                             <input 
                                 type="text"
-                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                                placeholder="Search Job No. or Client Name..."
+                                className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm"
+                                placeholder="Job No. or Shipper Name..."
                                 value={jobSearchTerm}
                                 onChange={(e) => {
                                     setJobSearchTerm(e.target.value);
@@ -1902,33 +1910,38 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                             </div>
                         </div>
                         {showJobSuggestions && (
-                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto custom-scrollbar">
+                            <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl z-50 max-h-64 overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-top-2">
                                 {filteredJobs.length > 0 ? (
                                     filteredJobs.map(job => (
                                         <div 
                                             key={job.id} 
                                             onClick={() => selectJob(job)}
-                                            className="px-4 py-3 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-none"
+                                            className="px-5 py-4 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-none group/item"
                                         >
                                             <div className="flex justify-between items-center">
-                                                <span className="text-sm font-bold text-slate-800">{job.shipper_name}</span>
-                                                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">{job.id}</span>
+                                                <span className="text-sm font-black text-slate-900 group-hover/item:text-blue-600 transition-colors uppercase tracking-tight">{job.shipper_name}</span>
+                                                <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100">{job.id}</span>
                                             </div>
-                                            <div className="text-xs text-slate-400 mt-0.5">{job.location || 'No Location'}</div>
+                                            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold mt-1 group-hover/item:text-slate-500 transition-colors">
+                                                <MapPin className="w-3 h-3" />
+                                                <span className="truncate">{job.location || 'Pending Location'}</span>
+                                            </div>
                                         </div>
                                     ))
                                 ) : (
-                                    <div className="px-4 py-3 text-sm text-slate-400 italic">No matching jobs found.</div>
+                                    <div className="px-5 py-6 text-center">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">No matching records found</p>
+                                    </div>
                                 )}
                             </div>
                         )}
                     </div>
 
                     {selectedJobId && (
-                        <div className="flex gap-2 flex-wrap">
-                            <div className="flex flex-col justify-center px-4 py-2 bg-slate-50 rounded-xl border border-slate-100 min-w-[150px]">
-                                <span className="text-[9px] text-slate-400 font-bold uppercase">Requester</span>
-                                <span className="text-sm font-bold text-slate-800 truncate">
+                        <div className="grid grid-cols-2 sm:flex sm:flex-row gap-2">
+                            <div className="flex flex-col justify-center px-4 py-2.5 bg-slate-50 rounded-2xl border border-slate-100 min-w-0 sm:min-w-[140px]">
+                                <span className="text-[8px] text-slate-400 font-black uppercase tracking-wider mb-0.5">Requester</span>
+                                <span className="text-xs font-black text-slate-800 truncate">
                                     {(() => {
                                         const job = jobs.find(j => j.id === selectedJobId);
                                         const user = users.find(u => u.employee_id === job?.requester_id);
@@ -1936,19 +1949,19 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                                     })()}
                                 </span>
                             </div>
-                            <div className="flex flex-col justify-center px-4 py-2 bg-slate-50 rounded-xl border border-slate-100 min-w-[150px]">
-                                <span className="text-[9px] text-slate-400 font-bold uppercase">Shipper</span>
-                                <span className="text-sm font-bold text-slate-800">{jobs.find(j => j.id === selectedJobId)?.shipper_name}</span>
+                            <div className="flex flex-col justify-center px-4 py-2.5 bg-blue-50/50 rounded-2xl border border-blue-100/50 min-w-0 sm:min-w-[140px]">
+                                <span className="text-[8px] text-blue-600/60 font-black uppercase tracking-wider mb-0.5">Shipper</span>
+                                <span className="text-xs font-black text-blue-900 truncate">{jobs.find(j => j.id === selectedJobId)?.shipper_name}</span>
                             </div>
-                            <div className="flex flex-col justify-center px-4 py-2 bg-slate-50 rounded-xl border border-slate-100 min-w-[150px]">
-                                <span className="text-[9px] text-slate-400 font-bold uppercase">Location</span>
-                                <span className="text-sm font-bold text-slate-800 truncate max-w-[120px]" title={jobs.find(j => j.id === selectedJobId)?.location}>
+                            <div className="flex flex-col justify-center px-4 py-2.5 bg-slate-50 rounded-2xl border border-slate-100 min-w-0 sm:min-w-[140px]">
+                                <span className="text-[8px] text-slate-400 font-black uppercase tracking-wider mb-0.5">Location</span>
+                                <span className="text-xs font-black text-slate-800 truncate" title={jobs.find(j => j.id === selectedJobId)?.location}>
                                     {jobs.find(j => j.id === selectedJobId)?.location || 'N/A'}
                                 </span>
                             </div>
-                            <div className="flex flex-col justify-center px-4 py-2 bg-slate-50 rounded-xl border border-slate-100">
-                                <span className="text-[9px] text-slate-400 font-bold uppercase">Volume</span>
-                                <span className="text-sm font-bold text-slate-800">{jobs.find(j => j.id === selectedJobId)?.volume_cbm || 0} m³</span>
+                            <div className="flex flex-col justify-center px-4 py-2.5 bg-slate-50 rounded-2xl border border-slate-100 min-w-0 sm:min-w-[100px]">
+                                <span className="text-[8px] text-slate-400 font-black uppercase tracking-wider mb-0.5">Volume</span>
+                                <span className="text-xs font-black text-slate-800">{jobs.find(j => j.id === selectedJobId)?.volume_cbm || 0} <span className="text-[10px]">m³</span></span>
                             </div>
                         </div>
                     )}
@@ -2006,8 +2019,12 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                                 </div>
                             )}
 
+                            <div className="flex items-center gap-2 mb-2 sm:hidden text-slate-400 animate-pulse">
+                                <ChevronRight className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Scroll right to view more</span>
+                            </div>
                             <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-[600px] overflow-y-auto custom-scrollbar">
-                                <table className="w-full text-left">
+                                <table className="w-full text-left min-w-[700px]">
                                     <thead>
                                         <tr className="bg-slate-50 text-slate-500 text-[10px] font-bold uppercase tracking-widest sticky top-0 z-10 border-b border-slate-200">
                                             <th className="p-4 bg-slate-50">Material Description</th>
@@ -2129,18 +2146,18 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                                         </div>
                                     </div>
                                 )}
-                                <div className="flex justify-end gap-3 w-full md:w-auto">
+                                <div className="flex flex-wrap justify-end gap-3 w-full lg:w-auto">
                                     {costingStage === 'Final' && (
                                         <>
                                             <button
                                                 onClick={handleExportJobExcel}
-                                                className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold uppercase text-[11px] tracking-widest hover:bg-emerald-700 transition-all shadow-lg"
+                                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 active:scale-95"
                                             >
-                                                <FileDown className="w-4 h-4" /> Export Excel
+                                                <FileDown className="w-4 h-4" /> Export
                                             </button>
                                             <button
                                                 onClick={handleExportPDF}
-                                                className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl font-bold uppercase text-[11px] tracking-widest hover:bg-slate-800 transition-all shadow-lg"
+                                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-800 transition-all shadow-xl shadow-slate-900/20 active:scale-95"
                                             >
                                                 <Printer className="w-4 h-4" /> Save PDF
                                             </button>

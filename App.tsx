@@ -84,6 +84,43 @@ const App: React.FC = () => {
     };
   }, [isNavigationLocked]);
 
+  // Inactivity Auto-Logout Logic (10 Minutes)
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let inactivityTimer: NodeJS.Timeout;
+    const INACTIVITY_LIMIT = 10 * 60 * 1000; // 10 minutes in milliseconds
+
+    const resetTimer = () => {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      inactivityTimer = setTimeout(() => {
+        handleLogout();
+        window.location.reload(); // Refresh the app to clear all states
+      }, INACTIVITY_LIMIT);
+    };
+
+    // Events to track activity
+    const activityEvents = [
+      'mousedown', 'mousemove', 'keypress', 
+      'scroll', 'touchstart', 'click'
+    ];
+
+    // Initialize timer
+    resetTimer();
+
+    // Add listeners
+    activityEvents.forEach(event => {
+      window.addEventListener(event, resetTimer);
+    });
+
+    return () => {
+      if (inactivityTimer) clearTimeout(inactivityTimer);
+      activityEvents.forEach(event => {
+        window.removeEventListener(event, resetTimer);
+      });
+    };
+  }, [currentUser]);
+
   // Persist users and session whenever they change
   useEffect(() => {
     localStorage.setItem('writer_system_users', JSON.stringify(allCredentials));
@@ -175,6 +212,7 @@ const App: React.FC = () => {
       const { data, error } = await supabase.from('jobs').select('*').order('created_at', { ascending: false });
       if (error) {
         console.error('Error fetching jobs:', error.message);
+        addNotification(`Error fetching jobs: ${error.message}`, 'error');
       } else {
         // Normalize data: Ensure 'vehicles' array exists. 
         // If 'vehicles' is null but 'vehicle' exists (legacy), convert 'vehicle' string to array.
@@ -184,10 +222,11 @@ const App: React.FC = () => {
         }));
         setJobs(normalizedData);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Unexpected error fetching jobs:', err);
+      addNotification(`Unexpected error fetching jobs: ${err.message}`, 'error');
     }
-  }, []);
+  }, [addNotification]);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -198,40 +237,50 @@ const App: React.FC = () => {
             password: u.password
         }));
         setSystemUsers(userProfiles);
-    } catch (err) {
+    } catch (err: any) {
         console.error('Unexpected error fetching users:', err);
+        addNotification(`Unexpected error fetching users: ${err.message}`, 'error');
     }
-  }, [allCredentials]);
+  }, [addNotification, allCredentials]);
 
   const fetchPersonnel = useCallback(async () => {
     try {
         const { data, error } = await supabase.from('personnel').select('*');
-        if (error) console.error('Error fetching personnel:', error.message);
-        else setPersonnel(data || []);
-    } catch (err) {
+        if (error) {
+          console.error('Error fetching personnel:', error.message);
+          addNotification(`Error fetching personnel: ${error.message}`, 'error');
+        } else setPersonnel(data || []);
+    } catch (err: any) {
         console.error('Unexpected error fetching personnel:', err);
+        addNotification(`Unexpected error fetching personnel: ${err.message}`, 'error');
     }
-  }, []);
+  }, [addNotification]);
 
   const fetchVehicles = useCallback(async () => {
     try {
         const { data, error } = await supabase.from('vehicles').select('*');
-        if (error) console.error('Error fetching vehicles:', error.message);
-        else setVehicles(data || []);
-    } catch (err) {
+        if (error) {
+          console.error('Error fetching vehicles:', error.message);
+          addNotification(`Error fetching vehicles: ${error.message}`, 'error');
+        } else setVehicles(data || []);
+    } catch (err: any) {
         console.error('Unexpected error fetching vehicles:', err);
+        addNotification(`Unexpected error fetching vehicles: ${err.message}`, 'error');
     }
-  }, []);
+  }, [addNotification]);
 
   const fetchSurveys = useCallback(async () => {
     try {
       const { data, error } = await supabase.from('surveys').select('*').order('created_at', { ascending: false });
-      if (error) console.error('Error fetching surveys:', error.message);
-      else setSurveys(data || []);
-    } catch (err) {
+      if (error) {
+        console.error('Error fetching surveys:', error.message);
+        addNotification(`Error fetching surveys: ${error.message}`, 'error');
+      } else setSurveys(data || []);
+    } catch (err: any) {
       console.error('Unexpected error fetching surveys:', err);
+      addNotification(`Unexpected error fetching surveys: ${err.message}`, 'error');
     }
-  }, []);
+  }, [addNotification]);
 
   const fetchChecklists = useCallback(async () => {
     try {
@@ -437,11 +486,13 @@ const App: React.FC = () => {
              const { error: insertError } = await supabase.from('system_settings').insert([{ id: 1, daily_job_limits: {}, holidays: [] as string[] }]);
              if (insertError) console.error('Error creating initial settings:', insertError.message);
           } else {
-             // Silently handle other errors
+             console.error('Error fetching settings:', error.message);
+             addNotification(`Error fetching settings: ${error.message}`, 'error');
           }
         }
-    } catch (err) {
-        // Silently fail for transient errors to avoid console noise
+    } catch (err: any) {
+        console.error('Unexpected error fetching settings:', err);
+        addNotification(`Unexpected error fetching settings: ${err.message}`, 'error');
     }
   }, []);
 
@@ -1301,7 +1352,7 @@ const App: React.FC = () => {
       {/* Mobile Sidebar Overlay */}
       {isMobileMenuOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/50 z-40 lg:hidden backdrop-blur-sm"
+          className="fixed inset-0 bg-slate-900/60 z-40 lg:hidden backdrop-blur-md transition-all duration-300"
           onClick={closeMobileMenu}
         />
       )}
@@ -1318,12 +1369,12 @@ const App: React.FC = () => {
       />
 
       <div className="flex-1 flex flex-col h-screen overflow-hidden w-full relative">
-        <header className="h-16 md:h-20 border-b bg-white flex items-center justify-between px-4 md:px-10 sticky top-0 z-30 shadow-sm shrink-0">
-          <div className="flex items-center gap-4 md:gap-6">
+        <header className="h-16 md:h-20 border-b bg-white/90 backdrop-blur-xl flex items-center justify-between px-3 md:px-10 sticky top-0 z-30 shadow-sm shrink-0">
+          <div className="flex items-center gap-2 md:gap-6">
             {/* Mobile Menu Button */}
             <button 
               onClick={() => setIsMobileMenuOpen(true)}
-              className="p-2 -ml-2 hover:bg-slate-50 rounded-xl transition-colors lg:hidden"
+              className="p-2 -ml-1 hover:bg-slate-50 rounded-xl transition-colors lg:hidden"
             >
               <Menu className="w-6 h-6 text-slate-600" />
             </button>
@@ -1337,24 +1388,24 @@ const App: React.FC = () => {
               <Menu className="w-5 h-5 text-slate-600" />
             </button>
 
-            <div className="flex items-center gap-4 md:gap-8">
-              <h1 className="font-bold text-lg md:text-xl text-slate-800 tracking-tight uppercase border-r pr-4 md:pr-8 border-slate-200 hidden sm:block">Operations Central</h1>
-              <div className="flex items-center gap-2 md:gap-3 bg-slate-50 px-3 py-1.5 md:px-4 md:py-2 rounded-full border border-slate-100">
-                <span className="w-2 h-2 md:w-2.5 md:h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-[9px] md:text-[10px] text-slate-500 font-black uppercase tracking-widest leading-none">
+            <div className="flex items-center gap-2 md:gap-8">
+              <h1 className="font-bold text-base md:text-xl text-slate-800 tracking-tight uppercase border-r pr-3 md:pr-8 border-slate-200 hidden xs:block">Ops Central</h1>
+              <div className="flex items-center gap-1.5 md:gap-3 bg-slate-50 px-2.5 py-1 md:px-4 md:py-2 rounded-full border border-slate-100">
+                <span className="w-1.5 h-1.5 md:w-2.5 md:h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="text-[8px] md:text-[10px] text-slate-500 font-black uppercase tracking-widest leading-none">
                   {currentUser.role}
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 md:gap-8">
-            <div className="hidden md:flex items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 w-64 group focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+          <div className="flex items-center gap-2 md:gap-8">
+            <div className="hidden lg:flex items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 w-64 group focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
               <Search className="w-4 h-4 text-slate-400" />
               <input type="text" placeholder="Global job search..." className="bg-transparent border-none outline-none text-xs ml-3 w-full font-medium" />
             </div>
 
-            <button className="md:hidden p-2 text-slate-500">
+            <button className="lg:hidden p-2 text-slate-500 hover:bg-slate-50 rounded-lg">
               <Search className="w-5 h-5" />
             </button>
 
@@ -1369,7 +1420,7 @@ const App: React.FC = () => {
               title={isNavigationLocked ? 'Unlock Navigation' : 'Lock Navigation (Guard Mode)'}
             >
               {isNavigationLocked ? <Lock className="w-4 h-4" /> : <Unlock className="w-4 h-4" />}
-              <span className="hidden lg:inline text-[10px] font-black uppercase tracking-widest leading-none">
+              <span className="hidden md:inline lg:inline text-[10px] font-black uppercase tracking-widest leading-none">
                 {isNavigationLocked ? 'Locked' : 'Guard'}
               </span>
             </button>
@@ -1413,25 +1464,25 @@ const App: React.FC = () => {
                 )}
             </div>
 
-            <div className="flex items-center gap-3 md:gap-5 pl-4 md:pl-8 border-l border-slate-200">
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-bold text-slate-900 leading-none mb-1.5">{currentUser.name}</p>
-                <p className="text-[10px] text-slate-500 font-medium leading-none">{currentUser.role}</p>
+            <div className="flex items-center gap-2 md:gap-5 pl-2 md:pl-8 border-l border-slate-200">
+              <div className="text-right hidden lg:block">
+                <p className="text-[12px] font-bold text-slate-900 leading-none mb-1">{currentUser.name}</p>
+                <p className="text-[9px] text-slate-400 font-medium leading-none uppercase tracking-tighter">{currentUser.employee_id}</p>
               </div>
-              <img src={currentUser.avatar} className="w-9 h-9 md:w-11 md:h-11 rounded-2xl border-2 border-slate-100 shadow-md" alt="User" />
+              <img src={currentUser.avatar} className="w-8 h-8 md:w-10 md:h-10 rounded-xl border border-slate-100 shadow-sm" alt="User" />
               <button
                 onClick={handleLogout}
                 title="Log Out"
-                className="p-2 md:p-2.5 hover:bg-slate-50 rounded-xl transition-colors border border-transparent hover:border-slate-200 group"
+                className="p-1.5 md:p-2 hover:bg-rose-50 rounded-xl transition-colors border border-transparent hover:border-rose-100 group"
               >
-                <LogOut className="w-5 h-5 text-slate-500 group-hover:text-rose-500 transition-colors" />
+                <LogOut className="w-4 h-4 md:w-5 md:h-5 text-slate-400 group-hover:text-rose-500 transition-colors" />
               </button>
             </div>
           </div>
         </header>
 
-        <main className="flex-1 p-4 md:p-8 lg:p-12 overflow-y-auto custom-scrollbar w-full">
-          <div className="max-w-[1600px] mx-auto pb-12">
+        <main className="flex-1 p-3 md:p-8 lg:p-10 overflow-y-auto custom-scrollbar w-full">
+          <div className="max-w-[1700px] mx-auto pb-12">
             {activeTab === 'dashboard' && <Dashboard jobs={jobs} settings={settings} onSetLimit={handleSetLimit} isAdmin={currentUser.role === UserRole.ADMIN} />}
             {activeTab === 'schedule' && (
               <ScheduleView 
