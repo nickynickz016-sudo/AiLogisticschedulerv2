@@ -53,10 +53,49 @@ export const DigitalPackingList: React.FC<DigitalPackingListProps> = ({ currentU
   const logoInputRef = useRef<HTMLInputElement>(null);
   const sigCanvasRef = useRef<SignatureCanvas>(null);
 
-  // Auto-save persistence
+  // Improved image compression utility
+  const compressImage = (base64Str: string, maxWidth = 1024, maxHeight = 1024): Promise<string> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.src = base64Str;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > maxWidth) {
+            height *= maxWidth / width;
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width *= maxHeight / height;
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.8)); // Use JPEG with 80% quality for good balance
+      };
+    });
+  };
+
+  // Auto-save persistence with error handling
   useEffect(() => {
     if (currentList) {
-      localStorage.setItem('writer_active_packing_list', JSON.stringify(currentList));
+      try {
+        localStorage.setItem('writer_active_packing_list', JSON.stringify(currentList));
+      } catch (err) {
+        console.error('LocalStorage persistence failed:', err);
+        // If storage is full, we still keep it in memory state, but alert maybe
+        if (err instanceof Error && err.name === 'QuotaExceededError') {
+          console.warn('Storage limit reached. Photos might be too large.');
+        }
+      }
     }
   }, [currentList]);
 
@@ -1033,11 +1072,15 @@ export const DigitalPackingList: React.FC<DigitalPackingListProps> = ({ currentU
                               accept="image/*" 
                               capture="environment" 
                               className="hidden" 
-                              onChange={(e) => {
+                              onChange={async (e) => {
                                 const file = e.target.files?.[0];
-                                if (file) {
+                                if (file && editingPackage) {
                                   const reader = new FileReader();
-                                  reader.onload = (re) => setEditingPackage({...editingPackage, photo: re.target?.result as string});
+                                  reader.onload = async (re) => {
+                                    const base64 = re.target?.result as string;
+                                    const compressed = await compressImage(base64);
+                                    setEditingPackage({...editingPackage, photo: compressed});
+                                  };
                                   reader.readAsDataURL(file);
                                 }
                               }}
@@ -1050,11 +1093,15 @@ export const DigitalPackingList: React.FC<DigitalPackingListProps> = ({ currentU
                               type="file" 
                               accept="image/*" 
                               className="hidden" 
-                              onChange={(e) => {
+                              onChange={async (e) => {
                                 const file = e.target.files?.[0];
-                                if (file) {
+                                if (file && editingPackage) {
                                   const reader = new FileReader();
-                                  reader.onload = (re) => setEditingPackage({...editingPackage, photo: re.target?.result as string});
+                                  reader.onload = async (re) => {
+                                    const base64 = re.target?.result as string;
+                                    const compressed = await compressImage(base64);
+                                    setEditingPackage({...editingPackage, photo: compressed});
+                                  };
                                   reader.readAsDataURL(file);
                                 }
                               }}
