@@ -2,8 +2,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { getUAEToday } from '../utils';
 import { Job, JobStatus, SystemSettings, JobCostSheet, CustomsStatus } from '../types';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, Download, Loader2, Activity, Calendar, X, Filter, CalendarRange, ListFilter, Camera, DollarSign, FileText } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, Download, Loader2, Activity, Calendar, X, Filter, CalendarRange, ListFilter, Camera, DollarSign, FileText, PieChart as PieIcon } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
@@ -51,6 +51,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
 
   const [timeframe, setTimeframe] = useState<'weekly' | 'monthly' | 'yearly'>('weekly');
   const [chartData, setChartData] = useState<{name: string, v: number}[]>([]);
+
+  const COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#6366f1', '#ef4444', '#94a3b8'];
+
+  const statusData = useMemo(() => {
+    const counts: Record<string, number> = {};
+    Object.values(JobStatus).forEach(status => counts[status] = 0);
+    
+    jobs.forEach(job => {
+      if (!job.is_transporter) {
+        counts[job.status] = (counts[job.status] || 0) + 1;
+      }
+    });
+
+    return Object.entries(counts)
+      .filter(([_, count]) => count > 0)
+      .map(([status, count]) => ({
+        name: status.replace(/_/g, ' '),
+        value: count
+      }));
+  }, [jobs]);
 
   useEffect(() => {
     const calculateTrend = () => {
@@ -548,8 +568,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-8 md:gap-10">
-        <div className="bg-white rounded-[2.5rem] p-6 md:p-10 border border-slate-200 shadow-sm relative overflow-hidden group">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-10">
+        <div className="lg:col-span-2 bg-white rounded-[2.5rem] p-6 md:p-10 border border-slate-200 shadow-sm relative overflow-hidden group">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 md:mb-12 gap-4">
             <div>
               <h3 className="font-black text-xl text-slate-800 uppercase tracking-tight">Job Trend Analysis</h3>
@@ -591,6 +611,58 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
             </ResponsiveContainer>
           </div>
           <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 blur-[100px] rounded-full"></div>
+        </div>
+
+        <div className="bg-white rounded-[2.5rem] p-6 md:p-10 border border-slate-200 shadow-sm relative flex flex-col">
+          <div className="mb-8">
+            <h3 className="font-black text-xl text-slate-800 uppercase tracking-tight flex items-center gap-3">
+              <PieIcon className="w-5 h-5 text-indigo-500" />
+              Workload
+            </h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">Status distribution</p>
+          </div>
+          
+          <div className="flex-1 flex flex-col justify-center">
+            <div className="h-[250px] w-full relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {statusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
+                    labelStyle={{fontWeight: '900'}}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="text-center">
+                  <p className="text-2xl font-black text-slate-800">{jobs.filter(j => !j.is_transporter).length}</p>
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Total</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 grid grid-cols-2 gap-3">
+              {statusData.map((entry, index) => (
+                <div key={entry.name} className="flex items-center gap-2">
+                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                  <span className="text-[10px] font-black text-slate-600 uppercase tracking-tight truncate">{entry.name}</span>
+                  <span className="text-[10px] font-bold text-slate-400 ml-auto">{entry.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 

@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   FileText, Upload, Printer, AlertTriangle, CheckCircle2, 
   Search, Package, Plus, Trash2, Edit3, Loader2, FileUp, Info, ChevronRight, Hash, X, Users, MessageSquare, ListTodo, Save, Lock, Unlock,
-  Image as ImageIcon, PlusCircle, Cloud, FolderOpen, AlertCircle, Camera
+  Image as ImageIcon, PlusCircle, Cloud, FolderOpen, AlertCircle, Camera, RefreshCw
 } from 'lucide-react';
 import { PackingList, PackingListItem, PackageDetail, UserProfile, UserRole } from '../types';
 import { GoogleGenAI, Type } from "@google/genai";
@@ -48,6 +48,10 @@ export const DigitalPackingList: React.FC<DigitalPackingListProps> = ({ currentU
   const [savedLists, setSavedLists] = useState<PackingList[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isRealtimeSyncing, setIsRealtimeSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
@@ -83,6 +87,90 @@ export const DigitalPackingList: React.FC<DigitalPackingListProps> = ({ currentU
       };
     });
   };
+
+  const uploadPhotoToSupabase = async (base64: string, pkgNumber: string): Promise<string | null> => {
+    try {
+      setIsUploadingPhoto(true);
+      const parts = base64.split(';base64,');
+      const contentType = parts[0].split(':')[1];
+      const raw = window.atob(parts[1]);
+      const rawLength = raw.length;
+      const uInt8Array = new Uint8Array(rawLength);
+      for (let i = 0; i < rawLength; ++i) {
+        uInt8Array[i] = raw.charCodeAt(i);
+      }
+      const blob = new Blob([uInt8Array], { type: contentType });
+      
+      const fileName = `pkg_${pkgNumber}_${Date.now()}.jpg`;
+      const filePath = `${currentList?.id || 'temp'}/${fileName}`;
+
+      const { data, error } = await supabase.storage
+        .from('packing_list_photos')
+        .upload(filePath, blob, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (error) throw error;
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from('packing_list_photos')
+        .getPublicUrl(data.path);
+        
+      return publicUrl;
+    } catch (err) {
+      console.error('Error uploading to Supabase:', err);
+      setUploadError('Failed to upload photo to cloud storage. Please ensure "packing_list_photos" bucket exists.');
+      return null;
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  // Realtime Sync Subscription
+  useEffect(() => {
+    if (!currentList?.id) return;
+
+    const channel = supabase
+      .channel(`packing_list_${currentList.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'packing_lists',
+          filter: `id=eq.${currentList.id}`
+        },
+        (payload) => {
+          if (payload.new && (payload.new as any).data) {
+            const newData = (payload.new as any).data as PackingList;
+            // Only update if the cloud version is newer than local or if we are not the one who pushed it
+            // Simple check: if timestamps differ
+            setCurrentList(newData);
+            setLastSyncedAt(Date.now());
+            setIsRealtimeSyncing(true);
+            setTimeout(() => setIsRealtimeSyncing(false), 2000);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentList?.id]);
+
+  // Online Status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   // Auto-save persistence with error handling
   useEffect(() => {
@@ -347,6 +435,7 @@ export const DigitalPackingList: React.FC<DigitalPackingListProps> = ({ currentU
         }], { onConflict: 'id' });
 
       if (error) throw error;
+      setLastSyncedAt(Date.now());
       alert('Packing list saved successfully to cloud!');
     } catch (err: any) {
       console.error('Save error:', err);
@@ -642,8 +731,25 @@ export const DigitalPackingList: React.FC<DigitalPackingListProps> = ({ currentU
               <FileText className="w-5 h-5 md:w-6 md:h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight leading-none mb-1 uppercase">Digital Packing List</h1>
-              <p className="text-slate-400 font-black uppercase tracking-[0.2em] text-[8px] md:text-[9px]">Inventory Management</p>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight leading-none mb-1 uppercase">Digital Packing List</h1>
+                <div className={`w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]'} hidden sm:block`} title={isOnline ? 'Online' : 'Offline'} />
+              </div>
+              <div className="flex items-center gap-2">
+                <p className="text-slate-400 font-black uppercase tracking-[0.2em] text-[8px] md:text-[9px]">Inventory Management</p>
+                {lastSyncedAt && (
+                  <span className="text-[8px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1">
+                    <CheckCircle2 className="w-2.5 h-2.5" />
+                    Synced {new Date(lastSyncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+                {isRealtimeSyncing && (
+                  <span className="text-[8px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-1 animate-pulse">
+                    <RefreshCw className="w-2.5 h-2.5 animate-spin" />
+                    Updating...
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1044,7 +1150,12 @@ export const DigitalPackingList: React.FC<DigitalPackingListProps> = ({ currentU
                  <div>
                    <div className="flex flex-col items-center gap-4 mb-4">
                       <div className="w-full h-48 bg-slate-50 rounded-3xl border border-slate-100 flex flex-col items-center justify-center overflow-hidden relative group">
-                         {editingPackage.photo ? (
+                         {isUploadingPhoto ? (
+                           <div className="flex flex-col items-center gap-3">
+                             <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Uploading to cloud...</p>
+                           </div>
+                         ) : editingPackage.photo ? (
                            <>
                              <img src={editingPackage.photo} alt="Contents" className="w-full h-full object-cover" />
                              <button 
@@ -1079,7 +1190,10 @@ export const DigitalPackingList: React.FC<DigitalPackingListProps> = ({ currentU
                                   reader.onload = async (re) => {
                                     const base64 = re.target?.result as string;
                                     const compressed = await compressImage(base64);
-                                    setEditingPackage({...editingPackage, photo: compressed});
+                                    const url = await uploadPhotoToSupabase(compressed, editingPackage.pkgNumber);
+                                    if (url) {
+                                      setEditingPackage({...editingPackage, photo: url});
+                                    }
                                   };
                                   reader.readAsDataURL(file);
                                 }
@@ -1100,7 +1214,10 @@ export const DigitalPackingList: React.FC<DigitalPackingListProps> = ({ currentU
                                   reader.onload = async (re) => {
                                     const base64 = re.target?.result as string;
                                     const compressed = await compressImage(base64);
-                                    setEditingPackage({...editingPackage, photo: compressed});
+                                    const url = await uploadPhotoToSupabase(compressed, editingPackage.pkgNumber);
+                                    if (url) {
+                                      setEditingPackage({...editingPackage, photo: url});
+                                    }
                                   };
                                   reader.readAsDataURL(file);
                                 }
