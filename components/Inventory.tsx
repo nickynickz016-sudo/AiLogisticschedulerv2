@@ -245,7 +245,7 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
     });
 
     if (data) {
-        setCurrentSheet({ ...data, items: mergedItems });
+        setCurrentSheet({ ...data, items: mergedItems, manual_items: data.manual_items || [] });
         
         // Determine stage
         if (onlyFinalAssessment) {
@@ -262,6 +262,7 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
         setCurrentSheet({
             job_id: jobId,
             items: mergedItems,
+            manual_items: [],
             status: 'Issued',
             total_cost: 0
         });
@@ -646,12 +647,25 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
         };
       });
 
-    if (reportData.length === 0) {
-      setNotification({ message: "No materials consumed for this job yet.", type: 'error' });
+    const manualReportData = (currentSheet.manual_items || []).map(mItem => ({
+      'Packing Date': currentSheet.packing_date || '-',
+      'Category': currentSheet.job_category || '-',
+      'CBM': currentSheet.cbm || 0,
+      'Item Code': 'MANUAL',
+      'Product Description': mItem.description,
+      'Qty Consumed': 1,
+      'Rate': mItem.cost,
+      'Qty Consumed X rate': mItem.cost.toFixed(2)
+    }));
+
+    const fullReportData = [...reportData, ...manualReportData];
+
+    if (fullReportData.length === 0) {
+      setNotification({ message: "No job data found to export.", type: 'error' });
       return;
     }
 
-    const worksheet = XLSX.utils.json_to_sheet(reportData);
+    const worksheet = XLSX.utils.json_to_sheet(fullReportData);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Job Costing Report");
 
@@ -972,10 +986,12 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
 
   const calculateTotalCost = () => {
     if (!currentSheet) return 0;
-    return currentSheet.items.reduce((acc, item) => {
+    const itemsCost = currentSheet.items.reduce((acc, item) => {
         const consumed = Math.max(0, item.issued_qty - item.returned_qty);
         return acc + (consumed * item.price);
     }, 0);
+    const manualCost = (currentSheet.manual_items || []).reduce((acc, item) => acc + (item.cost || 0), 0);
+    return itemsCost + manualCost;
   };
 
   const saveCostSheet = async () => {
@@ -1084,6 +1100,7 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
         const payload = {
             job_id: currentSheet.job_id,
             items: itemsToSave,
+            manual_items: currentSheet.manual_items || [],
             status: status,
             total_cost: calculateTotalCost(),
             packing_date: currentSheet.packing_date || null,
@@ -1265,7 +1282,7 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
     yPos += 20;
 
     // --- Table ---
-    // Only show items with activity for clean PDF
+    // 1. Inventory Items Table
     const itemsToShow = currentSheet.items.filter(i => i.issued_qty > 0 || i.returned_qty > 0);
     const tableBody = itemsToShow.map(item => {
         const consumed = Math.max(0, item.issued_qty - item.returned_qty);
@@ -1294,7 +1311,7 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
             fontSize: 9,
             lineWidth: { bottom: 0.1 },
             lineColor: colors.border,
-            halign: 'left' // Explicit left align for header text
+            halign: 'left'
         }, 
         bodyStyles: { 
             textColor: colors.textDark,
@@ -1303,22 +1320,14 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
             valign: 'middle'
         },
         columnStyles: {
-            0: { cellWidth: 40, halign: 'left' }, // Code
-            1: { cellWidth: 'auto', halign: 'left' }, // Description (Flexible)
-            2: { cellWidth: 25, halign: 'center' }, // Unit
-            3: { cellWidth: 25, halign: 'center', textColor: [37, 99, 235] }, // Issued
-            4: { cellWidth: 25, halign: 'center', textColor: [234, 88, 12] }, // Return
-            5: { cellWidth: 25, halign: 'center', fontStyle: 'bold' }, // Net
-            6: { cellWidth: 30, halign: 'right' }, // Rate
-            7: { cellWidth: 40, halign: 'right', fontStyle: 'bold', textColor: [5, 150, 105] } // Total
-        },
-        foot: [['', '', '', '', '', '', 'GRAND TOTAL', calculateTotalCost().toFixed(2) + ' AED']],
-        footStyles: {
-            fillColor: [30, 41, 59],
-            textColor: [255, 255, 255],
-            fontStyle: 'bold',
-            fontSize: 11,
-            halign: 'right'
+            0: { cellWidth: 40, halign: 'left' },
+            1: { cellWidth: 'auto', halign: 'left' },
+            2: { cellWidth: 25, halign: 'center' },
+            3: { cellWidth: 25, halign: 'center', textColor: [37, 99, 235] },
+            4: { cellWidth: 25, halign: 'center', textColor: [234, 88, 12] },
+            5: { cellWidth: 25, halign: 'center', fontStyle: 'bold' },
+            6: { cellWidth: 30, halign: 'right' },
+            7: { cellWidth: 40, halign: 'right', fontStyle: 'bold', textColor: [5, 150, 105] }
         },
         theme: 'grid', 
         styles: {
@@ -1326,6 +1335,70 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
             lineColor: colors.border
         }
     });
+
+    yPos = (doc as any).lastAutoTable.finalY + 10;
+
+    // 2. Manual Items Table (If any)
+    const manualItems = currentSheet.manual_items || [];
+    if (manualItems.length > 0) {
+        doc.setFontSize(10);
+        doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]);
+        doc.setFont("helvetica", "bold");
+        doc.text("MANUAL COST ITEMS", margin, yPos);
+        yPos += 5;
+
+        const manualBody = manualItems.map(m => [
+            '—',
+            m.description,
+            '—',
+            '1',
+            '0',
+            '1',
+            m.cost.toFixed(2),
+            m.cost.toFixed(2)
+        ]);
+
+        (doc as any).autoTable({
+            startY: yPos,
+            head: [['Code', 'Description', 'Unit', 'Qty', '—', 'Net', 'Rate', 'Total']],
+            body: manualBody,
+            margin: { left: margin, right: margin },
+            headStyles: { fillColor: [241, 245, 249], textColor: colors.textDark, fontSize: 8 },
+            bodyStyles: { fontSize: 8 },
+            columnStyles: {
+                0: { cellWidth: 40 },
+                1: { cellWidth: 'auto' },
+                2: { cellWidth: 25, halign: 'center' },
+                3: { cellWidth: 25, halign: 'center' },
+                4: { cellWidth: 25, halign: 'center' },
+                5: { cellWidth: 25, halign: 'center' },
+                6: { cellWidth: 30, halign: 'right' },
+                7: { cellWidth: 40, halign: 'right', fontStyle: 'bold' }
+            },
+            theme: 'grid'
+        });
+
+        yPos = (doc as any).lastAutoTable.finalY + 10;
+    }
+
+    // --- Footer Totals ---
+    if (yPos > doc.internal.pageSize.getHeight() - 40) {
+        doc.addPage();
+        yPos = 20;
+    }
+
+    const totalCost = calculateTotalCost();
+    
+    doc.setFillColor(30, 41, 59);
+    doc.rect(pageWidth - margin - 100, yPos, 100, 15, 'F');
+    
+    doc.setFontSize(10);
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.text("GRAND TOTAL", pageWidth - margin - 90, yPos + 10);
+    
+    doc.setFontSize(12);
+    doc.text(`${totalCost.toFixed(2)} AED`, pageWidth - margin - 15, yPos + 10, { align: 'right' });
 
     doc.save(`JobCost_${selectedJobId}.pdf`);
   }
@@ -2096,16 +2169,116 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                                             </tr>
                                         )}
                                     </tbody>
-                                    {costingStage === 'Final' && (
-                                        <tfoot>
-                                            <tr className="bg-slate-900 text-white">
-                                                <td colSpan={5} className="p-4 text-right text-xs font-bold uppercase tracking-widest">Total Material Cost</td>
-                                                <td className="p-4 text-right text-lg font-black">{calculateTotalCost().toFixed(2)} AED</td>
-                                            </tr>
-                                        </tfoot>
-                                    )}
                                 </table>
                             </div>
+
+                            {/* Manual Cost Items Section - Only in Final Assessment */}
+                            {costingStage === 'Final' && (
+                                <div className="mt-8 space-y-4 animate-in fade-in duration-500">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Calculator className="w-5 h-5 text-blue-600" />
+                                            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Manual Cost Items</h3>
+                                            <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-[10px] font-black uppercase rounded border border-blue-100">Special Costs</span>
+                                        </div>
+                                        {!isReadOnly && (
+                                            <button 
+                                                onClick={() => {
+                                                    const updatedManual = [...(currentSheet.manual_items || []), { id: crypto.randomUUID(), description: '', cost: 0 }];
+                                                    setCurrentSheet({ ...currentSheet, manual_items: updatedManual });
+                                                }}
+                                                className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700 transition-all shadow-md shadow-blue-100 active:scale-95"
+                                            >
+                                                <Plus className="w-3.5 h-3.5" /> Add Manual Item
+                                            </button>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="overflow-hidden bg-slate-50/50 rounded-[1.5rem] border border-slate-200">
+                                        <table className="w-full text-left">
+                                            <thead>
+                                                <tr className="bg-slate-100/50 text-slate-500 text-[9px] font-bold uppercase tracking-widest border-b border-slate-200">
+                                                    <th className="p-4">Description (e.g. Food cost, Extra Labor)</th>
+                                                    <th className="p-4 w-48 text-right">Cost (AED)</th>
+                                                    {!isReadOnly && <th className="p-4 w-16 text-center"></th>}
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-200">
+                                                {(currentSheet.manual_items || []).length === 0 ? (
+                                                    <tr>
+                                                        <td colSpan={isReadOnly ? 2 : 3} className="p-8 text-center text-slate-400 text-xs font-bold uppercase tracking-widest italic bg-white/50">
+                                                            No manual costs added yet.
+                                                        </td>
+                                                    </tr>
+                                                ) : (
+                                                    (currentSheet.manual_items || []).map((mItem, idx) => (
+                                                        <tr key={mItem.id} className="bg-white/40 hover:bg-white/80 transition-colors">
+                                                            <td className="p-3">
+                                                                <input 
+                                                                    disabled={isReadOnly}
+                                                                    type="text" 
+                                                                    placeholder="Enter description (e.g. Food cost)"
+                                                                    className="w-full bg-transparent border-b border-transparent focus:border-blue-400 outline-none p-1 text-sm font-bold text-slate-700 placeholder:text-slate-300 placeholder:font-normal"
+                                                                    value={mItem.description}
+                                                                    onChange={e => {
+                                                                        const updatedManual = [...(currentSheet.manual_items || [])];
+                                                                        updatedManual[idx].description = e.target.value;
+                                                                        setCurrentSheet({ ...currentSheet, manual_items: updatedManual });
+                                                                    }}
+                                                                />
+                                                            </td>
+                                                            <td className="p-3">
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                    <span className="text-[10px] font-bold text-slate-400">AED</span>
+                                                                    <input 
+                                                                        disabled={isReadOnly}
+                                                                        type="number" 
+                                                                        placeholder="0.00"
+                                                                        className="w-32 bg-transparent text-right border-b border-transparent focus:border-blue-400 outline-none p-1 text-sm font-black text-blue-600 placeholder:text-blue-200"
+                                                                        value={mItem.cost || ''}
+                                                                        onChange={e => {
+                                                                            const updatedManual = [...(currentSheet.manual_items || [])];
+                                                                            updatedManual[idx].cost = parseFloat(e.target.value) || 0;
+                                                                            setCurrentSheet({ ...currentSheet, manual_items: updatedManual });
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                            </td>
+                                                            {!isReadOnly && (
+                                                                <td className="p-3 text-center">
+                                                                    <button 
+                                                                        onClick={() => {
+                                                                            const updatedManual = (currentSheet.manual_items || []).filter((_, i) => i !== idx);
+                                                                            setCurrentSheet({ ...currentSheet, manual_items: updatedManual });
+                                                                        }}
+                                                                        className="p-1.5 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
+                                                                    >
+                                                                        <Trash2 className="w-4 h-4" />
+                                                                    </button>
+                                                                </td>
+                                                            )}
+                                                        </tr>
+                                                    ))
+                                                )}
+                                            </tbody>
+                                            <tfoot>
+                                                <tr className="bg-slate-900 text-white">
+                                                    <td className="p-4 text-right text-xs font-bold uppercase tracking-widest">Grand Total Cost</td>
+                                                    <td className="p-4 text-right text-lg font-black" colSpan={isReadOnly ? 1 : 2}>
+                                                        {calculateTotalCost().toFixed(2)} AED
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+                            {costingStage === 'Final' && (
+                                <div className="mt-8">
+                                    {/* Keep existing total summary row if desired, but we integrated it above for manual section */}
+                                </div>
+                            )}
 
                             <div className="mt-8 flex flex-col md:flex-row items-center justify-between gap-4">
                                 {costingStage === 'Final' && currentSheet && (

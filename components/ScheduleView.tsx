@@ -423,7 +423,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         if (filter && !job.id.toLowerCase().includes(filter.toLowerCase()) && !job.shipper_name.toLowerCase().includes(filter.toLowerCase())) return false;
         
         // Parse job date string manually to avoid timezone issues
-        const [jY, jM, jD] = job.job_date.split('-').map(Number);
+        const [jY, jM, jD] = (job.job_date || '').split('-').map(Number);
         return jY === year && (jM - 1) === month;
     });
 
@@ -445,7 +445,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
           {calendarDays.map((day, index) => {
             // Filter jobs by matching day component
             const jobsForThisDay = day.isCurrentMonth ? jobsForMonth.filter(job => {
-                const [,, jD] = job.job_date.split('-').map(Number);
+                const [,, jD] = (job.job_date || '').split('-').map(Number);
                 return jD === day.day;
             }) : [];
             

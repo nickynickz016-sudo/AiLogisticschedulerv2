@@ -40,21 +40,21 @@ export interface SpecialRequests {
 export interface UserPermissions {
   dashboard: boolean;
   schedule: boolean;
-  jobBoard: boolean;
+  jobBoard: boolean; // Added
   warehouse: boolean;
   importClearance: boolean;
   approvals: boolean;
   writerDocs: boolean;
   inventory: boolean; 
-  tracking: boolean; // Added Tracking permission
-  surveyTracker: boolean; // Added Survey Tracker permission
+  tracking: boolean;
+  surveyTracker: boolean;
+  digitalPackingList: boolean; // Added
   warehouseChecklist: boolean;
   resources: boolean;
   capacity: boolean;
   users: boolean;
   transporter: boolean;
   ai: boolean;
-  digitalPackingList: boolean;
 }
 
 export interface PackageDetail {
@@ -150,14 +150,9 @@ export interface CustomsHistoryEntry {
   updated_by: string;
 }
 
-// FIX: Made several properties optional to support different job creation contexts (e.g., Warehouse vs. Schedule).
-// This prevents type errors where not all job details are available upon creation.
-export type TransporterStatus = 'Scheduled' | 'In Transit' | 'Completed';
-
 export enum SurveyStatus {
-  SCHEDULED = 'Survey Scheduled',
   BOOKED = 'Booked',
-  NEGOTIATION = 'Negotiation',
+  PENDING = 'Pending',
   LOST = 'Lost'
 }
 
@@ -178,11 +173,16 @@ export interface Survey {
   start_time?: string;
   end_time?: string;
   client_emails?: string[];
-  google_event_id?: string;
+  google_event_id?: string; // Kept for DB compatibility but not used for sync now
+  created_by_id: string;
   created_at: number;
   last_edited_by?: string;
   last_edited_at?: number;
 }
+
+// FIX: Made several properties optional to support different job creation contexts (e.g., Warehouse vs. Schedule).
+// This prevents type errors where not all job details are available upon creation.
+export type TransporterStatus = 'Scheduled' | 'In Transit' | 'Completed';
 
 export interface Job {
   id: string; // Job No.
@@ -215,6 +215,7 @@ export interface Job {
   is_locked?: boolean;
   last_edited_by?: string;
   last_edited_at?: number;
+  sunday_handling?: 'Skip' | 'Include';
   
   // Admin allocations
   team_leader?: string;
@@ -297,9 +298,16 @@ export interface CostSheetItem {
   location?: string;
 }
 
+export interface ManualCostItem {
+  id: string;
+  description: string;
+  cost: number;
+}
+
 export interface JobCostSheet {
   job_id: string;
   items: CostSheetItem[];
+  manual_items?: ManualCostItem[];
   status: 'Issued' | 'Returned' | 'Finalized';
   total_cost: number;
   packing_date?: string;

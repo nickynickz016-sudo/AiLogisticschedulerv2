@@ -29,7 +29,14 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users, logo }
         if (user.profile.status === 'Disabled') {
             setError('This account has been disabled. Please contact an administrator.');
         } else {
-            onLogin(user.profile);
+            // Merge latest permissions from USERS definition to handle updates
+            const latestUser = users.find(u => u.profile.employee_id === user.profile.employee_id);
+            const finalProfile = latestUser ? { 
+              ...user.profile, 
+              permissions: latestUser.profile.permissions,
+              role: latestUser.profile.role 
+            } : user.profile;
+            onLogin(finalProfile);
         }
       } else {
         setError('Invalid username or password.');

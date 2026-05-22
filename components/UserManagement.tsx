@@ -16,7 +16,7 @@ interface UserManagementProps {
 const DEFAULT_PERMISSIONS: UserPermissions = {
   dashboard: true,
   schedule: true,
-  jobBoard: true,
+  jobBoard: false,
   warehouse: false,
   importClearance: false,
   approvals: false,
@@ -24,19 +24,19 @@ const DEFAULT_PERMISSIONS: UserPermissions = {
   inventory: false,
   tracking: false,
   surveyTracker: true,
+  digitalPackingList: false,
   warehouseChecklist: false,
   resources: false,
   capacity: false,
   users: false,
   transporter: false,
   ai: false,
-  digitalPackingList: true,
 };
 
 const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
   dashboard: 'Dashboard View',
   schedule: 'Job Schedule',
-  jobBoard: 'Simple Board',
+  jobBoard: 'Job Board (Admin)',
   warehouse: 'Warehouse Activity',
   importClearance: 'Import Clearance',
   approvals: 'Approval Queue',
@@ -44,13 +44,13 @@ const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
   inventory: 'Inventory Control',
   tracking: 'Shipment Tracking',
   surveyTracker: 'Survey Tracker',
+  digitalPackingList: 'Digital Packing List',
   warehouseChecklist: 'Warehouse Checklist',
   resources: 'Fleet & Crew',
   capacity: 'Capacity Limits',
   users: 'User Management',
   transporter: 'Transporter',
   ai: 'AI Planner',
-  digitalPackingList: 'Digital Packing List',
 };
 
 export const UserManagement: React.FC<UserManagementProps> = ({ 
@@ -315,9 +315,9 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                       {user.role === UserRole.ADMIN ? (
                         <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded">All Access</span>
                       ) : (
-                        Object.entries(user.permissions).filter(([_, hasAccess]) => hasAccess).map(([key]) => (
+                        Object.entries(user.permissions).filter(([key, hasAccess]) => hasAccess && PERMISSION_LABELS[key as keyof UserPermissions]).map(([key]) => (
                            <span key={key} className="text-[9px] font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                              {PERMISSION_LABELS[key as keyof UserPermissions].split(' ')[0]}
+                              {PERMISSION_LABELS[key as keyof UserPermissions]?.split(' ')[0] || key}
                            </span>
                         ))
                       )}

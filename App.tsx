@@ -11,7 +11,6 @@ import { ImportClearance } from './components/ImportClearance';
 import { ResourceManager } from './components/ResourceManager';
 import { CapacityManager } from './components/CapacityManager';
 import { UserManagement } from './components/UserManagement';
-import { JobBoard } from './components/JobBoard';
 import { PublicTracking } from './components/PublicTracking';
 import { LoginScreen } from './components/LoginScreen';
 import { HolidayAlertModal } from './components/HolidayAlertModal';
@@ -21,8 +20,8 @@ import { Inventory } from './components/Inventory';
 import { TrackingView } from './components/TrackingView';
 import { Transporter } from './components/Transporter';
 import { SurveyTracker } from './components/SurveyTracker';
-import { DigitalPackingList } from './components/DigitalPackingList';
 import { WarehouseChecklist as WarehouseChecklistComponent } from './components/WarehouseChecklist';
+import { SundayJobModal } from './components/SundayJobModal';
 import { UserRole, Job, JobStatus, UserProfile, Personnel, Vehicle, SystemSettings, CustomsStatus, Survey, WarehouseChecklist, NightPatrollingChecklist, SafetyMonitoringChecklist, SurpriseVisitChecklist, DailyMonitoringChecklist } from './types';
 import { Bell, Search, Menu, LogOut, X, CheckCircle2, XCircle, AlertTriangle, Info, Lock, Unlock } from 'lucide-react';
 import { supabase } from './supabaseClient';
@@ -31,12 +30,32 @@ import { USERS, MockUser } from './mockData';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
-    const saved = localStorage.getItem('writer_current_user');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = sessionStorage.getItem('writer_current_user');
+      if (!saved) return null;
+      const user = JSON.parse(saved);
+      
+      // Validation: Ensure basic profile fields exist
+      if (!user || !user.employee_id || !user.role) return null;
+      
+      // Auto-sync permissions from mockData to session if mismatch found
+      const blueprint = USERS.find(u => u.profile.employee_id === user.employee_id);
+      if (blueprint) {
+        return {
+          ...user,
+          permissions: blueprint.profile.permissions, // Force latest permissions
+          role: blueprint.profile.role                 // Force latest role
+        };
+      }
+      
+      return user;
+    } catch (e) {
+      console.error("Session restore failed", e);
+      return null;
+    }
   });
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'job-board' | 'approvals' | 'survey-tracker' | 'digital-packing-list' | 'warehouse-checklist' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>(() => {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'approvals' | 'survey-tracker' | 'warehouse-checklist' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>(() => {
     const saved = localStorage.getItem('writer_active_tab');
-    if (saved === 'digital-packing-list') return 'dashboard'; // Reset if coming back from refresh to avoid lock weirdness if needed, but we typically want persistent tabs
     return (saved as any) || 'dashboard';
   });
   const [isNavigationLocked, setIsNavigationLocked] = useState(false);
@@ -52,8 +71,42 @@ const App: React.FC = () => {
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
   const [allCredentials, setAllCredentials] = useState<MockUser[]>(() => {
     const saved = localStorage.getItem('writer_system_users');
-    return saved ? JSON.parse(saved) : USERS;
-  }); // State to hold login credentials
+    let users = USERS;
+    try {
+      if (saved) {
+        users = JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error("Error parsing writer_system_users", e);
+    }
+    
+    // Auto-sync: If new users are added to USERS constant in code, add them to state
+    // Use optional chaining and fallback to be safe
+    const existingIds = new Set(users.filter(u => u?.profile?.employee_id).map((u: any) => u.profile.employee_id));
+    const missingUsers = USERS.filter(u => u?.profile?.employee_id && !existingIds.has(u.profile.employee_id));
+    
+    // Also ensure all existing users have a permissions object
+    users = users.map((u: any) => {
+      if (u.profile && !u.profile.permissions) {
+        // Find them in USERS to get default permissions if missing
+        const blueprint = USERS.find(b => b.profile.employee_id === u.profile.employee_id);
+        return {
+          ...u,
+          profile: {
+            ...u.profile,
+            permissions: blueprint?.profile?.permissions || {}
+          }
+        };
+      }
+      return u;
+    });
+
+    if (missingUsers.length > 0) {
+      users = [...users, ...missingUsers];
+    }
+    
+    return users;
+  }); 
 
   // Navigation Lock Logic (Tablet Safety - Global)
   useEffect(() => {
@@ -128,9 +181,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem('writer_current_user', JSON.stringify(currentUser));
+      sessionStorage.setItem('writer_current_user', JSON.stringify(currentUser));
     } else {
-      localStorage.removeItem('writer_current_user');
+      sessionStorage.removeItem('writer_current_user');
     }
   }, [currentUser]);
 
@@ -149,6 +202,7 @@ const App: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // New state for mobile
   const [showHolidayAlert, setShowHolidayAlert] = useState(false);
   const [showSystemAlert, setShowSystemAlert] = useState(false);
+  const [sundayPrompt, setSundayPrompt] = useState<{ job: Partial<Job>, mode: 'add' | 'edit', oldId?: string } | null>(null);
 
   // Check for public tracking link
   const queryParams = new URLSearchParams(window.location.search);
@@ -231,7 +285,7 @@ const App: React.FC = () => {
   const fetchUsers = useCallback(async () => {
     try {
         // Sync systemUsers with the profiles in allCredentials
-        const userProfiles = allCredentials.map(u => ({
+        const userProfiles = allCredentials.filter(u => u && u.profile).map(u => ({
             ...u.profile,
             username: u.username,
             password: u.password
@@ -554,7 +608,14 @@ const App: React.FC = () => {
 
     const snapshotKey = `jobs_snapshot_${currentUser.employee_id}`;
     const lastSnapshotStr = localStorage.getItem(snapshotKey);
-    const lastSnapshot: Job[] = lastSnapshotStr ? JSON.parse(lastSnapshotStr) : [];
+    let lastSnapshot: Job[] = [];
+    try {
+        lastSnapshot = lastSnapshotStr ? JSON.parse(lastSnapshotStr) : [];
+        if (!Array.isArray(lastSnapshot)) lastSnapshot = [];
+    } catch (e) {
+        console.error("Failed to parse jobs snapshot", e);
+        lastSnapshot = [];
+    }
 
     // If first run (no snapshot), baseline it and return
     if (lastSnapshot.length === 0) {
@@ -607,9 +668,10 @@ const App: React.FC = () => {
             });
         }
 
-        const prevVehicles = previousJob.vehicles || [];
-        const currVehicles = currentJob.vehicles || [];
-        if (JSON.stringify(prevVehicles.sort()) !== JSON.stringify(currVehicles.sort()) && currVehicles.length > 0) {
+        const prevVehicles = Array.isArray(previousJob.vehicles) ? previousJob.vehicles : [];
+        const currVehicles = Array.isArray(currentJob.vehicles) ? currentJob.vehicles : [];
+        
+        if (JSON.stringify([...prevVehicles].sort()) !== JSON.stringify([...currVehicles].sort()) && currVehicles.length > 0) {
              newNotifs.push({
                 id: `veh-${currentJob.id}-${Date.now()}`,
                 text: `Vehicles updated for Job ${currentJob.id}: ${currVehicles.join(', ')}.`,
@@ -619,9 +681,10 @@ const App: React.FC = () => {
             });
         }
 
-        const prevCrew = previousJob.writer_crew || [];
-        const currCrew = currentJob.writer_crew || [];
-        if (JSON.stringify(prevCrew.sort()) !== JSON.stringify(currCrew.sort()) && currCrew.length > 0) {
+        const prevCrew = Array.isArray(previousJob.writer_crew) ? previousJob.writer_crew : [];
+        const currCrew = Array.isArray(currentJob.writer_crew) ? currentJob.writer_crew : [];
+        
+        if (JSON.stringify([...prevCrew].sort()) !== JSON.stringify([...currCrew].sort()) && currCrew.length > 0) {
              newNotifs.push({
                 id: `crew-${currentJob.id}-${Date.now()}`,
                 text: `Crew members updated for Job ${currentJob.id}.`,
@@ -717,45 +780,49 @@ const App: React.FC = () => {
     setJobs(prevJobs => prevJobs.map(j => j.id === updatedJob.id ? updatedJob : j));
   };
 
-  const handleAddSurvey = async (survey: Omit<Survey, 'id' | 'created_at'>) => {
+  const handleAddSurvey = async (survey: Omit<Survey, 'id' | 'created_at' | 'created_by_id'>) => {
     const newSurvey: Survey = {
       ...survey,
       id: `SRV-${Date.now()}`,
+      created_by_id: currentUser?.id || 'unknown',
       created_at: Date.now()
     };
     const { error } = await supabase.from('surveys').insert([newSurvey]);
-    if (error) alert(`Error adding survey: ${error.message}`);
-    else fetchSurveys();
+    if (error) {
+      console.error('Error adding survey:', error.message);
+      addNotification(`Error adding survey: ${error.message}`, 'error');
+      alert(`Error adding survey: ${error.message}`);
+      throw error;
+    } else {
+      addNotification('Survey booked successfully');
+      fetchSurveys();
+    }
   };
 
   const handleUpdateSurvey = async (survey: Survey) => {
     const { error } = await supabase.from('surveys').update(survey).eq('id', survey.id);
-    if (error) alert(`Error updating survey: ${error.message}`);
-    else fetchSurveys();
+    if (error) {
+      console.error('Error updating survey:', error.message);
+      addNotification(`Error updating survey: ${error.message}`, 'error');
+      alert(`Error updating survey: ${error.message}`);
+      throw error;
+    } else {
+      addNotification('Survey updated successfully');
+      fetchSurveys();
+    }
   };
 
   const handleDeleteSurvey = async (id: string) => {
-    const surveyToDelete = surveys.find(s => s.id === id);
-    
-    // If synced to Google Calendar, delete the event first
-    if (surveyToDelete?.google_event_id && googleTokens) {
-      try {
-        await fetch('/api/calendar-delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            eventId: surveyToDelete.google_event_id, 
-            tokens: googleTokens 
-          })
-        });
-      } catch (err) {
-        console.error('Failed to delete Google Calendar event:', err);
-      }
-    }
-
     const { error } = await supabase.from('surveys').delete().eq('id', id);
-    if (error) alert(`Error deleting survey: ${error.message}`);
-    else fetchSurveys();
+    if (error) {
+      console.error('Error deleting survey:', error.message);
+      addNotification(`Error deleting survey: ${error.message}`, 'error');
+      alert(`Error deleting survey: ${error.message}`);
+      throw error;
+    } else {
+      addNotification('Survey deleted successfully');
+      fetchSurveys();
+    }
   };
 
   const handleEditJob = async (job: Job, oldId?: string) => {
@@ -807,20 +874,42 @@ const App: React.FC = () => {
         const baseJob = (job.id === baseId ? job : relatedJobs.find(j => j.id === baseId)) || job;
         const duration = job.duration || 1;
         
-        // Calculate the required dates based on the new duration
-        let currentDateObj = new Date(baseJob.job_date || getUAEToday());
-        let daysScheduled = 0;
-        const requiredDates: string[] = [];
-        
-        while (daysScheduled < duration) {
-            if (currentDateObj.getUTCDay() === 0) {
-                currentDateObj.setDate(currentDateObj.getDate() + 1);
-                continue;
-            }
-            requiredDates.push(currentDateObj.toISOString().split('T')[0]);
-            daysScheduled++;
-            currentDateObj.setDate(currentDateObj.getDate() + 1);
+    // --- Sunday Handling Detection ---
+    // Use explicit UTC construction to avoid local timezone shifts
+    const startDateStr = baseJob.job_date || getUAEToday();
+    let testDate = new Date(`${startDateStr}T00:00:00Z`);
+    let hasSundayRange = false;
+    let daysChecked = 0;
+    while (daysChecked < duration) {
+        if (testDate.getUTCDay() === 0) {
+            hasSundayRange = true;
+            break;
         }
+        daysChecked++;
+        testDate.setUTCDate(testDate.getUTCDate() + 1);
+    }
+
+    if (hasSundayRange && !job.sunday_handling) {
+        setSundayPrompt({ job, mode: 'edit', oldId });
+        return;
+    }
+    // --- End Sunday Handling ---
+
+    // Calculate the required dates based on the new duration
+    let currentDateObj = new Date(`${baseJob.job_date || getUAEToday()}T00:00:00Z`);
+    let daysScheduled = 0;
+    const requiredDates: { date: string, isSunday: boolean }[] = [];
+    
+    while (daysScheduled < duration) {
+        const isSunday = currentDateObj.getUTCDay() === 0;
+        if (isSunday && job.sunday_handling !== 'Include') {
+            currentDateObj.setUTCDate(currentDateObj.getUTCDate() + 1);
+            continue;
+        }
+        requiredDates.push({ date: currentDateObj.toISOString().split('T')[0], isSunday });
+        daysScheduled++;
+        currentDateObj.setUTCDate(currentDateObj.getUTCDate() + 1);
+    }
 
         const jobsToCreate: Job[] = [];
         const jobsToDelete: string[] = [];
@@ -829,14 +918,24 @@ const App: React.FC = () => {
         for (let i = 0; i < requiredDates.length; i++) {
             const expectedId = i === 0 ? baseId : `${baseId}-D${i + 1}`;
             const existingJob = relatedJobs.find(j => j.id === expectedId);
+            const isSunday = requiredDates[i].isSunday;
             
             if (existingJob) {
-                // Update its date and duration if needed, but skip the one we just updated
-                if (existingJob.id !== job.id && (existingJob.job_date !== requiredDates[i] || existingJob.duration !== duration)) {
+                // Update its date and duration, and potentially status if Sunday
+                const needsUpdate = existingJob.id !== job.id && (
+                    existingJob.job_date !== requiredDates[i].date || 
+                    existingJob.duration !== duration ||
+                    (isSunday && existingJob.status === JobStatus.ACTIVE && currentUser.role !== UserRole.ADMIN)
+                );
+
+                if (needsUpdate) {
                     jobsToUpdate.push({
                         ...existingJob,
-                        job_date: requiredDates[i],
+                        job_date: requiredDates[i].date,
                         duration: duration,
+                        status: isSunday 
+                          ? (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD) 
+                          : existingJob.status,
                         last_edited_by: currentUser?.name || 'Unknown',
                         last_edited_at: Date.now()
                     });
@@ -847,8 +946,11 @@ const App: React.FC = () => {
                     ...baseJob,
                     id: expectedId,
                     title: expectedId,
-                    job_date: requiredDates[i],
+                    job_date: requiredDates[i].date,
                     duration: duration,
+                    status: isSunday 
+                      ? (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD) 
+                      : (baseJob.status || (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD)),
                     created_at: Date.now(),
                     last_edited_by: currentUser?.name || 'Unknown',
                     last_edited_at: Date.now()
@@ -900,21 +1002,41 @@ const App: React.FC = () => {
 
     const duration = job.duration || 1;
     const baseId = job.id!;
+
+    // --- Sunday Handling Detection ---
+    // Use explicit UTC construction
+    let testDate = new Date(`${baseDate}T00:00:00Z`);
+    let hasSundayRange = false;
+    let daysChecked = 0;
+    while (daysChecked < duration) {
+        if (testDate.getUTCDay() === 0) {
+            hasSundayRange = true;
+            break;
+        }
+        daysChecked++;
+        testDate.setUTCDate(testDate.getUTCDate() + 1);
+    }
+
+    if (hasSundayRange && !job.sunday_handling) {
+        setSundayPrompt({ job, mode: 'add' });
+        return;
+    }
+    // --- End Sunday Handling ---
     
     // Logic to create multiple jobs based on duration
     const jobsToCreate: Job[] = [];
     
-    // We treat the string 'YYYY-MM-DD' as UTC Midnight for the purpose of calculation logic
-    // to allow 'getUTCDay()' to accurately reflect the day of that string regardless of local browser timezone.
-    let currentDateObj = new Date(baseDate); 
+    // Explicit UTC Midnight
+    let currentDateObj = new Date(`${baseDate}T00:00:00Z`); 
     
     let daysScheduled = 0;
     
     while (daysScheduled < duration) {
-       // Check if Sunday (0). Use getUTCDay() to align with the date string (YYYY-MM-DD treated as UTC).
-       if (currentDateObj.getUTCDay() === 0) {
-          // Skip Sunday, move to next day
-          currentDateObj.setDate(currentDateObj.getDate() + 1);
+       // Check if Sunday (0).
+       const isSunday = currentDateObj.getUTCDay() === 0;
+       if (isSunday && job.sunday_handling !== 'Include') {
+          // Skip Sunday
+          currentDateObj.setUTCDate(currentDateObj.getUTCDate() + 1);
           continue;
        }
 
@@ -973,8 +1095,10 @@ const App: React.FC = () => {
          ...job,
          id: uniqueId,
          title: uniqueId,
-         // Allow status to be passed (e.g. for BLOCKED slots), otherwise default based on role
-         status: job.status || (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD),
+         // If it's Sunday, it always needs approval (PENDING_ADD) regardless of admin role, per user request.
+         status: isSunday 
+           ? (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD) 
+           : (job.status || (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD)),
          created_at: Date.now(),
          requester_id: currentUser.employee_id,
          assigned_to: job.assigned_to || 'Unassigned',
@@ -986,13 +1110,14 @@ const App: React.FC = () => {
          vehicles: vehiclesArray,
          vehicle: vehicleString,
          duration: duration, 
+         sunday_handling: job.sunday_handling
        } as Job;
 
        jobsToCreate.push(newJobEntry);
        
        // Increment loop
        daysScheduled++;
-       currentDateObj.setDate(currentDateObj.getDate() + 1);
+       currentDateObj.setUTCDate(currentDateObj.getUTCDate() + 1);
     }
     
     // Batch Insert
@@ -1007,7 +1132,8 @@ const App: React.FC = () => {
     } else {
       await fetchJobs();
       if (duration > 1) {
-        alert(`Successfully scheduled ${duration} days (skipping Sundays).`);
+        const sundayMsg = job.sunday_handling === 'Include' ? "including Sunday" : "skipping Sunday";
+        alert(`Successfully scheduled ${duration} days (${sundayMsg}).`);
       }
     }
   };
@@ -1280,20 +1406,20 @@ const App: React.FC = () => {
   const handleLogin = (user: UserProfile) => {
     setCurrentUser(user);
     // Reset active tab to a safe default if current default isn't allowed
-    if (user.role !== UserRole.ADMIN && !user.permissions.dashboard) {
+    if (user.role !== UserRole.ADMIN && (!user.permissions || !user.permissions.dashboard)) {
         // Find first allowed tab
-        const allowed = Object.entries(user.permissions).find(([_, val]) => val);
+        const allowed = user.permissions ? Object.entries(user.permissions).find(([_, val]) => val) : null;
         if (allowed) {
             // Map permission keys back to tab IDs if they differ
             const map: Record<string, string> = {
                 dashboard: 'dashboard',
                 schedule: 'schedule',
-                jobBoard: 'job-board',
+                jobBoard: 'dashboard', // Mapped to dashboard as job-board doesn't exist
                 warehouse: 'warehouse',
                 importClearance: 'import-clearance',
                 approvals: 'approvals',
                 surveyTracker: 'survey-tracker',
-                digitalPackingList: 'digital-packing-list',
+                digitalPackingList: 'writer-docs', // Mapped to writer-docs
                 warehouseChecklist: 'warehouse-checklist',
                 writerDocs: 'writer-docs',
                 inventory: 'inventory',
@@ -1304,7 +1430,10 @@ const App: React.FC = () => {
                 users: 'users',
                 ai: 'ai'
             };
-            setActiveTab(map[allowed[0]] as any);
+            const targetTab = map[allowed[0]] || 'dashboard';
+            setActiveTab(targetTab as any);
+        } else {
+            setActiveTab('dashboard');
         }
     } else {
         setActiveTab('dashboard');
@@ -1313,6 +1442,18 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     setCurrentUser(null);
+  };
+
+  const handleSundayConfirm = (action: 'Skip' | 'Include') => {
+    if (!sundayPrompt) return;
+    const { job, mode, oldId } = sundayPrompt;
+    const updatedJob = { ...job, sunday_handling: action };
+    setSundayPrompt(null);
+    if (mode === 'add') {
+      handleAddJob(updatedJob);
+    } else {
+      handleEditJob(updatedJob as Job, oldId);
+    }
   };
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
@@ -1337,6 +1478,19 @@ const App: React.FC = () => {
   return (
     <div className="flex min-h-screen bg-[#f8fafc] text-slate-900 font-sans selection:bg-blue-100 selection:text-blue-900 overflow-hidden">
       <HolidayAlertModal isOpen={showHolidayAlert} onClose={() => setShowHolidayAlert(false)} />
+      
+      {sundayPrompt && (
+        <SundayJobModal 
+          isOpen={!!sundayPrompt}
+          onClose={() => setSundayPrompt(null)}
+          onConfirm={handleSundayConfirm}
+          jobDetails={{
+            startDate: sundayPrompt.job.job_date || getUAEToday(),
+            duration: sundayPrompt.job.duration || 1,
+            title: (sundayPrompt.job as any).title || sundayPrompt.job.id || 'Job Request'
+          }}
+        />
+      )}
       
       {/* Global System Alert Modal */}
       {settings.system_alert && (
@@ -1498,15 +1652,6 @@ const App: React.FC = () => {
                 users={systemUsers}
               />
             )}
-            {activeTab === 'job-board' && (
-              <JobBoard 
-                jobs={jobs}
-                onAddJob={handleAddJob}
-                onDeleteJob={handleDeleteJob}
-                currentUser={currentUser}
-                users={systemUsers}
-              />
-            )}
             {activeTab === 'warehouse' && (
               <WarehouseActivity 
                 jobs={jobs} 
@@ -1532,7 +1677,7 @@ const App: React.FC = () => {
               <ApprovalQueue 
                 jobs={jobs} 
                 onApproval={handleApproval}
-                isAdmin={currentUser.role === UserRole.ADMIN || currentUser.permissions.approvals || currentUser.employee_id === 'OPS-ADMIN-01'}
+                isAdmin={currentUser.role === UserRole.ADMIN || (currentUser.permissions && currentUser.permissions.approvals) || currentUser.employee_id === 'OPS-ADMIN-01'}
                 personnel={personnel}
                 vehicles={vehicles}
                 users={systemUsers}
@@ -1557,13 +1702,7 @@ const App: React.FC = () => {
                 onUpdateSurvey={handleUpdateSurvey}
                 onDeleteSurvey={handleDeleteSurvey}
                 currentUser={currentUser}
-                googleTokens={googleTokens}
-                onConnectGoogle={handleConnectGoogle}
-                onDisconnectGoogle={handleDisconnectGoogle}
               />
-            )}
-            {activeTab === 'digital-packing-list' && (
-              <DigitalPackingList currentUser={currentUser} />
             )}
             {activeTab === 'warehouse-checklist' && (
               <WarehouseChecklistComponent 
@@ -1619,7 +1758,7 @@ const App: React.FC = () => {
                 onUpdatePersonnelStatus={handleUpdatePersonnelStatus}
                 vehicles={vehicles}
                 onUpdateVehicleStatus={handleUpdateVehicleStatus}
-                isAdmin={currentUser.role === UserRole.ADMIN || currentUser.permissions.resources}
+                isAdmin={currentUser.role === UserRole.ADMIN || (currentUser.permissions && currentUser.permissions.resources)}
                 onDeletePersonnel={handleDeletePersonnel}
                 onDeleteVehicle={handleDeleteVehicle}
                 onAddPersonnel={handleAddPersonnel}

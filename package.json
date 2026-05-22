@@ -24,6 +24,8 @@
     "jspdf-autotable": "^3.8.4",
     "lucide-react": "^0.562.0",
     "motion": "^12.38.0",
+    "papaparse": "^5.5.3",
+    "pdfjs-dist": "^5.7.284",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-signature-canvas": "^1.1.0-alpha.2",

@@ -286,7 +286,7 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({
                    type === 'safety' ? 'Safety Monitoring' :
                    'Surprise Visit Audit'}
                 </span>
-                <span className="text-xs text-slate-400 font-bold tracking-widest uppercase">ID: {item.id.split('-')[0]}</span>
+                <span className="text-xs text-slate-400 font-bold tracking-widest uppercase">ID: {item.id?.split('-')[0] || 'N/A'}</span>
               </div>
               
               <h4 className="text-2xl font-black text-slate-800 mb-2">{item.date}</h4>

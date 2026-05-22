@@ -26,7 +26,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const allMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, permission: 'dashboard' },
     { id: 'schedule', label: 'Job Schedule', icon: Calendar, permission: 'schedule' },
-    { id: 'job-board', label: 'Simple Board', icon: ClipboardList, permission: 'jobBoard' },
     { id: 'warehouse', label: 'Warehouse Area', icon: Box, permission: 'warehouse' },
     { id: 'import-clearance', label: 'Import Clearance', icon: FileCheck, permission: 'importClearance' },
     { id: 'approvals', label: 'Approval Pool', icon: CheckSquare, permission: 'approvals' },
@@ -36,7 +35,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'inventory', label: 'Inventory', icon: Clipboard, permission: 'inventory' },
     { id: 'tracking', label: 'Tracking', icon: Map, permission: 'tracking' },
     { id: 'transporter', label: 'Transporter', icon: Bus, permission: 'transporter' }, // New Transporter Module
-    { id: 'digital-packing-list', label: 'Digitial Packing', icon: ClipboardList, permission: 'digitalPackingList' },
     { id: 'resources', label: 'Fleet & Crew', icon: Users, permission: 'resources' },
     { id: 'capacity', label: 'Capacity Settings', icon: SlidersHorizontal, permission: 'capacity' },
     { id: 'users', label: 'User Access', icon: UserCog, permission: 'users' },
@@ -46,7 +44,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Filter items based on permissions or ADMIN role
   const menuItems = allMenuItems.filter(item => {
     if (currentUser.role === UserRole.ADMIN) return true;
-    return currentUser.permissions[item.permission as keyof typeof currentUser.permissions];
+    if (!currentUser.permissions) return false;
+    return !!currentUser.permissions[item.permission as keyof typeof currentUser.permissions];
   });
 
   // Base classes for sidebar

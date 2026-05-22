@@ -771,6 +771,13 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
       }
     };
 
+    const ensureSpace = (needed: number) => {
+      if (yPos + needed > pageHeight - 20) {
+        doc.addPage();
+        yPos = 30;
+      }
+    };
+
     const addTitle = (title: string, showHeader: boolean = true) => {
       let titleXOffset = 0;
       if (logo) {
@@ -811,8 +818,11 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
       yPos = 50;
       
       if (showHeader) {
-        doc.setFontSize(22); doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]); doc.setFont("helvetica", "bold");
-        doc.text(title, margin, yPos); yPos += 20;
+        const titleSize = title.length > 30 ? 15 : 20;
+        doc.setFontSize(titleSize); doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]); doc.setFont("helvetica", "bold");
+        const splitTitle = doc.splitTextToSize(title, pageWidth - margin * 2 - 10);
+        doc.text(splitTitle, margin, yPos);
+        yPos += splitTitle.length * (titleSize * 0.35 + 2) + 8;
       }
     };
 
@@ -859,18 +869,36 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
          doc.setFont("helvetica", "normal");
          const disclaimerText = "On completion of your packing/delivery the Crew foreman will walk through the property with you to check and confirm with you the following:";
          const splitDisclaimer = doc.splitTextToSize(disclaimerText, pageWidth - (margin * 2));
+         
+         ensureSpace(splitDisclaimer.length * 5 + 5);
          doc.text(splitDisclaimer, margin, yPos);
          yPos += splitDisclaimer.length * 5 + 5;
 
-         const checkItem = (text: string, checked: boolean, y: number) => { drawCheckbox(margin, y, checked); doc.text(text, margin + 10, y); };
-         checkItem("I confirm the property was checked with the crew foreman and found NO damage.", data.walkThrough.noDamage, yPos + 10);
-         checkItem("I confirm all items have been packed/removed; no empty cartons left behind.", data.walkThrough.itemsCheck, yPos + 20);
-         checkItem("I confirm the property was checked and found the following damage (detailed below).", data.walkThrough.foundDamage, yPos + 30);
-         yPos += 50;
+         ensureSpace(45);
+         drawCheckbox(margin, yPos + 5, data.walkThrough.noDamage);
+         doc.text("I confirm the property was checked with the crew foreman and found NO damage.", margin + 10, yPos + 8);
+         yPos += 10;
+
+         ensureSpace(15);
+         drawCheckbox(margin, yPos + 5, data.walkThrough.itemsCheck);
+         doc.text("I confirm all items have been packed/removed; no empty cartons left behind.", margin + 10, yPos + 8);
+         yPos += 10;
+
+         ensureSpace(15);
+         drawCheckbox(margin, yPos + 5, data.walkThrough.foundDamage);
+         doc.text("I confirm the property was checked and found the following damage (detailed below).", margin + 10, yPos + 8);
+         yPos += 15;
+
          if (data.clientNotes) {
+            ensureSpace(30);
             yPos = addSectionDivider("Notes / Damage Report", yPos); yPos += 5;
             const splitNotes = doc.splitTextToSize(data.clientNotes, pageWidth - (margin*2));
-            doc.text(splitNotes, margin, yPos); yPos += splitNotes.length * 5 + 10;
+            splitNotes.forEach((line: string) => {
+               ensureSpace(6);
+               doc.text(line, margin, yPos);
+               yPos += 5;
+            });
+            yPos += 5;
          }
     } else if (activeForm === 'delivery') {
          addTitle("Delivery Report");
@@ -890,14 +918,20 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
             theme: 'grid',
             styles: { fontSize: 8 },
          });
-         yPos = (doc as any).lastAutoTable.finalY + 20;
+         yPos = (doc as any).lastAutoTable.finalY + 15;
          if (deliveryData.notes) {
+            ensureSpace(20);
             doc.setFont("helvetica", "bold");
             doc.text("Remarks / Notes:", margin, yPos);
-            yPos += 5;
+            yPos += 7;
             doc.setFont("helvetica", "normal");
             const splitNotes = doc.splitTextToSize(deliveryData.notes, pageWidth - margin * 2);
-            doc.text(splitNotes, margin, yPos);
+            splitNotes.forEach((line: string) => {
+               ensureSpace(6);
+               doc.text(line, margin, yPos);
+               yPos += 5;
+            });
+            yPos += 5;
          }
     } else if (activeForm === 'crating') {
          addTitle("Crating Specification Sheet");
@@ -922,16 +956,22 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
             styles: { fontSize: 8 },
          });
          yPos = (doc as any).lastAutoTable.finalY + 10;
+         ensureSpace(15);
          doc.text(`Total Volume: ${calculateTotalVolume()} CBM`, margin, yPos);
          yPos += 10;
          if (cratingData.notes) {
+            ensureSpace(20);
             doc.setFont("helvetica", "bold");
             doc.text("Remarks:", margin, yPos);
-            yPos += 5;
+            yPos += 7;
             doc.setFont("helvetica", "normal");
             const splitRemarks = doc.splitTextToSize(cratingData.notes, pageWidth - margin * 2);
-            doc.text(splitRemarks, margin, yPos);
-            yPos += splitRemarks.length * 5 + 5;
+            splitRemarks.forEach((line: string) => {
+               ensureSpace(6);
+               doc.text(line, margin, yPos);
+               yPos += 5;
+            });
+            yPos += 5;
          }
     } else if (activeForm === 'electronicList') {
          addTitle("Electronic Items Inventory");
@@ -954,25 +994,32 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
          });
          yPos = (doc as any).lastAutoTable.finalY + 10;
          if (electronicData.remarks) {
+            ensureSpace(20);
             doc.setFont("helvetica", "bold");
             doc.text("Remarks:", margin, yPos);
-            yPos += 5;
+            yPos += 7;
             doc.setFont("helvetica", "normal");
             const splitRemarks = doc.splitTextToSize(electronicData.remarks, pageWidth - margin * 2);
-            doc.text(splitRemarks, margin, yPos);
-            yPos += splitRemarks.length * 5 + 5;
+            splitRemarks.forEach((line: string) => {
+               ensureSpace(6);
+               doc.text(line, margin, yPos);
+               yPos += 5;
+            });
+            yPos += 5;
          }
     } else if (activeForm === 'accessorial') {
           const serviceTypeStr = accessorialData.serviceType.packing ? " (PACKING/ORIGIN)" : accessorialData.serviceType.delivery ? " (DELIVERY/DESTINATION)" : "";
           addTitle("Accessorial Services Sheet" + serviceTypeStr);
-          const h1 = addField("Client Name", accessorialData.clientName, margin, yPos, 85);
-          const h2 = addField("Job Ref", accessorialData.jobId, margin + 95, yPos, 80);
-          yPos += Math.max(h1, h2) + 10;
+          const h1 = addField("Client Name", accessorialData.clientName, margin, yPos, 60);
+          const h2 = addField("Job Ref", accessorialData.jobId, margin + 65, yPos, 55);
+          const h3 = addField("Date", accessorialData.date, margin + 125, yPos, 55);
+          yPos += Math.max(h1, h2, h3) + 12;
           
           const selectedServices = Object.entries(accessorialData.services)
             .filter(([_, v]) => v)
             .map(([k]) => accessorialItems.find(item => item.key === k));
 
+          ensureSpace(15);
           doc.setFont("helvetica", "bold");
           doc.text("Authorized Services:", margin, yPos);
           doc.setFont("helvetica", "normal");
@@ -980,7 +1027,7 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
           
           selectedServices.forEach(item => { 
             if (!item) return;
-            if (yPos > pageHeight - 40) { doc.addPage(); yPos = 20; }
+            ensureSpace(25);
             doc.setFont("helvetica", "bold");
             doc.text(`• ${item.label.toUpperCase()}`, margin + 5, yPos);
             yPos += 5;
@@ -994,21 +1041,41 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
           });
           
           yPos += 4;
-          if (accessorialData.details.stairCarryFloors) doc.text(`Stair Carry: ${accessorialData.details.stairCarryFloors} Floors`, margin, yPos += 6);
-          if (accessorialData.details.longCarryDistance) doc.text(`Long Carry: ${accessorialData.details.longCarryDistance} Meters`, margin, yPos += 6);
-          if (accessorialData.details.handymanType) doc.text(`Handyman Type: ${accessorialData.details.handymanType}`, margin, yPos += 6);
-          if (accessorialData.details.otherDescription) doc.text(`Other Details: ${accessorialData.details.otherDescription}`, margin, yPos += 6);
+          if (accessorialData.details.stairCarryFloors) {
+             ensureSpace(10);
+             doc.text(`Stair Carry: ${accessorialData.details.stairCarryFloors} Floors`, margin, yPos);
+             yPos += 6;
+          }
+          if (accessorialData.details.longCarryDistance) {
+             ensureSpace(10);
+             doc.text(`Long Carry: ${accessorialData.details.longCarryDistance} Meters`, margin, yPos);
+             yPos += 6;
+          }
+          if (accessorialData.details.handymanType) {
+             ensureSpace(10);
+             doc.text(`Handyman Type: ${accessorialData.details.handymanType}`, margin, yPos);
+             yPos += 6;
+          }
+          if (accessorialData.details.otherDescription) {
+             ensureSpace(10);
+             doc.text(`Other Details: ${accessorialData.details.otherDescription}`, margin, yPos);
+             yPos += 6;
+          }
           
           yPos += 10;
           if (accessorialData.remarks) {
-             if (yPos > pageHeight - 30) { doc.addPage(); yPos = 20; }
+             ensureSpace(20);
              doc.setFont("helvetica", "bold");
              doc.text("Remarks:", margin, yPos);
-             yPos += 5;
+             yPos += 7;
              doc.setFont("helvetica", "normal");
              const splitRemarks = doc.splitTextToSize(accessorialData.remarks, pageWidth - margin * 2);
-             doc.text(splitRemarks, margin, yPos);
-             yPos += splitRemarks.length * 5 + 5;
+             splitRemarks.forEach((line: string) => {
+                ensureSpace(6);
+                doc.text(line, margin, yPos);
+                yPos += 5;
+             });
+             yPos += 5;
           }
     } else if (activeForm === 'warehouseReceipt') {
         addTitle("Warehouse Receipt / Tally Sheet");
@@ -1029,134 +1096,345 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
         yPos += Math.max(h7, h8, h9) + 15;
         
         // Selected Packages
+        ensureSpace(15);
         doc.text("Package Selection:", margin, yPos);
         yPos += 7;
         const selectedStr = warehouseReceiptData.selectedPackages.sort((a,b)=>a-b).join(', ');
         const splitSelected = doc.splitTextToSize(selectedStr, pageWidth - margin*2);
         doc.setFontSize(8);
+        ensureSpace(splitSelected.length * 4 + 10);
         doc.text(splitSelected, margin, yPos);
         yPos += splitSelected.length * 4 + 10;
         
         // Footer Details Grid
-        addField("Missing Numbers", warehouseReceiptData.missingNumbers, margin, yPos);
-        addField("Total Crates", warehouseReceiptData.totalCrates, margin + 70, yPos);
-        addField("Truck Details", warehouseReceiptData.truckDetails, margin + 140, yPos);
-        yPos += 15;
+        ensureSpace(20);
+        const hAg1 = addField("Missing Numbers", warehouseReceiptData.missingNumbers, margin, yPos, 65);
+        const hAg2 = addField("Total Crates", warehouseReceiptData.totalCrates, margin + 70, yPos, 65);
+        const hAg3 = addField("Truck Details", warehouseReceiptData.truckDetails, margin + 140, yPos, 65);
+        yPos += Math.max(hAg1, hAg2, hAg3) + 10;
         
-        addField("Unnumbered", warehouseReceiptData.unnumbered, margin, yPos);
-        addField("Crate Nos", warehouseReceiptData.crateNos, margin + 70, yPos);
-        yPos += 15;
+        ensureSpace(20);
+        const hAg4 = addField("Unnumbered", warehouseReceiptData.unnumbered, margin, yPos, 65);
+        const hAg5 = addField("Crate Nos", warehouseReceiptData.crateNos, margin + 70, yPos, 65);
+        yPos += Math.max(hAg4, hAg5) + 10;
         
-        addField("Double Number", warehouseReceiptData.doubleNumber, margin, yPos);
-        addField("Total Received", warehouseReceiptData.totalReceived, margin + 70, yPos);
-        yPos += 15;
+        ensureSpace(20);
+        const hAg6 = addField("Double Number", warehouseReceiptData.doubleNumber, margin, yPos, 65);
+        const hAg7 = addField("Total Received", warehouseReceiptData.totalReceived, margin + 70, yPos, 65);
+        yPos += Math.max(hAg6, hAg7) + 10;
         
-        addField("Checked By", warehouseReceiptData.checkedBy, margin, yPos);
-        addField("Total Delivered", warehouseReceiptData.totalDelivered, margin + 70, yPos);
+        ensureSpace(20);
+        const hAg8 = addField("Checked By", warehouseReceiptData.checkedBy, margin, yPos, 65);
+        const hAg9 = addField("Total Delivered", warehouseReceiptData.totalDelivered, margin + 70, yPos, 65);
+        yPos += Math.max(hAg8, hAg9) + 15;
         
     } else if (activeForm === 'handyman') {
         addTitle("Handyman Completion Report");
         const h1 = addField("Client Name", handymanData.clientName, margin, yPos, 85);
         const h2 = addField("File No", handymanData.fileNo, margin + 90, yPos, 85);
-        yPos += Math.max(h1, h2) + 5;
+        yPos += Math.max(h1, h2) + 6;
         
         const h3 = addField("Address", handymanData.address, margin, yPos, 85);
         const h4 = addField("Date", handymanData.date, margin + 90, yPos, 85);
-        yPos += Math.max(h3, h4) + 5;
+        yPos += Math.max(h3, h4) + 6;
         
         const h5 = addField("Handyman Assigned", handymanData.handymanAssigned, margin, yPos, 85);
         const h6 = addField("Day Assigned", handymanData.dayAssigned, margin + 90, yPos, 85);
-        yPos += Math.max(h5, h6) + 15;
-        
-        // List Services Grouped
-        const handymanGroups = [
-          { title: 'Wall Fixture', items: ['pictureFrames', 'wallMountOrnaments', 'mirrors', 'shelvingUnits', 'tvStandMounting', 'curtainRods'] },
-          { title: 'Electrical-Fixture', items: ['refrigerator', 'tv', 'hiFiSystem', 'chandelier', 'lights', 'washingMachine', 'dishwasher', 'electricalCooker', 'dishAntennae', 'windowAC', 'splitAC'] },
-          { title: 'Furniture', items: ['assembly', 'disassembly', 'wardrobes'] },
-          { title: 'Valet / Maid Services', items: ['houseCleaning', 'laundry', 'packingClothes', 'closetArrangements'] },
-          { title: 'Outdoor', items: ['trampoline', 'gazebo', 'hammock', 'playHouse', 'swing'] },
-          { title: 'Others', items: ['waterbed', 'childSafetyGates', 'wallPainting', 'furnitureRestoration', 'floorRepairs', 'poolTable'] },
+        yPos += Math.max(h5, h6) + 12;
+
+        ensureSpace(15);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]);
+        doc.text("Completed Services Checklist:", margin, yPos);
+        yPos += 8;
+
+        const drawHandymanCard = (title: string, items: { key: string; label: string }[], x: number, y: number, width: number, height: number) => {
+             // Card Background and Border
+             doc.setFillColor(252, 252, 253); // bg-slate-50
+             doc.setDrawColor(226, 232, 240); // slate-200
+             doc.roundedRect(x, y, width, height, 3, 3, 'FD');
+
+             // Card Title
+             doc.setFont("helvetica", "bold");
+             doc.setFontSize(8);
+             doc.setTextColor(37, 99, 235); // blue-600
+             doc.text(title.toUpperCase(), x + 4, y + 6);
+
+             // Divider line inside Card
+             doc.setDrawColor(241, 245, 249); // slate-100
+             doc.line(x + 4, y + 9, x + width - 4, y + 9);
+
+             // Checkpoints
+             let itemY = y + 15;
+             doc.setFont("helvetica", "normal");
+             doc.setFontSize(8);
+             doc.setTextColor(51, 65, 85); // slate-700
+             
+             items.forEach((item) => {
+                 const checked = !!(handymanData.services as any)[item.key];
+                 
+                 // Draw checkbox box
+                 doc.setDrawColor(148, 163, 184); // slate-400
+                 doc.setFillColor(255, 255, 255);
+                 doc.rect(x + 5, itemY - 3, 3.5, 3.5, 'FD');
+                 
+                 if (checked) {
+                     // Draw an X mark in blue
+                     doc.setDrawColor(37, 99, 235); // blue-600
+                     doc.line(x + 5, itemY - 3, x + 8.5, itemY + 0.5);
+                     doc.line(x + 8.5, itemY - 3, x + 5, itemY + 0.5);
+                 }
+                 
+                 doc.text(item.label, x + 11, itemY);
+                 itemY += 5;
+             });
+        };
+
+        const pdfHandymanGroups = [
+          {
+            title: 'Wall Fixture',
+            items: [
+              { key: 'pictureFrames', label: 'Picture Frames' },
+              { key: 'wallMountOrnaments', label: 'Wall Mount Ornaments' },
+              { key: 'mirrors', label: 'Mirrors' },
+              { key: 'shelvingUnits', label: 'Shelving Units' },
+              { key: 'tvStandMounting', label: 'TV Stand Mounting' },
+              { key: 'curtainRods', label: 'Curtain Rods' }
+            ]
+          },
+          {
+            title: 'Electrical-Fixture',
+            items: [
+              { key: 'refrigerator', label: 'Refrigerator' },
+              { key: 'tv', label: 'TV' },
+              { key: 'hiFiSystem', label: 'Hi Fi System' },
+              { key: 'chandelier', label: 'Chandelier' },
+              { key: 'lights', label: 'Lights' },
+              { key: 'washingMachine', label: 'Washing Machine' },
+              { key: 'dishwasher', label: 'Dishwasher' },
+              { key: 'electricalCooker', label: 'Electrical Cooker' },
+              { key: 'dishAntennae', label: 'Dish Antennae' },
+              { key: 'windowAC', label: 'Window A C' },
+              { key: 'splitAC', label: 'Split A C' }
+            ]
+          },
+          {
+            title: 'Furniture',
+            items: [
+              { key: 'assembly', label: 'Assembly' },
+              { key: 'disassembly', label: 'Disassembly' },
+              { key: 'wardrobes', label: 'Wardrobes' }
+            ]
+          },
+          {
+            title: 'Valet / Maid Services',
+            items: [
+              { key: 'houseCleaning', label: 'House Cleaning' },
+              { key: 'laundry', label: 'Laundry' },
+              { key: 'packingClothes', label: 'Packing Clothes' },
+              { key: 'closetArrangements', label: 'Closet Arrangements' }
+            ]
+          },
+          {
+            title: 'Outdoor',
+            items: [
+              { key: 'trampoline', label: 'Trampoline' },
+              { key: 'gazebo', label: 'Gazebo' },
+              { key: 'hammock', label: 'Hammock' },
+              { key: 'playHouse', label: 'Play House' },
+              { key: 'swing', label: 'Swing' }
+            ]
+          },
+          {
+            title: 'Others',
+            items: [
+              { key: 'waterbed', label: 'Waterbed' },
+              { key: 'childSafetyGates', label: 'Child Safety Gates' },
+              { key: 'wallPainting', label: 'Wall Painting' },
+              { key: 'furnitureRestoration', label: 'Furniture Restoration' },
+              { key: 'floorRepairs', label: 'Floor Repairs' },
+              { key: 'poolTable', label: 'Pool Table' }
+            ]
+          }
         ];
 
-        doc.text("Completed Services:", margin, yPos);
-        yPos += 8;
-        
-        handymanGroups.forEach(group => {
-            const activeItems = group.items.filter(key => (handymanData.services as any)[key]);
-            if (activeItems.length > 0) {
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(9);
-                doc.text(group.title, margin + 5, yPos);
-                yPos += 5;
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(10);
-                activeItems.forEach(key => {
-                    const label = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                    doc.text(`• ${label}`, margin + 10, yPos);
-                    yPos += 5;
-                });
-                yPos += 3;
-            }
+        const cardRows = [
+          [
+            { title: '1. Wall Fixture', items: pdfHandymanGroups[0].items },
+            { title: '4. Others', items: pdfHandymanGroups[5].items }
+          ],
+          [
+            { title: '2. Valet / Maid Services', items: pdfHandymanGroups[3].items },
+            { title: '5. Outdoor', items: pdfHandymanGroups[4].items }
+          ],
+          [
+            { title: '3. Electrical-Fixture', items: pdfHandymanGroups[1].items },
+            { title: '6. Furniture', items: pdfHandymanGroups[2].items }
+          ]
+        ];
+
+        cardRows.forEach((row) => {
+             const leftCard = row[0];
+             const rightCard = row[1];
+             
+             const leftLen = leftCard.items.length;
+             const rightLen = rightCard.items.length;
+             const maxLen = Math.max(leftLen, rightLen);
+             const rowHeight = 11 + (maxLen * 5) + 4;
+
+             ensureSpace(rowHeight + 6);
+
+             const colWidth = (pageWidth - margin * 2 - 8) / 2;
+
+             drawHandymanCard(leftCard.title, leftCard.items, margin, yPos, colWidth, rowHeight);
+             drawHandymanCard(rightCard.title, rightCard.items, margin + colWidth + 8, yPos, colWidth, rowHeight);
+
+             yPos += rowHeight + 6;
         });
+
+        yPos += 4;
+        ensureSpace(15);
+        const hTimeIn = addField("Time In", handymanData.timeIn, margin, yPos, 45);
+        const hTimeOut = addField("Time Out", handymanData.timeOut, margin + 50, yPos, 45);
+        yPos += Math.max(hTimeIn, hTimeOut) + 10;
         
-        yPos += 5;
-        
-        addField("Time In", handymanData.timeIn, margin, yPos);
-        addField("Time Out", handymanData.timeOut, margin + 50, yPos);
-        
-        yPos += 15;
-        if(handymanData.remarks) {
+        if (handymanData.remarks) {
+            ensureSpace(20);
             doc.setFont("helvetica", "bold");
+            doc.setFontSize(9);
+            doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]);
             doc.text("Remarks:", margin, yPos);
-            yPos += 5;
+            yPos += 7;
             doc.setFont("helvetica", "normal");
-            const splitNotes = doc.splitTextToSize(handymanData.remarks, pageWidth - margin * 2);
-            doc.text(splitNotes, margin, yPos);
-            yPos += splitNotes.length * 5 + 10;
+            doc.setFontSize(8);
+            doc.setTextColor(51, 65, 85);
+            const splitRemarks = doc.splitTextToSize(handymanData.remarks, pageWidth - margin * 2);
+            splitRemarks.forEach((line: string) => {
+               ensureSpace(6);
+               doc.text(line, margin, yPos);
+               yPos += 5;
+            });
+            yPos += 5;
         }
     } else if (activeForm === 'containerInspection') {
         addTitle("7-Point Container Inspection");
         const h1 = addField("Container No", containerInspectionData.containerNo, margin, yPos, 85);
         const h2 = addField("Seal No", containerInspectionData.sealNo, margin + 90, yPos, 45);
         const h3 = addField("Date", containerInspectionData.date, margin + 140, yPos, 40);
-        yPos += Math.max(h1, h2, h3) + 10;
+        yPos += Math.max(h1, h2, h3) + 12;
         
+        ensureSpace(15);
         doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]);
         doc.text("Inspection Checklist Status:", margin, yPos);
         yPos += 8;
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(8);
 
-        Object.entries(containerInspectionData.checkpoints).forEach(([section, points]) => {
-            const sectionLabel = section.replace(/([A-Z])/g, ' $1').trim().toUpperCase();
-            if (yPos > pageHeight - 40) { doc.addPage(); yPos = 20; }
-            
-            doc.setFont("helvetica", "bold");
-            doc.text(sectionLabel, margin + 5, yPos);
-            yPos += 5;
-            doc.setFont("helvetica", "normal");
-            
-            Object.entries(points).forEach(([point, checked]) => {
-                const pointLabel = point.replace(/([A-Z])/g, ' $1').trim();
-                doc.text(`${checked ? '[X]' : '[ ]'} ${pointLabel}`, margin + 10, yPos);
-                yPos += 5;
-            });
-            yPos += 2;
+        const drawCard = (title: string, points: Record<string, boolean>, x: number, y: number, width: number, height: number) => {
+             // Card Background and Border
+             doc.setFillColor(252, 252, 253); // bg-slate-50
+             doc.setDrawColor(226, 232, 240); // slate-200
+             doc.roundedRect(x, y, width, height, 3, 3, 'FD');
+
+             // Card Title
+             doc.setFont("helvetica", "bold");
+             doc.setFontSize(8);
+             doc.setTextColor(37, 99, 235); // blue-600
+             doc.text(title.toUpperCase(), x + 4, y + 6);
+
+             // Divider line inside Card
+             doc.setDrawColor(241, 245, 249); // slate-100
+             doc.line(x + 4, y + 9, x + width - 4, y + 9);
+
+             // Checkpoints
+             let itemY = y + 15;
+             doc.setFont("helvetica", "normal");
+             doc.setFontSize(8);
+             doc.setTextColor(51, 65, 85); // slate-700
+             
+             Object.entries(points).forEach(([point, checked]) => {
+                 const pointLabel = point.replace(/([A-Z])/g, ' $1').trim().replace(/^./, str => str.toUpperCase());
+                 
+                 // Draw checkbox box
+                 doc.setDrawColor(148, 163, 184); // slate-400
+                 doc.setFillColor(255, 255, 255);
+                 doc.rect(x + 5, itemY - 3, 3.5, 3.5, 'FD');
+                 
+                 if (checked) {
+                     // Draw an X mark in blue
+                     doc.setDrawColor(37, 99, 235); // blue-600
+                     doc.line(x + 5, itemY - 3, x + 8.5, itemY + 0.5);
+                     doc.line(x + 8.5, itemY - 3, x + 5, itemY + 0.5);
+                 }
+                 
+                 doc.text(pointLabel, x + 11, itemY);
+                 itemY += 5;
+             });
+        };
+
+        const cardRows = [
+          [
+            { key: 'outsideUndercarriage', label: '1. Outside Undercarriage' },
+            { key: 'frontWall', label: '5. Front Wall' }
+          ],
+          [
+            { key: 'insideOutsideDoors', label: '2. Inside/Outside Doors' },
+            { key: 'ceilingRoof', label: '6. Ceiling / Roof' }
+          ],
+          [
+            { key: 'rightSide', label: '3. Right Side' },
+            { key: 'floor', label: '7. Floor' }
+          ],
+          [
+            { key: 'leftSide', label: '4. Left Side' },
+            { key: 'sealVerification', label: '8. Seal Verification' }
+          ]
+        ];
+
+        cardRows.forEach((row) => {
+             const leftCard = row[0];
+             const rightCard = row[1];
+             const leftPoints = (containerInspectionData.checkpoints as any)[leftCard.key];
+             const rightPoints = (containerInspectionData.checkpoints as any)[rightCard.key];
+             
+             const leftLen = Object.keys(leftPoints).length;
+             const rightLen = Object.keys(rightPoints).length;
+             const maxLen = Math.max(leftLen, rightLen);
+             const rowHeight = 11 + (maxLen * 5) + 4;
+
+             ensureSpace(rowHeight + 6);
+
+             const colWidth = (pageWidth - margin * 2 - 8) / 2;
+
+             drawCard(leftCard.label, leftPoints, margin, yPos, colWidth, rowHeight);
+             drawCard(rightCard.label, rightPoints, margin + colWidth + 8, yPos, colWidth, rowHeight);
+
+             yPos += rowHeight + 6;
         });
 
-        yPos += 5;
-        if (yPos > pageHeight - 30) { doc.addPage(); yPos = 20; }
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]);
+
+        yPos += 4;
+        ensureSpace(15);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(10);
         doc.text(containerInspectionData.certified ? "STATUS: CERTIFIED - Container Inspection Passed" : "STATUS: NOT CERTIFIED", margin, yPos);
         yPos += 10;
         
         if (containerInspectionData.remarks) {
+            ensureSpace(15);
             doc.setFont("helvetica", "normal");
             doc.setFontSize(9);
             const splitRemarks = doc.splitTextToSize(`Remarks: ${containerInspectionData.remarks}`, pageWidth - margin * 2);
-            doc.text(splitRemarks, margin, yPos);
-            yPos += splitRemarks.length * 5 + 5;
+            splitRemarks.forEach((line: string) => {
+               ensureSpace(6);
+               doc.text(line, margin, yPos);
+               yPos += 5;
+            });
+            yPos += 5;
         }
     } else if (activeForm === 'vehicleInspection') {
         addTitle("Vehicle Condition Report");
@@ -1179,61 +1457,77 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
         yPos += Math.max(h8, h9, h10, h11) + 15;
         
         // Checklist
+        ensureSpace(15);
         yPos = addSectionDivider("Accessories & Equipment", yPos);
         const accessories = Object.entries(vehicleInspectionData.accessories)
             .filter(([_, checked]) => checked)
             .map(([key]) => key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()));
             
         if (accessories.length > 0) {
+            ensureSpace(15);
             doc.text("Present / Checked:", margin, yPos);
             yPos += 6;
             // Two columns
             const mid = Math.ceil(accessories.length / 2);
             const leftCol = accessories.slice(0, mid);
             const rightCol = accessories.slice(mid);
+            const colLen = leftCol.length;
             
-            leftCol.forEach((acc, i) => {
-                doc.text(`• ${acc}`, margin + 5, yPos + (i*6));
-            });
-            rightCol.forEach((acc, i) => {
-                doc.text(`• ${acc}`, margin + 80, yPos + (i*6));
-            });
-            yPos += (leftCol.length * 6) + 10;
+            for (let i = 0; i < colLen; i++) {
+                ensureSpace(7);
+                if (leftCol[i]) doc.text(`• ${leftCol[i]}`, margin + 5, yPos);
+                if (rightCol[i]) doc.text(`• ${rightCol[i]}`, margin + 80, yPos);
+                yPos += 6;
+            }
+            yPos += 4;
         } else {
+            ensureSpace(15);
             doc.text("No accessories marked.", margin, yPos);
             yPos += 10;
         }
         
         // Condition Check
+        ensureSpace(15);
         yPos = addSectionDivider("Condition / Operation Check", yPos);
         const operational = Object.entries(vehicleInspectionData.condition)
             .filter(([_, ok]) => ok)
             .map(([key]) => key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()));
             
+        ensureSpace(15);
         doc.text("Verified Operational / Good Condition:", margin, yPos);
         yPos += 6;
         if(operational.length > 0) {
              const mid = Math.ceil(operational.length / 2);
-             operational.slice(0, mid).forEach((op, i) => doc.text(`• ${op}`, margin + 5, yPos + (i*6)));
-             operational.slice(mid).forEach((op, i) => doc.text(`• ${op}`, margin + 80, yPos + (i*6)));
-             yPos += (Math.ceil(operational.length/2) * 6) + 10;
+             const leftCol = operational.slice(0, mid);
+             const rightCol = operational.slice(mid);
+             const colLen = leftCol.length;
+             
+             for (let i = 0; i < colLen; i++) {
+                 ensureSpace(7);
+                 if (leftCol[i]) doc.text(`• ${leftCol[i]}`, margin + 5, yPos);
+                 if (rightCol[i]) doc.text(`• ${rightCol[i]}`, margin + 80, yPos);
+                 yPos += 6;
+             }
+             yPos += 4;
         } else {
+             ensureSpace(15);
              doc.text("None marked as verified.", margin, yPos);
              yPos += 10;
         }
         
         // --- Add Diagram if possible ---
         if (vehicleCanvasRef.current) {
-            if (yPos > doc.internal.pageSize.getHeight() - 120) { doc.addPage(); yPos = 40; }
+            ensureSpace(105);
             doc.setFont("helvetica", "bold");
             doc.text("Marked Damages Diagram:", margin, yPos);
-            yPos += 5;
+            yPos += 7;
             const diagramData = vehicleCanvasRef.current.toDataURL("image/png");
             doc.addImage(diagramData, 'PNG', margin, yPos, 150, 80); // Adjust size as needed
             yPos += 90;
         }
 
         // --- Damage Legend ---
+        ensureSpace(15);
         yPos = addSectionDivider("Damage Legend & Remarks", yPos);
         const damageFields = [
             { label: 'SCRATCH', value: vehicleInspectionData.damageMarks.scratch },
@@ -1246,33 +1540,36 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
         
         damageFields.forEach(field => {
             if (field.value) {
-                if (yPos > doc.internal.pageSize.getHeight() - 30) { doc.addPage(); yPos = 40; }
+                const splitText = doc.splitTextToSize(field.value, pageWidth - margin * 2 - 45);
+                ensureSpace(splitText.length * 5 + 5);
                 doc.setFont("helvetica", "bold");
-                doc.text(`${field.label}:`, margin + 5, yPos);
+                doc.text(`${field.label}:`, margin + 5, yPos + 3);
                 doc.setFont("helvetica", "normal");
-                const splitText = doc.splitTextToSize(field.value, 140);
-                doc.text(splitText, margin + 40, yPos);
-                yPos += splitText.length * 5 + 3;
+                doc.text(splitText, margin + 40, yPos + 3);
+                yPos += splitText.length * 5 + 6;
             }
         });
 
         if (vehicleInspectionData.remarks) {
-            yPos += 5;
-            if (yPos > doc.internal.pageSize.getHeight() - 30) { doc.addPage(); yPos = 40; }
+            ensureSpace(15);
             doc.setFont("helvetica", "bold");
             doc.text("General Remarks:", margin, yPos);
-            yPos += 6;
+            yPos += 7;
             doc.setFont("helvetica", "normal");
             const splitRemarks = doc.splitTextToSize(vehicleInspectionData.remarks, pageWidth - margin * 2);
-            doc.text(splitRemarks, margin, yPos);
-            yPos += splitRemarks.length * 5 + 5;
+            splitRemarks.forEach((line: string) => {
+               ensureSpace(6);
+               doc.text(line, margin, yPos);
+               yPos += 5;
+            });
+            yPos += 5;
         }
     }
 
     // Common Footer / Signature
     if (activeForm !== 'warehouseReceipt' && hasSignature && canvasRef.current) {
-        if (yPos > doc.internal.pageSize.getHeight() - 50) { doc.addPage(); yPos = 40; }
-        yPos += 10;
+        ensureSpace(45);
+        yPos += 5;
         doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]); doc.line(margin, yPos, pageWidth - margin, yPos); yPos += 10;
         const imgData = canvasRef.current.toDataURL("image/png");
         doc.setFontSize(8); doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]);
@@ -1289,6 +1586,7 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
         doc.text(sigLabel, margin, yPos);
         doc.addImage(imgData, 'PNG', margin, yPos + 5, 50, 25);
         doc.setFontSize(7); doc.text(`Digitally signed: ${new Date().toLocaleString()}`, margin, yPos + 35);
+        yPos += 45;
     }
 
     const addGlobalFooter = () => {

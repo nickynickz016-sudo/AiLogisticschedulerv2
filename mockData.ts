@@ -58,13 +58,13 @@ const WRITER_ACCESS = {
   inventory: false,
   tracking: false,
   surveyTracker: false,
+  digitalPackingList: true,
   warehouseChecklist: false,
   resources: false,
   capacity: false,
   users: false,
   transporter: false,
   ai: false,
-  digitalPackingList: true,
 };
 
 const SENIOR_OPS_ACCESS = {
@@ -98,13 +98,13 @@ const SANTOSH_ACCESS = {
   inventory: false,
   tracking: false,
   surveyTracker: false,
+  digitalPackingList: false,
   warehouseChecklist: false,
   resources: false,
   capacity: false,
   users: false,
   transporter: false,
   ai: false,
-  digitalPackingList: false,
 };
 
 const SEMI_ADMIN_ACCESS = {
@@ -158,13 +158,13 @@ const SECURITY_ONLY_ACCESS = {
   inventory: false,
   tracking: false,
   surveyTracker: false,
+  digitalPackingList: false,
   warehouseChecklist: true,
   resources: false,
   capacity: false,
   users: false,
   transporter: false,
   ai: false,
-  digitalPackingList: false,
 };
 
 export const USERS: MockUser[] = [
@@ -360,6 +360,32 @@ export const USERS: MockUser[] = [
       role: UserRole.USER,
       permissions: SECURITY_ONLY_ACCESS,
       avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Security',
+      status: 'Active',
+    },
+  },
+  {
+    username: 'Maria',
+    password: 'Writer@123',
+    profile: {
+      id: 'm1a2r3i4-a5b6-7890-1234-567890abcdef',
+      employee_id: 'MAR-001',
+      name: 'Maria',
+      role: UserRole.USER,
+      permissions: STANDARD_ACCESS,
+      avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Maria',
+      status: 'Active',
+    },
+  },
+  {
+    username: 'Ashok',
+    password: 'Writer@123',
+    profile: {
+      id: 'a1s2h3o4-k5b6-7890-1234-567890abcdef',
+      employee_id: 'ASH-001',
+      name: 'Ashok',
+      role: UserRole.USER,
+      permissions: STANDARD_ACCESS,
+      avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Ashok',
       status: 'Active',
     },
   },
