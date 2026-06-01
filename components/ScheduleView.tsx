@@ -13,6 +13,7 @@ interface ScheduleViewProps {
   onDeleteJob: (jobId: string) => void;
   onUpdateAllocation: (jobId: string, allocation: { team_leader: string, vehicles: string[], writer_crew: string[] }) => void;
   onToggleLock: (jobId: string) => void;
+  onUpdateJobConfirmation?: (jobId: string, isConfirmed: boolean) => void;
   currentUser: UserProfile;
   personnel: Personnel[];
   vehicles: Vehicle[];
@@ -50,7 +51,7 @@ const getLocalDateString = (date: Date = new Date()) => {
 };
 
 export const ScheduleView: React.FC<ScheduleViewProps> = ({ 
-  jobs, onAddJob, onEditJob, onDeleteJob, onUpdateAllocation, onToggleLock, currentUser, personnel, vehicles, users 
+  jobs, onAddJob, onEditJob, onDeleteJob, onUpdateAllocation, onToggleLock, onUpdateJobConfirmation, currentUser, personnel, vehicles, users 
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [isModalExpanded, setIsModalExpanded] = useState(false);
@@ -639,6 +640,29 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                       <User className="w-3 h-3 text-slate-400" />
                                       <span className="text-[10px] text-slate-500 font-bold">{requester ? requester.name : job.requester_id}</span>
                                     </div>
+                                    <div className="mt-1.5">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (onUpdateJobConfirmation) {
+                                            onUpdateJobConfirmation(job.id, !job.is_confirmed);
+                                          }
+                                        }}
+                                        className={`flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[8.5px] font-black uppercase tracking-wider border transition-all cursor-pointer ${
+                                          job.is_confirmed 
+                                            ? 'bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-600 shadow-sm' 
+                                            : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-200'
+                                        }`}
+                                        title={
+                                          currentUser.employee_id === job.requester_id
+                                            ? "Toggle Confirmation"
+                                            : `Only the creator can toggle confirmation`
+                                        }
+                                      >
+                                        <span className={`w-1 h-1 rounded-full ${job.is_confirmed ? 'bg-white' : 'bg-slate-400'}`}></span>
+                                        {job.is_confirmed ? 'Confirmed' : 'Not Confirmed'}
+                                      </button>
+                                    </div>
                                  </div>
                                  <div className="flex gap-2">
                                     {/* Action Buttons */}
@@ -809,11 +833,34 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                            </div>
                          </td>
                          <td className="p-6">
-                           <span className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase ${
-                             job.status === JobStatus.ACTIVE ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'
-                           }`}>
-                             {job.status}
-                           </span>
+                           <div className="flex flex-col items-start gap-1.5">
+                             <span className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase ${
+                               job.status === JobStatus.ACTIVE ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'
+                             }`}>
+                               {job.status}
+                             </span>
+                             <button
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 if (onUpdateJobConfirmation) {
+                                   onUpdateJobConfirmation(job.id, !job.is_confirmed);
+                                 }
+                               }}
+                               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all cursor-pointer ${
+                                 job.is_confirmed 
+                                   ? 'bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-600 shadow-sm shadow-emerald-100' 
+                                   : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-200'
+                               }`}
+                               title={
+                                 currentUser.employee_id === job.requester_id
+                                   ? "Click to toggle confirmation status"
+                                   : `Only creator can alter confirmation status`
+                               }
+                             >
+                               <span className={`w-1.5 h-1.5 rounded-full ${job.is_confirmed ? 'bg-white' : 'bg-slate-400'}`}></span>
+                               {job.is_confirmed ? 'Confirmed' : 'Not Confirmed'}
+                             </button>
+                           </div>
                          </td>
                          <td className="p-6">
                            <div className="flex items-center justify-center gap-2">

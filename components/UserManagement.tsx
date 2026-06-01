@@ -1,13 +1,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { UserProfile, UserRole, UserPermissions, SystemSettings } from '../types';
-import { UserPlus, ShieldAlert, ToggleLeft, ToggleRight, User, Fingerprint, Mail, CheckCircle, X, Lock, Key, Shield, Edit2, Save, Radio, MessageSquare, AlertTriangle, Power } from 'lucide-react';
+import { UserPlus, ShieldAlert, ToggleLeft, ToggleRight, User, Fingerprint, Mail, CheckCircle, X, Lock, Key, Shield, Edit2, Save, Radio, MessageSquare, AlertTriangle, Power, Trash2 } from 'lucide-react';
 
 interface UserManagementProps {
   users: UserProfile[];
   onAddUser: (user: any) => void;
   onUpdateStatus: (id: string, status: 'Active' | 'Disabled') => void;
   onUpdateUser: (user: UserProfile) => void; 
+  onDeleteUser: (id: string) => void;
   isAdmin: boolean;
   systemAlert?: SystemSettings['system_alert'];
   onUpdateSystemAlert: (alert: SystemSettings['system_alert']) => void;
@@ -54,10 +55,11 @@ const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
 };
 
 export const UserManagement: React.FC<UserManagementProps> = ({ 
-  users, onAddUser, onUpdateStatus, onUpdateUser, isAdmin, systemAlert, onUpdateSystemAlert 
+  users, onAddUser, onUpdateStatus, onUpdateUser, onDeleteUser, isAdmin, systemAlert, onUpdateSystemAlert 
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [userIdToDelete, setUserIdToDelete] = useState<string | null>(null);
   const [newUser, setNewUser] = useState({
     name: '',
     employee_id: '',
@@ -359,6 +361,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                         </>
                       )}
                     </button>
+                    <button 
+                      onClick={() => setUserIdToDelete(user.id)}
+                      className="p-2 bg-slate-50 hover:bg-rose-50 text-rose-400 hover:text-rose-600 rounded-xl transition-all"
+                      title="Delete User"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -520,6 +529,43 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                    </button>
                  </div>
               </form>
+           </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {userIdToDelete && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+           <div className="bg-white rounded-[2rem] w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-150 overflow-hidden border border-slate-100 p-8">
+              <div className="flex flex-col items-center text-center">
+                 <div className="w-14 h-14 bg-rose-50 rounded-full flex items-center justify-center border-4 border-rose-100 mb-4 text-rose-500">
+                    <Trash2 className="w-6 h-6" />
+                 </div>
+                 <h3 className="text-lg font-bold text-slate-900">Delete User Account</h3>
+                 <p className="text-sm text-slate-500 mt-2">
+                    Are you sure you want to delete the account for <strong className="text-slate-800">{users.find(u => u.id === userIdToDelete)?.name || 'this user'}</strong>? 
+                    This action is permanent and cannot be undone.
+                 </p>
+              </div>
+              <div className="flex gap-3 mt-6">
+                 <button 
+                   type="button" 
+                   onClick={() => setUserIdToDelete(null)}
+                   className="flex-grow py-3 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                 >
+                    Cancel
+                 </button>
+                 <button 
+                   type="button" 
+                   onClick={() => {
+                     onDeleteUser(userIdToDelete);
+                     setUserIdToDelete(null);
+                   }}
+                   className="flex-grow py-3 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-colors shadow-lg shadow-rose-100"
+                 >
+                    Confirm Delete
+                 </button>
+              </div>
            </div>
         </div>
       )}

@@ -213,6 +213,7 @@ export interface Job {
   is_import_clearance?: boolean;
   is_transporter?: boolean; // New field for Transporter module
   is_locked?: boolean;
+  is_confirmed?: boolean;
   last_edited_by?: string;
   last_edited_at?: number;
   sunday_handling?: 'Skip' | 'Include';

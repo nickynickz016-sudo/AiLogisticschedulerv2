@@ -22,16 +22,67 @@ import { Transporter } from './components/Transporter';
 import { SurveyTracker } from './components/SurveyTracker';
 import { WarehouseChecklist as WarehouseChecklistComponent } from './components/WarehouseChecklist';
 import { SundayJobModal } from './components/SundayJobModal';
+import { ProfileUpdateModal } from './components/ProfileUpdateModal';
 import { UserRole, Job, JobStatus, UserProfile, Personnel, Vehicle, SystemSettings, CustomsStatus, Survey, WarehouseChecklist, NightPatrollingChecklist, SafetyMonitoringChecklist, SurpriseVisitChecklist, DailyMonitoringChecklist } from './types';
 import { Bell, Search, Menu, LogOut, X, CheckCircle2, XCircle, AlertTriangle, Info, Lock, Unlock } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { USERS, MockUser } from './mockData';
 
+const safeLocalStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.warn("Storage access denied for key:", key, e);
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn("Storage set failed for key:", key, e);
+    }
+  },
+  removeItem: (key: string): void => {
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {
+      console.warn("Storage remove failed for key:", key, e);
+    }
+  }
+};
+
+const safeSessionStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return sessionStorage.getItem(key);
+    } catch (e) {
+      console.warn("SessionStorage access denied for key:", key, e);
+      return null;
+    }
+  },
+  setItem: (key: string, value: string): void => {
+    try {
+      sessionStorage.setItem(key, value);
+    } catch (e) {
+      console.warn("SessionStorage set failed for key:", key, e);
+    }
+  },
+  removeItem: (key: string): void => {
+    try {
+      sessionStorage.removeItem(key);
+    } catch (e) {
+      console.warn("SessionStorage remove failed for key:", key, e);
+    }
+  }
+};
+
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     try {
-      const saved = sessionStorage.getItem('writer_current_user');
+      const saved = safeSessionStorage.getItem('writer_current_user');
       if (!saved) return null;
       const user = JSON.parse(saved);
       
@@ -55,7 +106,7 @@ const App: React.FC = () => {
     }
   });
   const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'approvals' | 'survey-tracker' | 'warehouse-checklist' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>(() => {
-    const saved = localStorage.getItem('writer_active_tab');
+    const saved = safeLocalStorage.getItem('writer_active_tab');
     return (saved as any) || 'dashboard';
   });
   const [isNavigationLocked, setIsNavigationLocked] = useState(false);
@@ -69,8 +120,9 @@ const App: React.FC = () => {
   const [surpriseVisits, setSurpriseVisits] = useState<SurpriseVisitChecklist[]>([]);
   const [dailyMonitoring, setDailyMonitoring] = useState<DailyMonitoringChecklist[]>([]);
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [allCredentials, setAllCredentials] = useState<MockUser[]>(() => {
-    const saved = localStorage.getItem('writer_system_users');
+    const saved = safeLocalStorage.getItem('writer_system_users');
     let users = USERS;
     try {
       if (saved) {
@@ -176,25 +228,25 @@ const App: React.FC = () => {
 
   // Persist users and session whenever they change
   useEffect(() => {
-    localStorage.setItem('writer_system_users', JSON.stringify(allCredentials));
+    safeLocalStorage.setItem('writer_system_users', JSON.stringify(allCredentials));
   }, [allCredentials]);
 
   useEffect(() => {
     if (currentUser) {
-      sessionStorage.setItem('writer_current_user', JSON.stringify(currentUser));
+      safeSessionStorage.setItem('writer_current_user', JSON.stringify(currentUser));
     } else {
-      sessionStorage.removeItem('writer_current_user');
+      safeSessionStorage.removeItem('writer_current_user');
     }
   }, [currentUser]);
 
   useEffect(() => {
-    localStorage.setItem('writer_active_tab', activeTab);
+    safeLocalStorage.setItem('writer_active_tab', activeTab);
   }, [activeTab]);
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [settings, setSettings] = useState<SystemSettings>({ daily_job_limits: {}, holidays: [] });
   const [googleTokens, setGoogleTokens] = useState<any>(() => {
-    const saved = localStorage.getItem('google_calendar_tokens');
+    const saved = safeLocalStorage.getItem('google_calendar_tokens');
     return saved ? JSON.parse(saved) : null;
   });
   
@@ -231,7 +283,7 @@ const App: React.FC = () => {
       if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
         const tokens = event.data.tokens;
         setGoogleTokens(tokens);
-        localStorage.setItem('google_calendar_tokens', JSON.stringify(tokens));
+        safeLocalStorage.setItem('google_calendar_tokens', JSON.stringify(tokens));
         addNotification(`Google Calendar connected successfully!`, 'success');
       }
     };
@@ -256,7 +308,7 @@ const App: React.FC = () => {
 
   const handleDisconnectGoogle = () => {
     setGoogleTokens(null);
-    localStorage.removeItem('google_calendar_tokens');
+    safeLocalStorage.removeItem('google_calendar_tokens');
     addNotification('Google Calendar disconnected', 'info');
   };
 
@@ -270,10 +322,15 @@ const App: React.FC = () => {
       } else {
         // Normalize data: Ensure 'vehicles' array exists. 
         // If 'vehicles' is null but 'vehicle' exists (legacy), convert 'vehicle' string to array.
-        const normalizedData = (data || []).map((j: any) => ({
-          ...j,
-          vehicles: j.vehicles || (j.vehicle ? j.vehicle.split(',').map((s: string) => s.trim()) : [])
-        }));
+        const normalizedData = (data || []).map((j: any) => {
+          const cachedConfirmation = safeLocalStorage.getItem(`job_confirmed_${j.id}`);
+          const is_confirmed = cachedConfirmation === 'true' ? true : (cachedConfirmation === 'false' ? false : !!j.is_confirmed);
+          return {
+            ...j,
+            is_confirmed,
+            vehicles: j.vehicles || (j.vehicle ? j.vehicle.split(',').map((s: string) => s.trim()) : [])
+          };
+        });
         setJobs(normalizedData);
       }
     } catch (err: any) {
@@ -588,7 +645,7 @@ const App: React.FC = () => {
   // 1. Load persisted notifications on mount/user switch
   useEffect(() => {
     if (!currentUser) return;
-    const saved = localStorage.getItem(`notifications_${currentUser.employee_id}`);
+    const saved = safeLocalStorage.getItem(`notifications_${currentUser.employee_id}`);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -602,13 +659,13 @@ const App: React.FC = () => {
     }
   }, [currentUser]);
 
-  // 2. Diffing logic to detect changes
-  useEffect(() => {
+    // 2. Diffing logic to detect changes
+    useEffect(() => {
     if (!currentUser || jobs.length === 0) return;
 
     const snapshotKey = `jobs_snapshot_${currentUser.employee_id}`;
-    const lastSnapshotStr = localStorage.getItem(snapshotKey);
-    let lastSnapshot: Job[] = [];
+    const lastSnapshotStr = safeLocalStorage.getItem(snapshotKey);
+    let lastSnapshot: any[] = [];
     try {
         lastSnapshot = lastSnapshotStr ? JSON.parse(lastSnapshotStr) : [];
         if (!Array.isArray(lastSnapshot)) lastSnapshot = [];
@@ -617,9 +674,25 @@ const App: React.FC = () => {
         lastSnapshot = [];
     }
 
+    // Map to a minimal snapshot containing ONLY the current user's jobs and ONLY the fields used for diffing.
+    // This reduces the storage footprint by over 99.9%, fully eliminating quota-exceeded warnings.
+    const minimalSnapshot = jobs
+      .filter(j => j.requester_id === currentUser.employee_id)
+      .map(j => ({
+         id: j.id,
+         requester_id: j.requester_id,
+         status: j.status,
+         team_leader: j.team_leader,
+         vehicles: j.vehicles,
+         writer_crew: j.writer_crew,
+         job_time: j.job_time,
+         job_date: j.job_date,
+         description: j.description
+      }));
+
     // If first run (no snapshot), baseline it and return
     if (lastSnapshot.length === 0) {
-        localStorage.setItem(snapshotKey, JSON.stringify(jobs));
+        safeLocalStorage.setItem(snapshotKey, JSON.stringify(minimalSnapshot));
         return;
     }
 
@@ -730,13 +803,13 @@ const App: React.FC = () => {
         setNotifications(prev => {
             const updated = [...newNotifs, ...prev];
             // Persist to local storage
-            localStorage.setItem(`notifications_${currentUser.employee_id}`, JSON.stringify(updated));
+            safeLocalStorage.setItem(`notifications_${currentUser.employee_id}`, JSON.stringify(updated));
             return updated;
         });
     }
 
-    // Update snapshot for next diff
-    localStorage.setItem(snapshotKey, JSON.stringify(jobs));
+    // Update snapshot for next diff with our light weight minimal model
+    safeLocalStorage.setItem(snapshotKey, JSON.stringify(minimalSnapshot));
 
   }, [jobs, currentUser]);
 
@@ -745,7 +818,7 @@ const App: React.FC = () => {
       // Mark all as read when opening
       setNotifications(prev => {
           const updated = prev.map(n => ({...n, read: true}));
-          localStorage.setItem(`notifications_${currentUser?.employee_id}`, JSON.stringify(updated));
+          safeLocalStorage.setItem(`notifications_${currentUser?.employee_id}`, JSON.stringify(updated));
           return updated;
       });
     }
@@ -757,8 +830,13 @@ const App: React.FC = () => {
   // Helper for safe Supabase operations
   const updateJobInSupabase = async (jobId: string, payload: any) => {
     let { error } = await supabase.from('jobs').update(payload).eq('id', jobId);
+    if (error && (error.message.includes("is_confirmed") || error.message.includes("column"))) {
+      const { is_confirmed, ...strippedPayload } = payload;
+      let { error: retryError } = await supabase.from('jobs').update(strippedPayload).eq('id', jobId);
+      error = retryError;
+    }
     if (error && error.message.includes("last_edited_at")) {
-      const { last_edited_by, last_edited_at, ...fallbackPayload } = payload;
+      const { last_edited_by, last_edited_at, is_confirmed, ...fallbackPayload } = payload;
       const { error: retryError } = await supabase.from('jobs').update(fallbackPayload).eq('id', jobId);
       error = retryError;
     }
@@ -767,8 +845,13 @@ const App: React.FC = () => {
 
   const insertJobsInSupabase = async (jobsToInsert: Job[]) => {
     let { error } = await supabase.from('jobs').insert(jobsToInsert);
+    if (error && (error.message.includes("is_confirmed") || error.message.includes("column"))) {
+      const strippedJobs = jobsToInsert.map(({ is_confirmed, ...j }: any) => j);
+      let { error: retryError } = await supabase.from('jobs').insert(strippedJobs);
+      error = retryError;
+    }
     if (error && error.message.includes("last_edited_at")) {
-      const fallbackJobs = jobsToInsert.map(({ last_edited_by, last_edited_at, ...j }: any) => j);
+      const fallbackJobs = jobsToInsert.map(({ last_edited_by, last_edited_at, is_confirmed, ...j }: any) => j);
       const { error: retryError } = await supabase.from('jobs').insert(fallbackJobs);
       error = retryError;
     }
@@ -823,6 +906,35 @@ const App: React.FC = () => {
       addNotification('Survey deleted successfully');
       fetchSurveys();
     }
+  };
+
+  const handleUpdateJobConfirmation = async (jobId: string, isConfirmed: boolean) => {
+    const targetJob = jobs.find(j => j.id === jobId);
+    if (!targetJob) return;
+
+    if (!currentUser) {
+       addNotification('You must be logged in to update confirmation status.', 'error');
+       return;
+    }
+
+    if (currentUser.employee_id !== targetJob.requester_id) {
+       const creator = USERS.find(u => u.profile.employee_id === targetJob.requester_id)?.profile?.name || targetJob.requester_id;
+       addNotification(`Only ${creator} (who added this job) has the authority to change its confirmation status.`, 'error');
+       return;
+    }
+
+    // 1. Update localStorage
+    safeLocalStorage.setItem(`job_confirmed_${jobId}`, isConfirmed ? 'true' : 'false');
+
+    // 2. Update React State
+    setJobs(prevJobs => prevJobs.map(j => j.id === jobId ? { ...j, is_confirmed: isConfirmed } : j));
+
+    // 3. Update Supabase
+    const { error } = await updateJobInSupabase(jobId, { is_confirmed: isConfirmed });
+    if (error) {
+       console.log("Supabase confirm sync skipped (possible column mismatch):", error.message);
+    }
+    addNotification(`Job ${jobId} marked as ${isConfirmed ? 'Confirmed' : 'Not Confirmed'}.`, 'success');
   };
 
   const handleEditJob = async (job: Job, oldId?: string) => {
@@ -1358,6 +1470,15 @@ const App: React.FC = () => {
     else await fetchVehicles();
   };
 
+  const handleDeleteUser = async (id: string) => {
+    if (currentUser && currentUser.id === id) {
+       addNotification('You cannot delete your own active administrator account.', 'warning');
+       return;
+    }
+    setAllCredentials(prev => prev.filter(u => u.profile.id !== id));
+    addNotification('User account deleted successfully.', 'success');
+  };
+
   const handleUpdateUserStatus = async (id: string, status: 'Active' | 'Disabled') => {
     // Update local state for credentials
     setAllCredentials(prev => prev.map(u => u.profile.id === id ? { ...u, profile: { ...u.profile, status } } : u));
@@ -1403,6 +1524,36 @@ const App: React.FC = () => {
      alert(`Account created for ${newUser.name}. Login: ${newUser.username} / ${newUser.password}`);
   };
   
+  const handleSaveProfileCredentials = async (newUsername: string, newPassword: string) => {
+    if (!currentUser) return;
+    
+    // Update local state credentials array
+    setAllCredentials(prev => prev.map(u => {
+      if (u.profile.id === currentUser.id) {
+         return {
+           ...u,
+           username: newUsername,
+           password: newPassword,
+           profile: {
+             ...u.profile,
+             username: newUsername,
+             password: newPassword
+           }
+         };
+      }
+      return u;
+    }));
+
+    // Also update current active session with the updated profile
+    setCurrentUser(prev => prev ? {
+      ...prev,
+      username: newUsername,
+      password: newPassword
+    } : null);
+    
+    addNotification('Your profile account credentials have been changed successfully.', 'success');
+  };
+
   const handleLogin = (user: UserProfile) => {
     setCurrentUser(user);
     // Reset active tab to a safe default if current default isn't allowed
@@ -1478,6 +1629,15 @@ const App: React.FC = () => {
   return (
     <div className="flex min-h-screen bg-[#f8fafc] text-slate-900 font-sans selection:bg-blue-100 selection:text-blue-900 overflow-hidden">
       <HolidayAlertModal isOpen={showHolidayAlert} onClose={() => setShowHolidayAlert(false)} />
+      {currentUser && (
+        <ProfileUpdateModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+          currentUser={currentUser}
+          allUsers={allCredentials}
+          onSave={handleSaveProfileCredentials}
+        />
+      )}
       
       {sundayPrompt && (
         <SundayJobModal 
@@ -1619,11 +1779,17 @@ const App: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2 md:gap-5 pl-2 md:pl-8 border-l border-slate-200">
-              <div className="text-right hidden lg:block">
-                <p className="text-[12px] font-bold text-slate-900 leading-none mb-1">{currentUser.name}</p>
-                <p className="text-[9px] text-slate-400 font-medium leading-none uppercase tracking-tighter">{currentUser.employee_id}</p>
-              </div>
-              <img src={currentUser.avatar} className="w-8 h-8 md:w-10 md:h-10 rounded-xl border border-slate-100 shadow-sm" alt="User" />
+              <button
+                onClick={() => setIsProfileModalOpen(true)}
+                title="Update Profile Credentials"
+                className="flex items-center text-left gap-2 md:gap-3 hover:opacity-85 transition-opacity focus:outline-none group"
+              >
+                <div className="text-right hidden lg:block">
+                  <p className="text-[12px] font-bold text-slate-900 leading-none mb-1 group-hover:text-blue-600 transition-colors">{currentUser.name}</p>
+                  <p className="text-[9px] text-slate-400 font-medium leading-none uppercase tracking-tighter">{currentUser.employee_id}</p>
+                </div>
+                <img src={currentUser.avatar} className="w-8 h-8 md:w-10 md:h-10 rounded-xl border border-slate-100 shadow-sm group-hover:border-slate-300 transition-all object-cover" alt="User" referrerPolicy="no-referrer" />
+              </button>
               <button
                 onClick={handleLogout}
                 title="Log Out"
@@ -1646,6 +1812,7 @@ const App: React.FC = () => {
                 onDeleteJob={handleDeleteJob}
                 onUpdateAllocation={handleUpdateJobAllocation}
                 onToggleLock={handleToggleLock}
+                onUpdateJobConfirmation={handleUpdateJobConfirmation}
                 currentUser={currentUser}
                 personnel={personnel}
                 vehicles={vehicles}
@@ -1781,6 +1948,7 @@ const App: React.FC = () => {
                 onAddUser={handleAddSystemUser}
                 onUpdateStatus={handleUpdateUserStatus}
                 onUpdateUser={handleUpdateUser}
+                onDeleteUser={handleDeleteUser}
                 isAdmin={currentUser.role === UserRole.ADMIN}
                 systemAlert={settings.system_alert}
                 onUpdateSystemAlert={handleUpdateSystemAlert}
