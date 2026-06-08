@@ -32,6 +32,7 @@ const DEFAULT_PERMISSIONS: UserPermissions = {
   users: false,
   transporter: false,
   ai: false,
+  groupageTracker: true,
 };
 
 const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
@@ -52,6 +53,7 @@ const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
   users: 'User Management',
   transporter: 'Transporter',
   ai: 'AI Planner',
+  groupageTracker: 'Groupage Tracker',
 };
 
 export const UserManagement: React.FC<UserManagementProps> = ({ 

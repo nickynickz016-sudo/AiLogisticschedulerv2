@@ -3,7 +3,7 @@ import {
   ClipboardCheck, Plus, Search, Calendar, MapPin, User, 
   Clock, Mail, Hash, Briefcase, Filter, ChevronRight, 
   Edit3, Trash2, X, CheckCircle2, ChevronDown, Info, XCircle, AlertCircle,
-  MoreVertical, ArrowUpRight, Check, History, List, LayoutGrid
+  MoreVertical, ArrowUpRight, Check, History, List, LayoutGrid, Download
 } from 'lucide-react';
 import { Survey, SurveyStatus, SurveyType, SurveyMode, UserProfile } from '../types';
 
@@ -95,6 +95,71 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
     };
   };
 
+  const [sendingIdMap, setSendingIdMap] = useState<Record<string, boolean>>({});
+  const [alertStatusMap, setAlertStatusMap] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    surveys.forEach(s => {
+      try {
+        const saved = localStorage.getItem(`survey_alert_sent_${s.id}`);
+        if (saved) initial[s.id] = saved;
+      } catch (e) {
+        console.warn(e);
+      }
+    });
+    return initial;
+  });
+
+  const handleSendAlert = async (survey: Survey) => {
+    setSendingIdMap(prev => ({ ...prev, [survey.id]: true }));
+    try {
+      const formDataObj: Record<string, string> = {
+        'form-name': 'survey-assignment-alert',
+        'shipper_name': survey.shipper_name,
+        'surveyor_name': survey.surveyor_name,
+        'enquiry_number': survey.enquiry_number,
+        'job_number': survey.job_number || 'N/A',
+        'location': survey.location,
+        'mode': survey.mode,
+        'survey_date': survey.survey_date,
+        'start_time': survey.start_time || 'N/A',
+        'end_time': survey.end_time || 'N/A',
+        'client_emails': survey.client_emails?.join(', ') || 'None',
+        'assigned_by': currentUser.name,
+        'timestamp': new Date().toLocaleString()
+      };
+
+      const body = Object.keys(formDataObj)
+        .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(formDataObj[key]))
+        .join('&');
+
+      const response = await fetch('/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body
+      });
+
+      if (response.ok) {
+        setAlertStatusMap(prev => {
+          const next = { ...prev, [survey.id]: 'sent' };
+          try {
+            localStorage.setItem(`survey_alert_sent_${survey.id}`, 'sent');
+          } catch (e) {
+            console.warn(e);
+          }
+          return next;
+        });
+        alert(`Success! Email alert request submitted via Netlify Forms for ${survey.shipper_name}.\n\nNote: Netlify handles email notifications that you configure in your Netlify dashboard.`);
+      } else {
+        throw new Error(`Netlify post returned status ${response.status}`);
+      }
+    } catch (err: any) {
+      console.error('Failed to submit Netlify Form Alert:', err);
+      alert(`Could not send alert: ${err.message || 'Network error'}. Make sure your form notifications are configured in the Netlify site panel.`);
+    } finally {
+      setSendingIdMap(prev => ({ ...prev, [survey.id]: false }));
+    }
+  };
+
   const [formData, setFormData] = useState({
     surveyor_name: currentUser.name,
     survey_type: 'Physical' as SurveyType,
@@ -107,7 +172,8 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
     survey_date: new Date().toISOString().split('T')[0],
     start_time: '09:00',
     end_time: '10:00',
-    client_emails: ''
+    client_emails: '',
+    lost_reason: ''
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -132,7 +198,8 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
       survey_date: new Date().toISOString().split('T')[0],
       start_time: '09:00',
       end_time: '10:00',
-      client_emails: ''
+      client_emails: '',
+      lost_reason: ''
     });
     setEditingSurvey(null);
     setIsSubmitting(false);
@@ -152,7 +219,8 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
       survey_date: survey.survey_date,
       start_time: survey.start_time || '09:00',
       end_time: survey.end_time || '10:00',
-      client_emails: survey.client_emails?.join(', ') || ''
+      client_emails: survey.client_emails?.join(', ') || '',
+      lost_reason: survey.lost_reason || ''
     });
     setShowAddModal(true);
   };
@@ -176,16 +244,25 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
+
+    if (formData.status === SurveyStatus.LOST && !formData.lost_reason.trim()) {
+      alert('Please explain why the shipment/booking is marked as Lost.');
+      return;
+    }
     
     setIsSubmitting(true);
     const emails = formData.client_emails.split(',').map(e => e.trim()).filter(e => e);
     
     try {
+      const isLost = formData.status === SurveyStatus.LOST;
+      const lostReasonVal = isLost ? formData.lost_reason.trim().slice(0, 300) : '';
+
       if (editingSurvey) {
         await onUpdateSurvey({
           ...editingSurvey,
           ...formData,
           client_emails: emails,
+          lost_reason: lostReasonVal || undefined,
           last_edited_by: currentUser.name,
           last_edited_at: Date.now()
         });
@@ -193,6 +270,7 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
         await onAddSurvey({
           ...formData,
           client_emails: emails,
+          lost_reason: lostReasonVal || undefined,
           last_edited_by: currentUser.name,
           last_edited_at: Date.now()
         });
@@ -210,7 +288,8 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
   const filteredSurveys = surveys.filter(s => {
     const matchesSearch = 
       s.shipper_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.enquiry_number.toLowerCase().includes(searchQuery.toLowerCase());
+      s.enquiry_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (s.lost_reason && s.lost_reason.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesStatus = statusFilter === 'All' || s.status === statusFilter;
     const matchesMode = modeFilter === 'All' || s.mode === modeFilter;
     const matchesSurveyor = surveyorFilter === 'All' || 
@@ -219,14 +298,98 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
     return matchesSearch && matchesStatus && matchesMode && matchesSurveyor;
   });
 
+  const handleDownloadExcel = () => {
+    // Columns to export
+    const headers = [
+      'Survey ID',
+      'Surveyor Name',
+      'Survey Type',
+      'Enquiry Number',
+      'Job Number',
+      'Shipper Name',
+      'Location',
+      'Shipment Mode',
+      'Status',
+      'Survey Date',
+      'Start Time',
+      'End Time',
+      'Client Emails',
+      'Lost Reason',
+      'Created At',
+      'Last Edited By'
+    ];
+
+    const escapeCSV = (value: any) => {
+      if (value === null || value === undefined) return '';
+      const str = String(value);
+      if (str.includes(',') || str.includes('\n') || str.includes('"')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rows = filteredSurveys.map(s => [
+      s.id,
+      s.surveyor_name,
+      s.survey_type,
+      s.enquiry_number,
+      s.job_number || '',
+      s.shipper_name,
+      s.location,
+      s.mode,
+      s.status,
+      s.survey_date,
+      s.start_time || '',
+      s.end_time || '',
+      s.client_emails?.join('; ') || '',
+      s.lost_reason || '',
+      new Date(s.created_at).toLocaleString(),
+      s.last_edited_by || ''
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(escapeCSV).join(','))
+    ].join('\r\n');
+
+    // Add byte order mark (BOM) for Excel UTF-8 support
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Survey_Tracker_Export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleStatusChange = async (survey: Survey, newStatus: SurveyStatus) => {
     try {
-      await onUpdateSurvey({
-        ...survey,
-        status: newStatus,
-        last_edited_by: currentUser.name,
-        last_edited_at: Date.now()
-      });
+      if (newStatus === SurveyStatus.LOST) {
+        // Prompt for lost reason
+        const reason = prompt('Please enter the reason why the shipment/booking is lost (maximum 300 characters):');
+        if (reason === null) return; // cancelled
+        const trimmed = (reason || '').trim().slice(0, 300);
+        if (!trimmed) {
+          alert('You must provide a reason why the shipment is lost.');
+          return;
+        }
+        await onUpdateSurvey({
+          ...survey,
+          status: newStatus,
+          lost_reason: trimmed,
+          last_edited_by: currentUser.name,
+          last_edited_at: Date.now()
+        });
+      } else {
+        await onUpdateSurvey({
+          ...survey,
+          status: newStatus,
+          lost_reason: undefined, // Clear reason if not lost
+          last_edited_by: currentUser.name,
+          last_edited_at: Date.now()
+        });
+      }
     } catch (err) {
       console.error('Status update error:', err);
       alert('Failed to update status.');
@@ -266,13 +429,24 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
           </h1>
           <p className="text-slate-500 mt-1">Manage and track survey bookings</p>
         </div>
-        <button
-          onClick={() => { resetForm(); setShowAddModal(true); }}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-semibold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
-        >
-          <Plus className="w-5 h-5" />
-          Book Survey
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleDownloadExcel}
+            className="bg-white text-slate-700 border border-slate-200 px-4 py-2 rounded-xl font-semibold flex items-center gap-2 hover:bg-slate-50 hover:text-indigo-600 transition-all shadow-sm cursor-pointer"
+            title="Download all survey information in Excel spreadsheet format"
+          >
+            <Download className="w-5 h-5 text-indigo-600" />
+            <span className="hidden sm:inline">Export Excel</span>
+            <span className="sm:hidden">Export</span>
+          </button>
+          <button
+            onClick={() => { resetForm(); setShowAddModal(true); }}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-semibold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 cursor-pointer"
+          >
+            <Plus className="w-5 h-5" />
+            Book Survey
+          </button>
+        </div>
       </div>
 
       {/* Allocation Summary Banner */}
@@ -554,26 +728,57 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
                         <span className="whitespace-nowrap">{survey.start_time} - {survey.end_time}</span>
                       </span>
                     </div>
+                    {survey.status === SurveyStatus.LOST && survey.lost_reason && (
+                      <div className="mt-2.5 flex items-start gap-2 bg-rose-50 border border-rose-100/70 rounded-xl p-3 text-[11px] text-rose-700 animate-in fade-in slide-in-from-top-1">
+                        <XCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="font-bold text-rose-800 uppercase text-[9px] tracking-wider block mb-0.5">Reason for Lost shipment</span>
+                          <p className="leading-relaxed whitespace-pre-wrap">{survey.lost_reason}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
                 {/* Right/Middle Section: Assignee Selector / Badge & Metadata */}
                 <div className="flex flex-wrap items-center gap-4 shrink-0 justify-between lg:justify-end">
-                  <div className="flex items-center gap-3 min-w-[200px] shrink-0">
+                  <div className="flex flex-col gap-2 min-w-[200px] shrink-0">
                     {isAssigner && survey.status === SurveyStatus.BOOKED ? (
-                      <div className="w-full relative group/alloc">
-                        <select
-                          className="w-full pl-8 pr-7 py-2 bg-slate-50 hover:bg-white border border-slate-200 hover:border-indigo-200 rounded-xl text-xs font-bold text-indigo-700 outline-none focus:ring-4 focus:ring-indigo-100 transition-all cursor-pointer appearance-none shadow-sm"
-                          value={survey.surveyor_name}
-                          onChange={(e) => handleAssigneeChange(survey, e.target.value)}
+                      <div className="space-y-2 w-full">
+                        <div className="w-full relative group/alloc">
+                          <select
+                            className="w-full pl-8 pr-7 py-2 bg-slate-50 hover:bg-white border border-slate-200 hover:border-indigo-200 rounded-xl text-xs font-bold text-indigo-700 outline-none focus:ring-4 focus:ring-indigo-100 transition-all cursor-pointer appearance-none shadow-sm"
+                            value={survey.surveyor_name}
+                            onChange={(e) => handleAssigneeChange(survey, e.target.value)}
+                          >
+                            <option value={currentUser.name}>My Responsibility</option>
+                            {ASSIGNABLE_SURVEYORS.map(s => (
+                              <option key={s.id} value={s.name}>{s.name} ({s.id})</option>
+                            ))}
+                          </select>
+                          <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400 pointer-events-none" />
+                        </div>
+                        <button
+                          onClick={() => handleSendAlert(survey)}
+                          disabled={sendingIdMap[survey.id]}
+                          className={`w-full py-1.5 px-3 rounded-xl text-[10px] font-black tracking-tight border flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer ${
+                            alertStatusMap[survey.id] === 'sent'
+                              ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-250'
+                              : sendingIdMap[survey.id]
+                              ? 'bg-amber-50 text-amber-700 border-amber-250 animate-pulse'
+                              : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200'
+                          }`}
                         >
-                          <option value={currentUser.name}>My Responsibility</option>
-                          {ASSIGNABLE_SURVEYORS.map(s => (
-                            <option key={s.id} value={s.name}>{s.name} ({s.id})</option>
-                          ))}
-                        </select>
-                        <User className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-400 pointer-events-none" />
+                          <Mail className="w-3.5 h-3.5 shrink-0" />
+                          <span>
+                            {sendingIdMap[survey.id]
+                              ? 'Sending Alert...'
+                              : alertStatusMap[survey.id] === 'sent'
+                              ? 'Alert Sent (Send Again)'
+                              : 'Send Email Alert'}
+                          </span>
+                        </button>
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
@@ -802,6 +1007,16 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
                   </div>
                 </div>
 
+                {survey.status === SurveyStatus.LOST && survey.lost_reason && (
+                  <div className="mb-6 p-4 rounded-2xl bg-rose-50 border border-rose-100 text-[11px] text-rose-700 animate-in face-in">
+                    <div className="flex items-center gap-1.5 mb-1 bg-rose-100/50 px-2 py-1 rounded-lg w-fit">
+                      <XCircle className="w-4 h-4 text-rose-500 shrink-0" />
+                      <span className="font-bold text-rose-800 uppercase text-[9px] tracking-wider">Reason shipment is lost</span>
+                    </div>
+                    <p className="leading-relaxed whitespace-pre-wrap mt-2">{survey.lost_reason}</p>
+                  </div>
+                )}
+
                 {/* Assignment Logic for Assigner (Param / Maria / Admin) */}
                 {isAssigner && survey.status === SurveyStatus.BOOKED && (
                   <div className="mb-6 animate-in fade-in slide-in-from-top-3 duration-500 bg-indigo-600/[0.03] p-4 rounded-[1.75rem] border border-indigo-600/10 shadow-inner">
@@ -811,7 +1026,7 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
                         Re-Allocation
                       </label>
                     </div>
-                    <div className="relative group/alloc">
+                    <div className="relative group/alloc mb-2.5">
                       <select
                         className="w-full px-4 py-2.5 bg-white border border-indigo-100 rounded-xl text-xs font-bold text-indigo-700 outline-none focus:ring-4 focus:ring-indigo-100 transition-all cursor-pointer shadow-sm appearance-none pr-10"
                         value={survey.surveyor_name}
@@ -824,6 +1039,26 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
                       </select>
                       <ChevronRight className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-300 group-hover/alloc:translate-x-0.5 transition-transform" />
                     </div>
+                    <button
+                      onClick={() => handleSendAlert(survey)}
+                      disabled={sendingIdMap[survey.id]}
+                      className={`w-full py-2 px-4 rounded-xl text-xs font-black tracking-tight border flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer ${
+                        alertStatusMap[survey.id] === 'sent'
+                          ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200'
+                          : sendingIdMap[survey.id]
+                          ? 'bg-amber-50 text-amber-700 border-amber-250 animate-pulse'
+                          : 'bg-indigo-600 hover:bg-indigo-700 text-white border-transparent shadow-md shadow-indigo-100'
+                      }`}
+                    >
+                      <Mail className="w-4 h-4 shrink-0" />
+                      <span>
+                        {sendingIdMap[survey.id]
+                          ? 'Sending Alert...'
+                          : alertStatusMap[survey.id] === 'sent'
+                          ? 'Alert Sent (Send Again)'
+                          : 'Send Email Alert'}
+                      </span>
+                    </button>
                   </div>
                 )}
 
@@ -991,6 +1226,28 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
                     ))}
                   </select>
                 </div>
+
+                {formData.status === SurveyStatus.LOST && (
+                  <div className="space-y-2 md:col-span-2 p-5 bg-rose-50 border border-rose-100 rounded-2xl animate-in slide-in-from-top-2 duration-200">
+                    <div className="flex justify-between items-center">
+                      <label className="text-sm font-bold text-rose-800 flex items-center gap-2">
+                        <AlertCircle className="w-4.5 h-4.5 text-rose-500" /> Reason why shipment is lost
+                      </label>
+                      <span className="text-xs font-bold text-rose-500/80">
+                        {300 - (formData.lost_reason?.length || 0)}/300 chars remaining
+                      </span>
+                    </div>
+                    <textarea
+                      required
+                      maxLength={300}
+                      rows={3}
+                      className="w-full px-4 py-3 bg-white border border-rose-250 focus:border-rose-450 focus:ring-4 focus:ring-rose-500/10 rounded-xl outline-none text-rose-900 placeholder-rose-300 font-medium text-sm transition-all resize-none"
+                      placeholder="Enter exactly why this shipment/booking was lost (minimum 1 character, maximum 300 characters)..."
+                      value={formData.lost_reason}
+                      onChange={(e) => setFormData({ ...formData, lost_reason: e.target.value })}
+                    />
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
                     <Calendar className="w-4 h-4" /> Survey Date
@@ -1065,6 +1322,22 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
           </div>
         </div>
       )}
+      {/* Hidden form for Netlify Forms identification and build crawler integration */}
+      <form name="survey-assignment-alert" data-netlify="true" netlify-honeypot="bot-field" hidden className="hidden" style={{ display: 'none' }}>
+        <input type="hidden" name="form-name" value="survey-assignment-alert" />
+        <input type="text" name="shipper_name" readOnly />
+        <input type="text" name="surveyor_name" readOnly />
+        <input type="text" name="enquiry_number" readOnly />
+        <input type="text" name="job_number" readOnly />
+        <input type="text" name="location" readOnly />
+        <input type="text" name="mode" readOnly />
+        <input type="text" name="survey_date" readOnly />
+        <input type="text" name="start_time" readOnly />
+        <input type="text" name="end_time" readOnly />
+        <input type="text" name="client_emails" readOnly />
+        <input type="text" name="assigned_by" readOnly />
+        <input type="text" name="timestamp" readOnly />
+      </form>
     </div>
   );
 };

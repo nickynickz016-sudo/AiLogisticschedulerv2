@@ -55,6 +55,7 @@ export interface UserPermissions {
   users: boolean;
   transporter: boolean;
   ai: boolean;
+  groupageTracker: boolean;
 }
 
 export interface PackageDetail {
@@ -178,6 +179,7 @@ export interface Survey {
   created_at: number;
   last_edited_by?: string;
   last_edited_at?: number;
+  lost_reason?: string;
 }
 
 // FIX: Made several properties optional to support different job creation contexts (e.g., Warehouse vs. Schedule).

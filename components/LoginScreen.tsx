@@ -3,9 +3,10 @@ import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import { MockUser } from '../mockData';
 import { User, Lock, Loader2 } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 interface LoginScreenProps {
-  onLogin: (user: UserProfile) => void;
+  onLogin: (user: UserProfile, latestUsers?: MockUser[]) => void;
   users: MockUser[];
   logo?: string;
 }
@@ -16,33 +17,69 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users, logo }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    // Simulate network delay for better UX
-    setTimeout(() => {
-      const user = users.find(u => u.username === username && u.password === password);
+    try {
+      // Direct real-time fetch from Supabase on login submission to prevent login with stale credentials
+      let latestUsers = users;
+      const { data, error: fetchErr } = await supabase
+        .from('system_settings')
+        .select('daily_job_limits')
+        .eq('id', 1)
+        .single();
+        
+      if (!fetchErr && data?.daily_job_limits?.__credentials) {
+        latestUsers = data.daily_job_limits.__credentials;
+      }
+
+      const user = latestUsers.find(u => u.username === username && u.password === password);
       
       if (user) {
         if (user.profile.status === 'Disabled') {
-            setError('This account has been disabled. Please contact an administrator.');
+          setError('This account has been disabled. Please contact an administrator.');
         } else {
-            // Merge latest permissions from USERS definition to handle updates
-            const latestUser = users.find(u => u.profile.employee_id === user.profile.employee_id);
-            const finalProfile = latestUser ? { 
-              ...user.profile, 
-              permissions: latestUser.profile.permissions,
-              role: latestUser.profile.role 
-            } : user.profile;
-            onLogin(finalProfile);
+          // Merge latest permissions from the central server source to handle updates instantly
+          const latestUser = latestUsers.find(u => u.profile.employee_id === user.profile.employee_id);
+          const finalProfile: UserProfile = latestUser ? { 
+            ...user.profile, 
+            permissions: latestUser.profile.permissions,
+            role: latestUser.profile.role,
+            username: latestUser.username,
+            password: latestUser.password
+          } : {
+            ...user.profile,
+            username: user.username,
+            password: user.password
+          };
+          onLogin(finalProfile, latestUsers);
         }
       } else {
         setError('Invalid username or password.');
       }
+    } catch (err: any) {
+      console.error('Login verification error:', err);
+      // Failover authentication using local memory credentials in case of network issues
+      const user = users.find(u => u.username === username && u.password === password);
+      if (user) {
+        if (user.profile.status === 'Disabled') {
+          setError('This account has been disabled. Please contact an administrator.');
+        } else {
+          const finalProfile: UserProfile = {
+            ...user.profile,
+            username: user.username,
+            password: user.password
+          };
+          onLogin(finalProfile);
+        }
+      } else {
+        setError('Invalid username or password.');
+      }
+    } finally {
       setLoading(false);
-    }, 500);
+    }
   };
 
   return (

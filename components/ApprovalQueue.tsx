@@ -112,42 +112,48 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({
   const handleWarehouseAuth = (approved: boolean) => {
     if (!signingWarehouse) return;
     const { item, type } = signingWarehouse;
-    const sig = sigPad.current?.isEmpty() ? null : sigPad.current?.toDataURL('image/png');
 
-    if (approved && !sig) {
-        alert("Digital signature is mandatory for approval");
-        return;
+    try {
+      const sig = sigPad.current?.isEmpty() ? null : sigPad.current?.toDataURL('image/png');
+
+      if (approved && !sig) {
+          alert("Digital signature is mandatory for approval");
+          return;
+      }
+
+      if (!approved && !declineReason.trim()) {
+          alert("Please provide a reason for declining");
+          return;
+      }
+
+      const updates = approved ? {
+          status: 'Approved' as const,
+          admin_incharge_name: currentUser.name,
+          admin_incharge_signature: sig || undefined,
+          warehouse_incharge_name: currentUser.name,
+          warehouse_incharge_signature: sig || undefined,
+          approved_at: Date.now(),
+          approved_by: currentUser.name
+      } : {
+          status: 'Declined' as const,
+          declined_at: Date.now(),
+          declined_by: currentUser.name,
+          decline_comments: declineReason
+      };
+
+      if (type === 'closing' && onUpdateChecklist) onUpdateChecklist(item.id, updates);
+      else if (type === 'patrolling' && onUpdatePatrol) onUpdatePatrol(item.id, updates);
+      else if (type === 'safety' && onUpdateSafety) onUpdateSafety(item.id, updates);
+      else if (type === 'surprise' && onUpdateSurprise) onUpdateSurprise(item.id, updates);
+      else if (type === 'daily' && onUpdateDaily) onUpdateDaily(item.id, updates);
+
+      setSigningWarehouse(null);
+      setDeclineReason('');
+      setIsDeclining(false);
+    } catch (error: any) {
+      console.error("Error submitting warehouse auth update:", error);
+      alert(`Failed to complete action: ${error.message || error}`);
     }
-
-    if (!approved && !declineReason.trim()) {
-        alert("Please provide a reason for declining");
-        return;
-    }
-
-    const updates = approved ? {
-        status: 'Approved' as const,
-        admin_incharge_name: currentUser.name,
-        admin_incharge_signature: sig || undefined,
-        warehouse_incharge_name: currentUser.name,
-        warehouse_incharge_signature: sig || undefined,
-        approved_at: Date.now(),
-        approved_by: currentUser.name
-    } : {
-        status: 'Declined' as const,
-        declined_at: Date.now(),
-        declined_by: currentUser.name,
-        decline_comments: declineReason
-    };
-
-    if (type === 'closing' && onUpdateChecklist) onUpdateChecklist(item.id, updates);
-    else if (type === 'patrolling' && onUpdatePatrol) onUpdatePatrol(item.id, updates);
-    else if (type === 'safety' && onUpdateSafety) onUpdateSafety(item.id, updates);
-    else if (type === 'surprise' && onUpdateSurprise) onUpdateSurprise(item.id, updates);
-    else if (type === 'daily' && onUpdateDaily) onUpdateDaily(item.id, updates);
-
-    setSigningWarehouse(null);
-    setDeclineReason('');
-    setIsDeclining(false);
   };
 
   const toggleVehicle = (name: string) => {

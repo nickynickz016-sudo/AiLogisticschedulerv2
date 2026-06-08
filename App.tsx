@@ -19,6 +19,7 @@ import { WriterDocs } from './components/WriterDocs';
 import { Inventory } from './components/Inventory';
 import { TrackingView } from './components/TrackingView';
 import { Transporter } from './components/Transporter';
+import { GroupageTracker } from './components/GroupageTracker';
 import { SurveyTracker } from './components/SurveyTracker';
 import { WarehouseChecklist as WarehouseChecklistComponent } from './components/WarehouseChecklist';
 import { SundayJobModal } from './components/SundayJobModal';
@@ -105,7 +106,7 @@ const App: React.FC = () => {
       return null;
     }
   });
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'approvals' | 'survey-tracker' | 'warehouse-checklist' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>(() => {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'approvals' | 'survey-tracker' | 'warehouse-checklist' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'groupage-tracker' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>(() => {
     const saved = safeLocalStorage.getItem('writer_active_tab');
     return (saved as any) || 'dashboard';
   });
@@ -226,9 +227,62 @@ const App: React.FC = () => {
     };
   }, [currentUser]);
 
-  // Persist users and session whenever they change
+  const fetchedCredentialsRef = useRef<string>('');
+  const allCredentialsRef = useRef<MockUser[]>(allCredentials);
+  const currentUserRef = useRef<UserProfile | null>(currentUser);
+
   useEffect(() => {
-    safeLocalStorage.setItem('writer_system_users', JSON.stringify(allCredentials));
+    allCredentialsRef.current = allCredentials;
+  }, [allCredentials]);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
+  const saveCredentialsToDb = async (credentials: MockUser[]) => {
+    try {
+      const { data, error: selectError } = await supabase
+        .from('system_settings')
+        .select('daily_job_limits')
+        .eq('id', 1)
+        .single();
+        
+      if (selectError) {
+        console.error('Error fetching settings to save credentials:', selectError);
+        return;
+      }
+      
+      const currentLimits = data?.daily_job_limits || {};
+      const updatedLimits = {
+        ...currentLimits,
+        __credentials: credentials
+      };
+      
+      const { error: updateError } = await supabase
+        .from('system_settings')
+        .update({ daily_job_limits: updatedLimits })
+        .eq('id', 1);
+        
+      if (updateError) {
+        console.error('Error saving credentials to Supabase:', updateError.message);
+      }
+    } catch (err) {
+      console.error('Unexpected error saving credentials to Supabase:', err);
+    }
+  };
+
+  const updateAndSaveCredentials = async (newList: MockUser[]) => {
+    setAllCredentials(newList);
+    const jsonStr = JSON.stringify(newList);
+    safeLocalStorage.setItem('writer_system_users', jsonStr);
+    fetchedCredentialsRef.current = jsonStr;
+    await saveCredentialsToDb(newList);
+  };
+
+  // Persist users and session whenever they change (Local storage mirroring only, no destructive DB auto-write)
+  useEffect(() => {
+    const jsonStr = JSON.stringify(allCredentials);
+    safeLocalStorage.setItem('writer_system_users', jsonStr);
   }, [allCredentials]);
 
   useEffect(() => {
@@ -386,7 +440,17 @@ const App: React.FC = () => {
       if (error) {
         console.error('Error fetching surveys:', error.message);
         addNotification(`Error fetching surveys: ${error.message}`, 'error');
-      } else setSurveys(data || []);
+      } else {
+        const normalizedData = (data || []).map((s: any) => {
+          const cachedLostReason = safeLocalStorage.getItem(`survey_lost_reason_${s.id}`);
+          const lost_reason = cachedLostReason || s.lost_reason || '';
+          return {
+            ...s,
+            lost_reason
+          };
+        });
+        setSurveys(normalizedData);
+      }
     } catch (err: any) {
       console.error('Unexpected error fetching surveys:', err);
       addNotification(`Unexpected error fetching surveys: ${err.message}`, 'error');
@@ -585,6 +649,32 @@ const App: React.FC = () => {
             system_alert: data.system_alert || { active: false, title: '', message: '', type: 'info' }
           });
           
+          // Synchronize credentials from Supabase
+          const dbCredentials = data.daily_job_limits?.__credentials;
+          if (dbCredentials && Array.isArray(dbCredentials)) {
+            const dbCredsStr = JSON.stringify(dbCredentials);
+            if (dbCredsStr !== fetchedCredentialsRef.current) {
+              fetchedCredentialsRef.current = dbCredsStr;
+              setAllCredentials(dbCredentials);
+            }
+
+            const latestUser = currentUserRef.current;
+            if (latestUser) {
+              const dbCurrentUser = dbCredentials.find((u: any) => u?.profile?.id === latestUser.id);
+              if (dbCurrentUser) {
+                const currentProfile = dbCurrentUser.profile;
+                if (currentProfile.status === 'Disabled') {
+                  alert('Your account has been disabled by an administrator. You have been logged out.');
+                  handleLogout();
+                } else if (JSON.stringify(currentProfile) !== JSON.stringify(latestUser)) {
+                  setCurrentUser(currentProfile);
+                }
+              }
+            }
+          } else {
+            saveCredentialsToDb(allCredentialsRef.current);
+          }
+          
           // Trigger alert if active and valid
           if (data.system_alert && data.system_alert.active) {
             setShowSystemAlert(true);
@@ -623,8 +713,11 @@ const App: React.FC = () => {
       fetchSurveys();
       fetchChecklists();
 
-      // Poll for job updates (alerts)
-      const interval = setInterval(fetchJobs, 10000);
+      // Poll for job updates, settings, and credentials synchronisation (every 10 seconds)
+      const interval = setInterval(() => {
+        fetchJobs();
+        fetchSettings();
+      }, 10000);
       return () => clearInterval(interval);
     }
   }, [currentUser, fetchJobs, fetchUsers, fetchPersonnel, fetchVehicles, fetchSettings, fetchChecklists]);
@@ -870,7 +963,19 @@ const App: React.FC = () => {
       created_by_id: currentUser?.id || 'unknown',
       created_at: Date.now()
     };
-    const { error } = await supabase.from('surveys').insert([newSurvey]);
+    
+    // Save to local storage for offline-first and schema flexibility
+    if (newSurvey.lost_reason) {
+      safeLocalStorage.setItem(`survey_lost_reason_${newSurvey.id}`, newSurvey.lost_reason);
+    }
+
+    let { error } = await supabase.from('surveys').insert([newSurvey]);
+    if (error && (error.message.includes('lost_reason') || error.message.includes('column'))) {
+      const { lost_reason, ...fallbackSurvey } = newSurvey;
+      const { error: retryError } = await supabase.from('surveys').insert([fallbackSurvey]);
+      error = retryError;
+    }
+
     if (error) {
       console.error('Error adding survey:', error.message);
       addNotification(`Error adding survey: ${error.message}`, 'error');
@@ -883,7 +988,19 @@ const App: React.FC = () => {
   };
 
   const handleUpdateSurvey = async (survey: Survey) => {
-    const { error } = await supabase.from('surveys').update(survey).eq('id', survey.id);
+    if (survey.lost_reason) {
+      safeLocalStorage.setItem(`survey_lost_reason_${survey.id}`, survey.lost_reason);
+    } else {
+      safeLocalStorage.removeItem(`survey_lost_reason_${survey.id}`);
+    }
+
+    let { error } = await supabase.from('surveys').update(survey).eq('id', survey.id);
+    if (error && (error.message.includes('lost_reason') || error.message.includes('column'))) {
+      const { lost_reason, ...fallbackSurvey } = survey;
+      const { error: retryError } = await supabase.from('surveys').update(fallbackSurvey).eq('id', survey.id);
+      error = retryError;
+    }
+
     if (error) {
       console.error('Error updating survey:', error.message);
       addNotification(`Error updating survey: ${error.message}`, 'error');
@@ -1475,31 +1592,42 @@ const App: React.FC = () => {
        addNotification('You cannot delete your own active administrator account.', 'warning');
        return;
     }
-    setAllCredentials(prev => prev.filter(u => u.profile.id !== id));
+    const newList = allCredentials.filter(u => u.profile.id !== id);
+    await updateAndSaveCredentials(newList);
     addNotification('User account deleted successfully.', 'success');
   };
 
   const handleUpdateUserStatus = async (id: string, status: 'Active' | 'Disabled') => {
-    // Update local state for credentials
-    setAllCredentials(prev => prev.map(u => u.profile.id === id ? { ...u, profile: { ...u.profile, status } } : u));
+    // Update local state for credentials and sync immediately
+    const newList = allCredentials.map(u => u.profile.id === id ? { ...u, profile: { ...u.profile, status } } : u);
+    await updateAndSaveCredentials(newList);
   };
 
   const handleUpdateUser = async (updatedUser: UserProfile) => {
-    setAllCredentials(prev => prev.map(u => {
+    const newList = allCredentials.map(u => {
         if (u.profile.id === updatedUser.id) {
             return { 
               ...u, 
               username: updatedUser.username || u.username,
               password: updatedUser.password || u.password,
-              profile: updatedUser 
+              profile: {
+                ...updatedUser,
+                username: updatedUser.username || u.profile.username,
+                password: updatedUser.password || u.profile.password
+              }
             };
         }
         return u;
-    }));
+    });
+    await updateAndSaveCredentials(newList);
 
     // If we're updating the currently logged in user, refresh their session data too
     if (currentUser && currentUser.id === updatedUser.id) {
-        setCurrentUser(updatedUser);
+        setCurrentUser({
+          ...updatedUser,
+          username: updatedUser.username || currentUser.username,
+          password: updatedUser.password || currentUser.password
+        });
     }
   };
 
@@ -1513,14 +1641,16 @@ const App: React.FC = () => {
             employee_id: newUser.employee_id,
             name: newUser.name,
             role: newUser.role,
+            username: newUser.username,
+            password: newUser.password,
             permissions: newUser.permissions, // Added permissions
             avatar: newUser.avatar,
             status: newUser.status
         }
      };
      
-     // Add to local state (this enables login for the session)
-     setAllCredentials(prev => [...prev, newMockUser]);
+     const newList = [...allCredentials, newMockUser];
+     await updateAndSaveCredentials(newList);
      alert(`Account created for ${newUser.name}. Login: ${newUser.username} / ${newUser.password}`);
   };
   
@@ -1528,7 +1658,7 @@ const App: React.FC = () => {
     if (!currentUser) return;
     
     // Update local state credentials array
-    setAllCredentials(prev => prev.map(u => {
+    const newList = allCredentials.map(u => {
       if (u.profile.id === currentUser.id) {
          return {
            ...u,
@@ -1542,7 +1672,9 @@ const App: React.FC = () => {
          };
       }
       return u;
-    }));
+    });
+    
+    await updateAndSaveCredentials(newList);
 
     // Also update current active session with the updated profile
     setCurrentUser(prev => prev ? {
@@ -1554,7 +1686,12 @@ const App: React.FC = () => {
     addNotification('Your profile account credentials have been changed successfully.', 'success');
   };
 
-  const handleLogin = (user: UserProfile) => {
+  const handleLogin = (user: UserProfile, latestUsers?: MockUser[]) => {
+    if (latestUsers) {
+      setAllCredentials(latestUsers);
+      fetchedCredentialsRef.current = JSON.stringify(latestUsers);
+      safeLocalStorage.setItem('writer_system_users', JSON.stringify(latestUsers));
+    }
     setCurrentUser(user);
     // Reset active tab to a safe default if current default isn't allowed
     if (user.role !== UserRole.ADMIN && (!user.permissions || !user.permissions.dashboard)) {
@@ -1918,6 +2055,9 @@ const App: React.FC = () => {
                 onEditJob={handleEditJob}
                 onDeleteJob={handleDeleteJob}
               />
+            )}
+            {activeTab === 'groupage-tracker' && (
+              <GroupageTracker currentUser={currentUser} />
             )}
             {activeTab === 'resources' && (
               <ResourceManager 

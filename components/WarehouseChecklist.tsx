@@ -539,67 +539,75 @@ export const WarehouseChecklist: React.FC<WarehouseChecklistProps> = ({
   };
 
   const handleApprove = async () => {
-    const adminSig = sigPadAdmin.current?.isEmpty() ? null : sigPadAdmin.current?.toDataURL('image/png');
-    const warehouseSig = sigPadWarehouse.current?.isEmpty() ? null : sigPadWarehouse.current?.toDataURL('image/png');
+    try {
+      const adminSig = sigPadAdmin.current?.isEmpty() ? null : sigPadAdmin.current?.toDataURL('image/png');
+      const warehouseSig = sigPadWarehouse.current?.isEmpty() ? null : sigPadWarehouse.current?.toDataURL('image/png');
 
-    if (moduleType === 'closing' && selectedChecklist) {
-      onUpdate(selectedChecklist.id, {
-        status: 'Approved',
-        admin_incharge_name: currentUser.name,
-        admin_incharge_signature: adminSig || undefined,
-        warehouse_incharge_name: currentUser.name,
-        warehouse_incharge_signature: warehouseSig || undefined,
-        approved_at: Date.now(),
-        approved_by: currentUser.name
-      });
-      setSelectedChecklist(null);
-    } else if (moduleType === 'patrolling' && selectedPatrol) {
-      onUpdatePatrol(selectedPatrol.id, {
-        status: 'Approved',
-        admin_incharge_name: currentUser.name,
-        admin_incharge_signature: adminSig || undefined,
-        warehouse_incharge_name: currentUser.name,
-        warehouse_incharge_signature: warehouseSig || undefined,
-        approved_at: Date.now(),
-        approved_by: currentUser.name
-      });
-      setSelectedPatrol(null);
-    } else if (moduleType === 'safety' && selectedSafety) {
-      onUpdateSafety(selectedSafety.id, {
-        status: 'Approved',
-        admin_incharge_name: currentUser.name,
-        admin_incharge_signature: adminSig || undefined,
-        warehouse_incharge_name: currentUser.name,
-        warehouse_incharge_signature: warehouseSig || undefined,
-        approved_at: Date.now(),
-        approved_by: currentUser.name
-      });
-      setSelectedSafety(null);
-    } else if (moduleType === 'surprise' && selectedSurprise) {
-      onUpdateSurprise(selectedSurprise.id, {
-        status: 'Approved',
-        admin_incharge_name: currentUser.name,
-        admin_incharge_signature: adminSig || undefined,
-        warehouse_incharge_name: currentUser.name,
-        warehouse_incharge_signature: warehouseSig || undefined,
-        approved_at: Date.now(),
-        approved_by: currentUser.name
-      });
-      setSelectedSurprise(null);
-    } else if (moduleType === 'daily' && selectedDaily) {
-      onUpdateDaily(selectedDaily.id, {
-        status: 'Approved',
-        admin_incharge_name: currentUser.name,
-        admin_incharge_signature: adminSig || undefined,
-        warehouse_incharge_name: currentUser.name,
-        warehouse_incharge_signature: warehouseSig || undefined,
-        approved_at: Date.now(),
-        approved_by: currentUser.name
-      });
-      setSelectedDaily(null);
+      if (selectedChecklist) {
+        onUpdate(selectedChecklist.id, {
+          status: 'Approved',
+          admin_incharge_name: currentUser.name,
+          admin_incharge_signature: adminSig || undefined,
+          warehouse_incharge_name: currentUser.name,
+          warehouse_incharge_signature: warehouseSig || undefined,
+          approved_at: Date.now(),
+          approved_by: currentUser.name
+        });
+        setSelectedChecklist(null);
+      } else if (selectedPatrol) {
+        onUpdatePatrol(selectedPatrol.id, {
+          status: 'Approved',
+          admin_incharge_name: currentUser.name,
+          admin_incharge_signature: adminSig || undefined,
+          warehouse_incharge_name: currentUser.name,
+          warehouse_incharge_signature: warehouseSig || undefined,
+          approved_at: Date.now(),
+          approved_by: currentUser.name
+        });
+        setSelectedPatrol(null);
+      } else if (selectedSafety) {
+        onUpdateSafety(selectedSafety.id, {
+          status: 'Approved',
+          admin_incharge_name: currentUser.name,
+          admin_incharge_signature: adminSig || undefined,
+          warehouse_incharge_name: currentUser.name,
+          warehouse_incharge_signature: warehouseSig || undefined,
+          approved_at: Date.now(),
+          approved_by: currentUser.name
+        });
+        setSelectedSafety(null);
+      } else if (selectedSurprise) {
+        onUpdateSurprise(selectedSurprise.id, {
+          status: 'Approved',
+          admin_incharge_name: currentUser.name,
+          admin_incharge_signature: adminSig || undefined,
+          warehouse_incharge_name: currentUser.name,
+          warehouse_incharge_signature: warehouseSig || undefined,
+          approved_at: Date.now(),
+          approved_by: currentUser.name
+        });
+        setSelectedSurprise(null);
+      } else if (selectedDaily) {
+        onUpdateDaily(selectedDaily.id, {
+          status: 'Approved',
+          admin_incharge_name: currentUser.name,
+          admin_incharge_signature: adminSig || undefined,
+          warehouse_incharge_name: currentUser.name,
+          warehouse_incharge_signature: warehouseSig || undefined,
+          approved_at: Date.now(),
+          approved_by: currentUser.name
+        });
+        setSelectedDaily(null);
+      } else {
+        alert("No active checklist item was found to authorize.");
+        return;
+      }
+
+      setActiveTab('history');
+    } catch (error: any) {
+      console.error("Error approving report:", error);
+      alert(`An error occurred while approving: ${error.message || error}`);
     }
-
-    setActiveTab('history');
   };
 
   const handleDecline = () => {
@@ -608,51 +616,59 @@ export const WarehouseChecklist: React.FC<WarehouseChecklistProps> = ({
       return;
     }
 
-    if (moduleType === 'closing' && selectedChecklist) {
-      onUpdate(selectedChecklist.id, {
-        status: 'Declined',
-        declined_at: Date.now(),
-        declined_by: currentUser.name,
-        decline_comments: declineComments
-      });
-      setSelectedChecklist(null);
-    } else if (moduleType === 'patrolling' && selectedPatrol) {
-      onUpdatePatrol(selectedPatrol.id, {
-        status: 'Declined',
-        declined_at: Date.now(),
-        declined_by: currentUser.name,
-        decline_comments: declineComments
-      });
-      setSelectedPatrol(null);
-    } else if (moduleType === 'safety' && selectedSafety) {
-      onUpdateSafety(selectedSafety.id, {
-        status: 'Declined',
-        declined_at: Date.now(),
-        declined_by: currentUser.name,
-        decline_comments: declineComments
-      });
-      setSelectedSafety(null);
-    } else if (moduleType === 'surprise' && selectedSurprise) {
-      onUpdateSurprise(selectedSurprise.id, {
-        status: 'Declined',
-        declined_at: Date.now(),
-        declined_by: currentUser.name,
-        decline_comments: declineComments
-      });
-      setSelectedSurprise(null);
-    } else if (moduleType === 'daily' && selectedDaily) {
-      onUpdateDaily(selectedDaily.id, {
-        status: 'Declined',
-        declined_at: Date.now(),
-        declined_by: currentUser.name,
-        decline_comments: declineComments
-      });
-      setSelectedDaily(null);
-    }
+    try {
+      if (selectedChecklist) {
+        onUpdate(selectedChecklist.id, {
+          status: 'Declined',
+          declined_at: Date.now(),
+          declined_by: currentUser.name,
+          decline_comments: declineComments
+        });
+        setSelectedChecklist(null);
+      } else if (selectedPatrol) {
+        onUpdatePatrol(selectedPatrol.id, {
+          status: 'Declined',
+          declined_at: Date.now(),
+          declined_by: currentUser.name,
+          decline_comments: declineComments
+        });
+        setSelectedPatrol(null);
+      } else if (selectedSafety) {
+        onUpdateSafety(selectedSafety.id, {
+          status: 'Declined',
+          declined_at: Date.now(),
+          declined_by: currentUser.name,
+          decline_comments: declineComments
+        });
+        setSelectedSafety(null);
+      } else if (selectedSurprise) {
+        onUpdateSurprise(selectedSurprise.id, {
+          status: 'Declined',
+          declined_at: Date.now(),
+          declined_by: currentUser.name,
+          decline_comments: declineComments
+        });
+        setSelectedSurprise(null);
+      } else if (selectedDaily) {
+        onUpdateDaily(selectedDaily.id, {
+          status: 'Declined',
+          declined_at: Date.now(),
+          declined_by: currentUser.name,
+          decline_comments: declineComments
+        });
+        setSelectedDaily(null);
+      } else {
+        alert("No active checklist item was found to decline.");
+        return;
+      }
 
-    setDeclineComments('');
-    setShowDeclineForm(false);
-    setActiveTab('history');
+      setDeclineComments('');
+      setShowDeclineForm(false);
+      setActiveTab('history');
+    } catch (error: any) {
+      console.error("Error declining report:", error);
+      alert(`An error occurred while declining: ${error.message || error}`);
+    }
   };
 
   const handleReset = () => {

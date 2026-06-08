@@ -25,6 +25,7 @@ const FULL_ACCESS = {
   transporter: true,
   ai: true,
   digitalPackingList: true,
+  groupageTracker: true,
 };
 
 const STANDARD_ACCESS = {
@@ -45,6 +46,7 @@ const STANDARD_ACCESS = {
   transporter: false,
   ai: false,
   digitalPackingList: true,
+  groupageTracker: true,
 };
 
 const WRITER_ACCESS = {
@@ -65,6 +67,7 @@ const WRITER_ACCESS = {
   users: false,
   transporter: false,
   ai: false,
+  groupageTracker: true,
 };
 
 const SENIOR_OPS_ACCESS = {
@@ -85,6 +88,7 @@ const SENIOR_OPS_ACCESS = {
   transporter: true,
   ai: false,
   digitalPackingList: true,
+  groupageTracker: true,
 };
 
 const SANTOSH_ACCESS = {
@@ -105,6 +109,7 @@ const SANTOSH_ACCESS = {
   users: false,
   transporter: false,
   ai: false,
+  groupageTracker: false,
 };
 
 const SEMI_ADMIN_ACCESS = {
@@ -125,6 +130,7 @@ const SEMI_ADMIN_ACCESS = {
   transporter: true,
   ai: true,
   digitalPackingList: true,
+  groupageTracker: true,
 };
 
 const ACCOUNTS_ACCESS = {
@@ -145,6 +151,7 @@ const ACCOUNTS_ACCESS = {
   transporter: false,
   ai: false,
   digitalPackingList: true,
+  groupageTracker: true,
 };
 
 const SECURITY_ONLY_ACCESS = {
@@ -165,6 +172,7 @@ const SECURITY_ONLY_ACCESS = {
   users: false,
   transporter: false,
   ai: false,
+  groupageTracker: false,
 };
 
 export const USERS: MockUser[] = [
@@ -178,6 +186,19 @@ export const USERS: MockUser[] = [
       role: UserRole.ADMIN,
       permissions: FULL_ACCESS,
       avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Admin',
+      status: 'Active',
+    },
+  },
+  {
+    username: 'WI061938',
+    password: 'Writer@123',
+    profile: {
+      id: 'wi061938-f6a7-8901-2345-67890abcdef1',
+      employee_id: 'WI061938',
+      name: 'Groupage Specialist (WI061938)',
+      role: UserRole.USER,
+      permissions: STANDARD_ACCESS,
+      avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=WI061938',
       status: 'Active',
     },
   },
