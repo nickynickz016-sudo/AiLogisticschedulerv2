@@ -20,7 +20,9 @@ CREATE TABLE public.groupage_shipper_entries (
     created_by_name TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     status TEXT DEFAULT 'Pending' NOT NULL, -- 'Pending', 'Grouped' (consolidated)
-    container_booking_id TEXT -- references groupage_container_bookings(id)
+    container_booking_id TEXT, -- references groupage_container_bookings(id)
+    job_no TEXT,
+    packing_date TEXT
 );
 
 -- 2. Create table for container bookings created by WI061938

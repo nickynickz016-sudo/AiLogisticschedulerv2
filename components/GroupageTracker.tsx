@@ -24,6 +24,8 @@ export interface ShipperEntry {
   created_at: string;
   status: 'Pending' | 'Grouped';
   container_booking_id?: string | null;
+  job_no?: string | null;
+  packing_date?: string | null;
 }
 
 export interface ContainerBooking {
@@ -61,6 +63,8 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
     destination_address: '',
     destination_city: '',
     destination_country: '',
+    job_no: '',
+    packing_date: '',
   });
   const [showShipperModal, setShowShipperModal] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
@@ -132,7 +136,26 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
             setDbErrorMsg(errMsg);
           }
         } else {
-          setShipperEntries(shipperData || []);
+          const enrichedShippers = (shipperData || []).map((item: any) => {
+            const cachedMeta = localStorage.getItem(`groupage_meta_${item.id}`);
+            let job_no = item.job_no;
+            let packing_date = item.packing_date;
+            if (cachedMeta) {
+              try {
+                const parsed = JSON.parse(cachedMeta);
+                if (job_no === undefined || job_no === null) job_no = parsed.job_no;
+                if (packing_date === undefined || packing_date === null) packing_date = parsed.packing_date;
+              } catch (e) {
+                // ignore
+              }
+            }
+            return {
+              ...item,
+              job_no,
+              packing_date
+            };
+          });
+          setShipperEntries(enrichedShippers);
           setContainerBookings(bookingData || []);
         }
       } else {
@@ -246,7 +269,9 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
       created_by_name: currentUser.name || 'Unknown User',
       created_at: new Date().toISOString(),
       status: 'Pending' as const,
-      container_booking_id: null
+      container_booking_id: null,
+      job_no: shipperForm.job_no || null,
+      packing_date: shipperForm.packing_date || null
     };
 
     try {
@@ -259,23 +284,73 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
              return;
           }
 
+          const payload = {
+            shipper_name: shipperForm.shipper_name,
+            volume_cbm: volumeNum,
+            destination_address: shipperForm.destination_address,
+            destination_city: shipperForm.destination_city,
+            destination_country: shipperForm.destination_country,
+            job_no: shipperForm.job_no || null,
+            packing_date: shipperForm.packing_date || null
+          };
+
           const { error } = await supabase
             .from('groupage_shipper_entries')
-            .update({
-              shipper_name: shipperForm.shipper_name,
-              volume_cbm: volumeNum,
-              destination_address: shipperForm.destination_address,
-              destination_city: shipperForm.destination_city,
-              destination_country: shipperForm.destination_country,
-            })
+            .update(payload)
             .eq('id', editingEntryId);
 
-          if (error) throw error;
+          if (error) {
+            if (error.message.includes('column') || error.message.includes('job_no') || error.message.includes('packing_date')) {
+              // Store locally in fallback
+              localStorage.setItem(`groupage_meta_${editingEntryId}`, JSON.stringify({
+                job_no: shipperForm.job_no || '',
+                packing_date: shipperForm.packing_date || ''
+              }));
+
+              // Retry stripped
+              const { job_no, packing_date, ...strippedPayload } = payload;
+              const { error: retryError } = await supabase
+                .from('groupage_shipper_entries')
+                .update(strippedPayload)
+                .eq('id', editingEntryId);
+              if (retryError) throw retryError;
+            } else {
+              throw error;
+            }
+          } else {
+            localStorage.removeItem(`groupage_meta_${editingEntryId}`);
+          }
         } else {
+          const entryId = `SHI-${Date.now()}`;
+          const insertPayload = {
+            ...itemData,
+            id: entryId
+          };
+
           const { error } = await supabase
             .from('groupage_shipper_entries')
-            .insert([itemData]);
-          if (error) throw error;
+            .insert([insertPayload]);
+
+          if (error) {
+            if (error.message.includes('column') || error.message.includes('job_no') || error.message.includes('packing_date')) {
+              // Store locally in fallback
+              localStorage.setItem(`groupage_meta_${entryId}`, JSON.stringify({
+                job_no: shipperForm.job_no || '',
+                packing_date: shipperForm.packing_date || ''
+              }));
+
+              // Retry stripped
+              const { job_no, packing_date, ...strippedPayload } = insertPayload;
+              const { error: retryError } = await supabase
+                .from('groupage_shipper_entries')
+                .insert([strippedPayload]);
+              if (retryError) throw retryError;
+            } else {
+              throw error;
+            }
+          } else {
+            localStorage.removeItem(`groupage_meta_${entryId}`);
+          }
         }
       } else {
         // Local sandbox
@@ -307,6 +382,8 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
         destination_address: '',
         destination_city: '',
         destination_country: '',
+        job_no: '',
+        packing_date: '',
       });
       fetchData();
     } catch (err: any) {
@@ -319,10 +396,6 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
       alert("Access Denied: You cannot edit details recorded by other users.");
       return;
     }
-    if (entry.status === 'Grouped') {
-      alert("This shipment cannot be edited because it is already booked/packed in a container consolidation.");
-      return;
-    }
     setEditingEntryId(entry.id);
     setShipperForm({
       id: entry.id || '',
@@ -331,6 +404,8 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
       destination_address: entry.destination_address || '',
       destination_city: entry.destination_city || '',
       destination_country: entry.destination_country || '',
+      job_no: entry.job_no || '',
+      packing_date: entry.packing_date || '',
     });
     setShowShipperModal(true);
   };
@@ -540,6 +615,49 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
         }
       },
       "Disband Block",
+      "Cancel"
+    );
+  };
+
+  // Remove a single shipper cargo consignment from an active container booking
+  const handleRemoveShipperFromBooking = async (shipperId: string, bookingId: string) => {
+    if (!isAuthorizedToBook) {
+      alert("Access Denied: Only authorized coordinators can remove shippers from active bookings.");
+      return;
+    }
+
+    const targetShipper = shipperEntries.find(s => s.id === shipperId);
+    if (!targetShipper) return;
+
+    triggerConfirm(
+      `Remove ${targetShipper.shipper_name}`,
+      `Are you sure you want to remove the shipment "${targetShipper.shipper_name}" from container "${bookingId}"? It will be safely returned to the pending list.`,
+      async () => {
+        try {
+          if (dbMode === 'supabase') {
+            const { error: shipperUpdateErr } = await supabase
+              .from('groupage_shipper_entries')
+              .update({ status: 'Pending', container_booking_id: null })
+              .eq('id', shipperId);
+
+            if (shipperUpdateErr) throw shipperUpdateErr;
+          } else {
+            // Sandbox
+            const updatedShippers = shipperEntries.map(s => 
+              s.id === shipperId 
+                ? { ...s, status: 'Pending' as const, container_booking_id: null } 
+                : s
+            );
+            localStorage.setItem('writer_groupage_shippers', JSON.stringify(updatedShippers));
+            setShipperEntries(updatedShippers);
+          }
+          alert(`Success! Removed "${targetShipper.shipper_name}" from consolidation.`);
+          fetchData();
+        } catch (err: any) {
+          alert(`Error removing shipper consignment: ${err.message}`);
+        }
+      },
+      "Remove Item",
       "Cancel"
     );
   };
@@ -756,6 +874,8 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
                 destination_address: '',
                 destination_city: '',
                 destination_country: '',
+                job_no: '',
+                packing_date: '',
               });
               setShowShipperModal(true);
             }}
@@ -929,6 +1049,21 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
                                 <p className="text-[11px] font-semibold text-slate-500 italic mt-0.5">
                                   Address: {shipper.destination_address}
                                 </p>
+
+                                {(shipper.job_no || shipper.packing_date) && (
+                                  <div className="flex flex-wrap gap-2 mt-2">
+                                    {shipper.job_no && (
+                                      <span className="text-[10px] font-mono font-bold bg-sky-50 text-sky-700 border border-sky-100 rounded-lg px-2 py-0.5">
+                                        Job No: {shipper.job_no}
+                                      </span>
+                                    )}
+                                    {shipper.packing_date && (
+                                      <span className="text-[10px] font-mono font-bold bg-amber-50 text-amber-700 border border-amber-100 rounded-lg px-2 py-0.5">
+                                        Packing: {new Date(shipper.packing_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
 
                               <div className="flex flex-col items-end gap-2 shrink-0">
@@ -945,13 +1080,12 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
                                         onClick={() => handleEditShipper(shipper)}
                                         className="p-1 hover:bg-slate-100 text-slate-400 hover:text-slate-700 rounded-lg transition-all"
                                         title="Edit Entry"
-                                        disabled={shipper.status === 'Grouped'}
                                       >
                                         <Edit2 className="w-3.5 h-3.5" />
                                       </button>
                                       <button 
                                         onClick={() => handleDeleteShipper(shipper.id)}
-                                        className="p-1 hover:bg-slate-100 text-red-400 hover:text-red-700 rounded-lg transition-all"
+                                        className="p-1 hover:bg-slate-100 text-red-400 hover:text-red-700 rounded-lg transition-all animate-none"
                                         title="Delete Entry"
                                         disabled={shipper.status === 'Grouped'}
                                       >
@@ -1101,7 +1235,10 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
                             >
                               <div>
                                 <p className="font-extrabold text-[#E31E24] text-[10px] leading-tight select-none">{shipper.shipper_name}</p>
-                                <span className="text-[8px] font-medium text-slate-400 block mt-0.5 select-none">{shipper.destination_city}, {shipper.destination_country}</span>
+                                <span className="text-[8px] font-medium text-slate-400 block mt-0.5 select-none">
+                                  {shipper.destination_city}, {shipper.destination_country}
+                                  {shipper.job_no ? ` • Job: ${shipper.job_no}` : ''}
+                                </span>
                               </div>
                               <span className="font-mono text-[9px] bg-slate-900 text-white font-bold rounded px-1.5 py-0.5 select-none shrink-0 text-right">
                                 {shipper.volume_cbm} CBM
@@ -1243,14 +1380,40 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
 
                     {/* Member List */}
                     <div className="space-y-1.5 mb-4">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">Consolidated shippers</p>
-                      <div className="space-y-1 max-h-[80px] overflow-y-auto">
-                        {members.map(item => (
-                          <div key={item.id} className="flex justify-between items-center text-[10px] font-bold py-1 border-b border-stone-100">
-                            <span className="text-indigo-600 truncate max-w-[150px]">{item.shipper_name}</span>
-                            <span className="font-mono text-slate-500">{item.volume_cbm} CBM</span>
-                          </div>
-                        ))}
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">Consolidated shippers (FIFO Order)</p>
+                      <div className="space-y-1 max-h-[140px] overflow-y-auto">
+                        {[...members]
+                          .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                          .map((item, idx) => {
+                            const isFirstIn = idx === 0;
+                            return (
+                              <div key={item.id} className="flex justify-between items-center text-[10px] font-bold py-1.5 border-b border-stone-100/80 hover:bg-slate-100/50 px-1 rounded-md transition-all group">
+                                <div className="flex items-center gap-1 min-w-0 flex-1">
+                                  <span className="text-[9px] font-mono text-slate-400 font-extrabold select-none">#{idx + 1}</span>
+                                  {isFirstIn && (
+                                    <span className="text-[7.5px] font-black uppercase bg-red-100 text-[#E31E24] border border-red-200 px-1 py-0.2 rounded scale-90 shrink-0 select-none animate-pulse">
+                                      First In
+                                    </span>
+                                  )}
+                                  <span className="text-zinc-800 truncate" title={item.shipper_name}>
+                                    {item.shipper_name}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                  <span className="font-mono text-slate-500 text-[9px] bg-slate-100 px-1.5 py-0.5 rounded">{item.volume_cbm} CBM</span>
+                                  {isAuthorizedToBook && (
+                                    <button
+                                      onClick={() => handleRemoveShipperFromBooking(item.id, booking.id)}
+                                      className="p-1 text-slate-300 hover:text-red-650 hover:bg-red-50 rounded transition-all"
+                                      title="Remove from Container Consolidation"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
                       </div>
                     </div>
                   </div>
@@ -1371,6 +1534,11 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
             </div>
 
             <form onSubmit={handleShipperSubmit} className="p-6 space-y-4">
+              {editingEntryId && shipperEntries.find(s => s.id === editingEntryId)?.status === 'Grouped' && (
+                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] rounded-xl font-medium">
+                  ⚠️ This cargo shipment is already grouped. You can modify any details (including Job No. and Packing Date); changes will be saved while preserving the container consolidated link.
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Shipper's Name *</label>
@@ -1442,6 +1610,29 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
                     <option value="Asia - Groupage">Asia - Groupage</option>
                     <option value="Europe - Groupage">Europe - Groupage</option>
                   </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Job No. (Optional)</label>
+                  <input 
+                    type="text"
+                    placeholder="e.g. JOB-8839"
+                    className="w-full text-xs font-bold border rounded-xl p-3.5 bg-slate-50 outline-none focus:ring-1 focus:ring-indigo-500"
+                    value={shipperForm.job_no}
+                    onChange={(e) => setShipperForm({ ...shipperForm, job_no: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Packing Date (Optional)</label>
+                  <input 
+                    type="date"
+                    className="w-full text-xs font-bold border rounded-xl p-3.5 bg-slate-50 outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800"
+                    value={shipperForm.packing_date}
+                    onChange={(e) => setShipperForm({ ...shipperForm, packing_date: e.target.value })}
+                  />
                 </div>
               </div>
 
@@ -1609,7 +1800,10 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
                                 </span>
                               )}
                             </div>
-                            <span className="text-[8px] font-medium text-slate-400 block mt-0.5 select-none">{shipper.destination_city}, {shipper.destination_country}</span>
+                            <span className="text-[8px] font-medium text-slate-400 block mt-0.5 select-none">
+                              {shipper.destination_city}, {shipper.destination_country}
+                              {shipper.job_no ? ` • Job: ${shipper.job_no}` : ''}
+                            </span>
                           </div>
                           <span className="font-mono text-[9px] bg-slate-900 text-white font-bold rounded px-1.5 py-0.5 select-none shrink-0 text-right">
                             {shipper.volume_cbm} CBM
