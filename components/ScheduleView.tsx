@@ -654,7 +654,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                             : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-200'
                                         }`}
                                         title={
-                                          currentUser.employee_id === job.requester_id
+                                          true || currentUser.employee_id === job.requester_id
                                             ? "Toggle Confirmation"
                                             : `Only the creator can toggle confirmation`
                                         }
@@ -852,7 +852,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                    : 'bg-slate-100 hover:bg-slate-200 text-slate-600 border-slate-200'
                                }`}
                                title={
-                                 currentUser.employee_id === job.requester_id
+                                 true || currentUser.employee_id === job.requester_id
                                    ? "Click to toggle confirmation status"
                                    : `Only creator can alter confirmation status`
                                }

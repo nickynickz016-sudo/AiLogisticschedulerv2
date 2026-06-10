@@ -13,6 +13,7 @@ interface SurveyTrackerProps {
   onUpdateSurvey: (survey: Survey) => void;
   onDeleteSurvey: (id: string) => void;
   currentUser: UserProfile;
+  onGoSurvey?: (survey: Survey) => void;
 }
 
 const ASSIGNABLE_SURVEYORS = [
@@ -28,7 +29,8 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
   onAddSurvey, 
   onUpdateSurvey, 
   onDeleteSurvey, 
-  currentUser 
+  currentUser,
+  onGoSurvey
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingSurvey, setEditingSurvey] = useState<Survey | null>(null);
@@ -805,6 +807,16 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
 
                   {/* Actions Section */}
                   <div className="flex items-center gap-1 pl-4 border-l border-slate-100 h-8">
+                    {onGoSurvey && (
+                      <button
+                        onClick={() => onGoSurvey(survey)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#E31E24]/10 hover:bg-[#E31E24] text-[#E31E24] hover:text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all shadow-sm shrink-0 whitespace-nowrap mr-2"
+                        title="Go to Survey/Packing List"
+                      >
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                        <span>Go survey</span>
+                      </button>
+                    )}
                     {canManage && (
                       <>
                         <button 
@@ -1060,6 +1072,15 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
                       </span>
                     </button>
                   </div>
+                )}
+
+                {onGoSurvey && (
+                  <button
+                    onClick={() => onGoSurvey(survey)}
+                    className="w-full mb-4.5 py-2.5 px-4 bg-[#E31E24] hover:bg-rose-700 text-white text-xs font-black uppercase tracking-wider rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-sm"
+                  >
+                    <ArrowUpRight className="w-4.5 h-4.5" /> Go survey
+                  </button>
                 )}
 
                 {/* Footer Details */}

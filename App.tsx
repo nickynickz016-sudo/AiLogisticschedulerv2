@@ -21,6 +21,7 @@ import { TrackingView } from './components/TrackingView';
 import { Transporter } from './components/Transporter';
 import { GroupageTracker } from './components/GroupageTracker';
 import { SurveyTracker } from './components/SurveyTracker';
+import { SurveyPackingList } from './components/SurveyPackingList';
 import { WarehouseChecklist as WarehouseChecklistComponent } from './components/WarehouseChecklist';
 import { SundayJobModal } from './components/SundayJobModal';
 import { ProfileUpdateModal } from './components/ProfileUpdateModal';
@@ -106,11 +107,12 @@ const App: React.FC = () => {
       return null;
     }
   });
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'approvals' | 'survey-tracker' | 'warehouse-checklist' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'groupage-tracker' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>(() => {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'approvals' | 'survey-tracker' | 'survey-packing' | 'warehouse-checklist' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'groupage-tracker' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>(() => {
     const saved = safeLocalStorage.getItem('writer_active_tab');
     return (saved as any) || 'dashboard';
   });
   const [isNavigationLocked, setIsNavigationLocked] = useState(false);
+  const [preloadPackingSurvey, setPreloadPackingSurvey] = useState<any>(null);
   
   // Local state for app data, fetched from Supabase
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -378,7 +380,9 @@ const App: React.FC = () => {
         // If 'vehicles' is null but 'vehicle' exists (legacy), convert 'vehicle' string to array.
         const normalizedData = (data || []).map((j: any) => {
           const cachedConfirmation = safeLocalStorage.getItem(`job_confirmed_${j.id}`);
-          const is_confirmed = cachedConfirmation === 'true' ? true : (cachedConfirmation === 'false' ? false : !!j.is_confirmed);
+          const is_confirmed = (j.is_confirmed !== undefined && j.is_confirmed !== null) 
+            ? !!j.is_confirmed 
+            : (cachedConfirmation === 'true' ? true : false);
           return {
             ...j,
             is_confirmed,
@@ -1031,12 +1035,6 @@ const App: React.FC = () => {
 
     if (!currentUser) {
        addNotification('You must be logged in to update confirmation status.', 'error');
-       return;
-    }
-
-    if (currentUser.employee_id !== targetJob.requester_id) {
-       const creator = USERS.find(u => u.profile.employee_id === targetJob.requester_id)?.profile?.name || targetJob.requester_id;
-       addNotification(`Only ${creator} (who added this job) has the authority to change its confirmation status.`, 'error');
        return;
     }
 
@@ -2006,6 +2004,18 @@ const App: React.FC = () => {
                 onUpdateSurvey={handleUpdateSurvey}
                 onDeleteSurvey={handleDeleteSurvey}
                 currentUser={currentUser}
+                onGoSurvey={(survey) => {
+                  setPreloadPackingSurvey(survey);
+                  setActiveTab('survey-packing');
+                }}
+              />
+            )}
+            {activeTab === 'survey-packing' && currentUser && (
+              <SurveyPackingList 
+                currentUser={currentUser} 
+                preloadSurveyData={preloadPackingSurvey}
+                onClearPreloadSurveyData={() => setPreloadPackingSurvey(null)}
+                logo={settings.company_logo}
               />
             )}
             {activeTab === 'warehouse-checklist' && (
