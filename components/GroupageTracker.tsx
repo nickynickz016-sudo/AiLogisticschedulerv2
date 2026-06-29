@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, UserRole } from '../types';
 import { supabase } from '../supabaseClient';
+import { safeLocalStorage } from '../utils';
 import { 
   Package, Plus, Trash2, Edit2, AlertTriangle, CheckCircle, 
   MapPin, User, ArrowRight, Shield, RefreshCw, Layers, Info, 
   Database, Eye, Clipboard, HelpCircle, X, Scale, Truck, Clock,
   Archive, FileSpreadsheet, Download
 } from 'lucide-react';
+
+const localStorage = safeLocalStorage;
+
 
 interface GroupageTrackerProps {
   currentUser: UserProfile;

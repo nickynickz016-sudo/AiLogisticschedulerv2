@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { getUAEToday } from '../utils';
+import { getUAEToday, getCleanJobNo, getJobDayNumber, getJobDayLabel as getJobDayLabelFromUtils, safeLocalStorage } from '../utils';
 import { Job, JobStatus, LoadingType, UserProfile, Personnel, Vehicle, UserRole, ShipmentDetailsType } from '../types';
-import { Plus, Search, Package, Clock, User, X, Calendar as CalendarIcon, CheckCircle2, Truck, Settings2, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Phone, Mail, Briefcase, FileText, AlertCircle, MapPin, RefreshCw, Edit2, Maximize2, Minimize2, Copy, Download } from 'lucide-react';
+import { Plus, Search, Package, Clock, User, X, Calendar as CalendarIcon, CheckCircle2, Check, Truck, Settings2, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Phone, Mail, Briefcase, FileText, AlertCircle, MapPin, RefreshCw, Edit2, Maximize2, Minimize2, Copy, Download } from 'lucide-react';
 import { JobDetailModal } from './JobDetailModal';
 import * as XLSX from 'xlsx';
 
@@ -57,6 +57,23 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   const [isModalExpanded, setIsModalExpanded] = useState(false);
   const [showAllocationModal, setShowAllocationModal] = useState<Job | null>(null);
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+
+  // Keep selectedJob in sync with the latest job data in jobs prop,
+  // even if the job ID itself is updated (find by clean job number or old id)
+  useEffect(() => {
+    if (selectedJob) {
+      let updated = jobs.find(j => j.id === selectedJob.id);
+      if (!updated) {
+        const oldCleanNo = getCleanJobNo(selectedJob.id);
+        updated = jobs.find(j => getCleanJobNo(j.id) === oldCleanNo);
+      }
+      if (updated) {
+        setSelectedJob(updated);
+      } else {
+        setSelectedJob(null);
+      }
+    }
+  }, [jobs]);
   const [filter, setFilter] = useState('');
   const [viewMode, setViewMode] = useState<'calendar' | 'list' | 'month'>('list');
   const [currentDate, setCurrentDate] = useState(() => {
@@ -114,6 +131,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   };
 
   const [newJob, setNewJob] = useState<Partial<Job>>(initialNewJobState);
+  const [dayDates, setDayDates] = useState<string[]>([]);
   const [showCopyModal, setShowCopyModal] = useState<Job | null>(null);
   const [copyDate, setCopyDate] = useState(getUAEToday());
   
@@ -180,6 +198,14 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
   const handleCopyJob = (e: React.MouseEvent, job: Job) => {
     e.stopPropagation();
+    if (job.duration && job.duration > 1) {
+      const confirmed = window.confirm(
+        "Are you sure to copy this schedule, this is a multi day job copying this job will give same numbers of days again \ninstead of copying kindly edit the job info with Multi-day Schedule Planner"
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
     setShowCopyModal(job);
     // Default to next day
     const nextDay = new Date(job.job_date);
@@ -211,11 +237,115 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     }
   }, [showModal, selectedDate, isEditingMode]);
 
+  // Friday Auto-Backup Download for Admins (retaining backup of 1 month back)
+  useEffect(() => {
+    if (!currentUser || !jobs || jobs.length === 0) return;
+
+    const isAdmin = currentUser.role === UserRole.ADMIN || currentUser.employee_id === 'OPS-ADMIN-01';
+    if (!isAdmin) return;
+
+    const uaeTodayStr = getUAEToday();
+    if (!uaeTodayStr) return;
+
+    // Determine if today (in UAE time) is Friday
+    const uaeTodayDate = new Date(`${uaeTodayStr}T00:00:00`);
+    const isFriday = uaeTodayDate.getDay() === 5;
+
+    if (!isFriday) return;
+
+    const localStorageKey = `friday_auto_backup_${uaeTodayStr}`;
+    const alreadyDownloaded = safeLocalStorage.getItem(localStorageKey) === 'downloaded';
+
+    if (!alreadyDownloaded) {
+      // Calculate 1 month back from today
+      const oneMonthBackDate = new Date(uaeTodayDate);
+      oneMonthBackDate.setMonth(oneMonthBackDate.getMonth() - 1);
+      const oneMonthBackStr = oneMonthBackDate.toISOString().split('T')[0];
+
+      // Filter jobs scheduled in the 1 month back range
+      const jobsToBackup = jobs.filter(job => {
+        return job.job_date >= oneMonthBackStr && job.job_date <= uaeTodayStr;
+      });
+
+      // Prepare the Excel data
+      const data = jobsToBackup.map(job => {
+        const requester = users?.find(u => u.employee_id === job.requester_id);
+        return {
+          'Job no.': job.id,
+          'Date': job.job_date,
+          'Shipper Name': job.shipper_name,
+          'Location': job.location || '',
+          'Requestor': requester ? requester.name : job.requester_id,
+          'CBM': job.volume_cbm || 0,
+          'Shipment Details': job.shipment_details || '',
+          'Loading Type': job.loading_type,
+          'Status': job.status || '',
+          'Assigned To': job.assigned_to || 'Unassigned'
+        };
+      });
+
+      // Generate spreadsheet
+      const ws = XLSX.utils.json_to_sheet(data);
+      const colWidths = [
+        { wch: 15 }, // Job no.
+        { wch: 12 }, // Date
+        { wch: 25 }, // Shipper Name
+        { wch: 30 }, // Location
+        { wch: 20 }, // Requestor
+        { wch: 10 }, // CBM
+        { wch: 20 }, // Shipment Details
+        { wch: 20 }, // Loading Type
+        { wch: 15 }, // Status
+        { wch: 15 }  // Assigned To
+      ];
+      ws['!cols'] = colWidths;
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Weekly Backup');
+
+      const fileName = `Job_Schedule_AutoBackup_${uaeTodayStr}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+
+      // Mark as downloaded to avoid repeating on refresh/navigation
+      safeLocalStorage.setItem(localStorageKey, 'downloaded');
+      console.log(`Automatic Friday backup completed successfully: ${fileName}`);
+    }
+  }, [currentUser, jobs, users]);
+
+  const calculateConsecutiveDates = (startDate: string, duration: number, sundayHandling?: string): string[] => {
+    const dates: string[] = [];
+    if (!startDate) return dates;
+    let currentDate = new Date(`${startDate}T00:00:00Z`);
+    let daysScheduled = 0;
+    while (daysScheduled < duration) {
+      const isSunday = currentDate.getUTCDay() === 0;
+      if (isSunday && sundayHandling !== 'Include') {
+        currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+        continue;
+      }
+      dates.push(currentDate.toISOString().split('T')[0]);
+      daysScheduled++;
+      currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+    }
+    return dates;
+  };
+
+  useEffect(() => {
+    if (showModal && newJob.job_date && newJob.duration) {
+      if (!isEditingMode || dayDates.length !== newJob.duration) {
+        const calculated = calculateConsecutiveDates(newJob.job_date, newJob.duration, newJob.sunday_handling);
+        setDayDates(calculated);
+      }
+    }
+  }, [showModal, newJob.job_date, newJob.duration, newJob.sunday_handling, isEditingMode]);
+
   const handleCloseModal = () => {
     setShowModal(false);
     setIsModalExpanded(false);
     setNewJob(initialNewJobState);
+    setDayDates([]);
     setIsEditingMode(false);
+    setSelectedJob(null);
   };
 
   const generateUniqueId = () => {
@@ -225,14 +355,149 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   };
 
   const getJobDayLabel = (job: Job) => {
-    const match = job.id.match(/-D(\d+)$/);
-    if (match) {
-      return `Day ${match[1]}`;
+    return getJobDayLabelFromUtils(job.id, job.duration);
+  };
+
+  const [hoveredJobCleanNo, setHoveredJobCleanNo] = useState<string | null>(null);
+
+  const isMultiDayJob = (job: Job) => {
+    if (job.duration && job.duration > 1) return true;
+    const cleanNo = getCleanJobNo(job.id);
+    if (!cleanNo) return false;
+    const relatedCount = jobs.filter(j => getCleanJobNo(j.id) === cleanNo).length;
+    return relatedCount > 1;
+  };
+
+  const getJobGroupColors = (jobId: string) => {
+    const cleanNo = getCleanJobNo(jobId);
+    if (!cleanNo) {
+      return {
+        bg: 'bg-slate-50',
+        text: 'text-slate-800',
+        border: 'border-slate-200',
+        borderL: 'border-l-slate-400',
+        badge: 'bg-slate-100 border-slate-200 text-slate-700',
+        line: 'bg-slate-400',
+        ring: 'ring-slate-300',
+        hoverBg: 'hover:bg-slate-100/80',
+        glow: 'shadow-slate-100',
+        activeBg: 'bg-slate-100'
+      };
     }
-    if (job.duration && job.duration > 1) {
-      return 'Day 1';
+    
+    let hash = 0;
+    for (let i = 0; i < cleanNo.length; i++) {
+      hash = cleanNo.charCodeAt(i) + ((hash << 5) - hash);
     }
-    return null;
+    
+    const palettes = [
+      {
+        bg: 'bg-violet-50/70',
+        text: 'text-violet-900',
+        border: 'border-violet-200',
+        borderL: 'border-l-violet-500',
+        badge: 'bg-violet-100 border-violet-200 text-violet-700',
+        line: 'bg-violet-500',
+        ring: 'ring-violet-400',
+        hoverBg: 'hover:bg-violet-100/60',
+        glow: 'shadow-violet-100',
+        activeBg: 'bg-violet-100/90'
+      },
+      {
+        bg: 'bg-emerald-50/70',
+        text: 'text-emerald-900',
+        border: 'border-emerald-200',
+        borderL: 'border-l-emerald-500',
+        badge: 'bg-emerald-100 border-emerald-200 text-emerald-700',
+        line: 'bg-emerald-500',
+        ring: 'ring-emerald-400',
+        hoverBg: 'hover:bg-emerald-100/60',
+        glow: 'shadow-emerald-100',
+        activeBg: 'bg-emerald-100/90'
+      },
+      {
+        bg: 'bg-amber-50/70',
+        text: 'text-amber-950',
+        border: 'border-amber-200',
+        borderL: 'border-l-amber-500',
+        badge: 'bg-amber-100 border-amber-200 text-amber-800',
+        line: 'bg-amber-500',
+        ring: 'ring-amber-400',
+        hoverBg: 'hover:bg-amber-100/60',
+        glow: 'shadow-amber-100',
+        activeBg: 'bg-amber-100/90'
+      },
+      {
+        bg: 'bg-cyan-50/70',
+        text: 'text-cyan-900',
+        border: 'border-cyan-200',
+        borderL: 'border-l-cyan-500',
+        badge: 'bg-cyan-100 border-cyan-200 text-cyan-700',
+        line: 'bg-cyan-500',
+        ring: 'ring-cyan-400',
+        hoverBg: 'hover:bg-cyan-100/60',
+        glow: 'shadow-cyan-100',
+        activeBg: 'bg-cyan-100/90'
+      },
+      {
+        bg: 'bg-rose-50/70',
+        text: 'text-rose-900',
+        border: 'border-rose-200',
+        borderL: 'border-l-rose-500',
+        badge: 'bg-rose-100 border-rose-200 text-rose-700',
+        line: 'bg-rose-500',
+        ring: 'ring-rose-400',
+        hoverBg: 'hover:bg-rose-100/60',
+        glow: 'shadow-rose-100',
+        activeBg: 'bg-rose-100/90'
+      },
+      {
+        bg: 'bg-indigo-50/70',
+        text: 'text-indigo-900',
+        border: 'border-indigo-200',
+        borderL: 'border-l-indigo-500',
+        badge: 'bg-indigo-100 border-indigo-200 text-indigo-700',
+        line: 'bg-indigo-500',
+        ring: 'ring-indigo-400',
+        hoverBg: 'hover:bg-indigo-100/60',
+        glow: 'shadow-indigo-100',
+        activeBg: 'bg-indigo-100/90'
+      },
+      {
+        bg: 'bg-teal-50/70',
+        text: 'text-teal-900',
+        border: 'border-teal-200',
+        borderL: 'border-l-teal-500',
+        badge: 'bg-teal-100 border-teal-200 text-teal-700',
+        line: 'bg-teal-500',
+        ring: 'ring-teal-400',
+        hoverBg: 'hover:bg-teal-100/60',
+        glow: 'shadow-teal-100',
+        activeBg: 'bg-teal-100/90'
+      },
+    ];
+    
+    const index = Math.abs(hash) % palettes.length;
+    return palettes[index];
+  };
+
+  const getJobTimelineData = (job: Job) => {
+    const cleanNo = getCleanJobNo(job.id);
+    if (!cleanNo) return null;
+    const related = jobs.filter(j => getCleanJobNo(j.id) === cleanNo);
+    // Sort related by date
+    const sorted = [...related].sort((a, b) => a.job_date.localeCompare(b.job_date));
+    const dates = sorted.map(j => ({
+      id: j.id,
+      date: j.job_date,
+      dayNum: getJobDayNumber(j.id),
+      isCurrent: j.id === job.id,
+    }));
+    return {
+      dates,
+      total: job.duration || dates.length,
+      currentDay: getJobDayNumber(job.id),
+    };
   };
 
   // Filter jobs based on selected date OR global search filter
@@ -249,8 +514,26 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   const handleEditClick = (e: React.MouseEvent, job: Job) => {
     e.stopPropagation();
     setSelectedJob(job);
-    setNewJob(job);
+    const cleanId = getCleanJobNo(job.id);
+    setNewJob({
+      ...job,
+      id: cleanId
+    });
     setIsEditingMode(true);
+
+    const cleanNo = getCleanJobNo(job.id);
+    const related = jobs
+      .filter(j => getCleanJobNo(j.id) === cleanNo)
+      .sort((a, b) => getJobDayNumber(a.id) - getJobDayNumber(b.id));
+    
+    if (related.length > 0) {
+      const dates = related.map(r => r.job_date);
+      setDayDates(dates);
+      setNewJob(prev => ({ ...prev, id: cleanId, duration: related.length }));
+    } else {
+      setDayDates([job.job_date]);
+    }
+
     setShowModal(true);
   };
 
@@ -289,9 +572,9 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     }
 
     if (isEditingMode) {
-        onEditJob(newJob as Job, selectedJob?.id);
+        onEditJob({ ...newJob, day_dates: dayDates } as Job, selectedJob?.id);
     } else {
-        onAddJob({ ...newJob, title: newJob.id });
+        onAddJob({ ...newJob, title: newJob.id, day_dates: dayDates });
     }
     handleCloseModal();
   };
@@ -460,7 +743,13 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
             return (
               <div
                 key={index}
-                className={`p-2 h-20 md:h-36 flex flex-col relative group transition-all ${day.isCurrentMonth ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/50'}`}
+                className={`p-2 h-20 md:h-36 flex flex-col relative group transition-all ${
+                  day.isCurrentMonth 
+                    ? day.isCurrentMonth && hoveredJobCleanNo && jobsForThisDay.some(j => getCleanJobNo(j.id) === hoveredJobCleanNo)
+                      ? 'bg-gradient-to-br from-indigo-50/70 to-indigo-50/10 ring-2 ring-indigo-500/80 ring-offset-1 z-10' 
+                      : 'bg-white hover:bg-slate-50' 
+                    : 'bg-slate-50/50'
+                }`}
                 onClick={() => day.isCurrentMonth && handleDayClick(day.day)}
               >
                 <span className={`text-sm font-bold ${
@@ -471,15 +760,37 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                 </span>
                 {day.isCurrentMonth && (
                   <div className="mt-1 space-y-1 overflow-y-auto custom-scrollbar flex-1 hidden md:block">
-                    {jobsForThisDay.map(job => (
-                      <div 
-                        key={job.id} 
-                        className="p-1.5 bg-blue-50 text-blue-800 rounded-md text-[10px] font-bold truncate cursor-pointer hover:bg-blue-100"
-                        title={job.shipper_name}
-                      >
-                       {job.shipper_name}
-                      </div>
-                    ))}
+                    {jobsForThisDay.map(job => {
+                      const isMulti = isMultiDayJob(job);
+                      const cleanNo = getCleanJobNo(job.id);
+                      const colors = getJobGroupColors(job.id);
+                      const isHoveredGroup = hoveredJobCleanNo && hoveredJobCleanNo === cleanNo;
+                      
+                      const dayNum = getJobDayNumber(job.id);
+                      const durationLabel = job.duration && job.duration > 1 ? ` (D${dayNum}/${job.duration})` : '';
+
+                      return (
+                        <div 
+                          key={job.id} 
+                          onMouseEnter={() => isMulti && setHoveredJobCleanNo(cleanNo)}
+                          onMouseLeave={() => isMulti && setHoveredJobCleanNo(null)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedJob(job);
+                          }}
+                          className={`p-1.5 rounded-md text-[10px] font-bold truncate cursor-pointer transition-all border ${
+                            isMulti 
+                              ? `${colors.bg} ${colors.text} ${colors.border} border-l-4 ${colors.borderL} shadow-sm` 
+                              : 'bg-blue-50 text-blue-800 border-blue-100 hover:bg-blue-100'
+                          } ${isHoveredGroup ? 'ring-2 ring-indigo-500 scale-102 z-10 shadow-md font-black' : ''}`}
+                          title={`${job.shipper_name}${isMulti ? ` - Day ${dayNum} of ${job.duration}` : ''}`}
+                        >
+                          {isMulti && <span className="opacity-70 mr-1">[{cleanNo}]</span>}
+                          {job.shipper_name}
+                          {isMulti && <span className="text-[8px] opacity-80 block text-right font-black mt-0.5">{durationLabel}</span>}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 {day.isCurrentMonth && jobsForThisDay.length > 0 && (
@@ -620,16 +931,35 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                        {hourJobs.map((job) => {
                          const requester = users.find(u => u.employee_id === job.requester_id);
                          const dayLabel = getJobDayLabel(job);
+                         const isMulti = isMultiDayJob(job);
+                         const cleanNo = getCleanJobNo(job.id);
+                         const colors = getJobGroupColors(job.id);
+                         const isHovered = hoveredJobCleanNo && hoveredJobCleanNo === cleanNo;
+
+                         const cardClasses = `w-full md:min-w-[340px] md:max-w-sm rounded-2xl p-6 border shadow-sm hover:shadow-md transition-all relative group/job cursor-pointer shrink-0 ${
+                           isMulti 
+                             ? `${colors.bg} ${colors.border} border-l-4 ${colors.borderL}` 
+                             : job.is_locked 
+                               ? 'border-amber-200 bg-amber-50/10' 
+                               : 'border-slate-200 bg-white'
+                         } ${isHovered ? `ring-2 ${colors.ring} scale-102 shadow-lg z-10` : ''}`;
+
                          return (
-                           <div key={job.id} onClick={() => setSelectedJob(job)} className={`w-full md:min-w-[340px] md:max-w-sm rounded-2xl p-6 border shadow-sm hover:shadow-md transition-all bg-white relative group/job cursor-pointer shrink-0 ${job.is_locked ? 'border-amber-200 bg-amber-50/10' : 'border-slate-200'}`}>
+                           <div 
+                             key={job.id} 
+                             onClick={() => setSelectedJob(job)} 
+                             onMouseEnter={() => isMulti && setHoveredJobCleanNo(cleanNo)}
+                             onMouseLeave={() => isMulti && setHoveredJobCleanNo(null)}
+                             className={cardClasses}
+                           >
                               <div className="flex justify-between items-start mb-4">
                                  <div>
                                     <div className="flex items-center gap-2 mb-1">
-                                      <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">ID: {job.id}</p>
+                                      <p className={`text-[10px] font-black uppercase tracking-widest ${isMulti ? colors.text : 'text-blue-600'}`}>ID: {getCleanJobNo(job.id)}</p>
                                       {/* Display date when searching globally */}
                                       {filter && <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{new Date(job.job_date).toLocaleDateString(undefined, {month:'numeric', day:'numeric'})}</span>}
                                       {dayLabel && (
-                                        <span className="text-[9px] font-bold bg-violet-100 text-violet-700 px-1.5 py-0.5 rounded border border-violet-200">
+                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${isMulti ? colors.badge : 'bg-violet-100 text-violet-700 border-violet-200'}`}>
                                             {dayLabel}
                                         </span>
                                       )}
@@ -728,6 +1058,64 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                     </div>
                                  </div>
                               </div>
+
+                              {/* Progressive Timeline Tracker for Multi-day jobs */}
+                              {(() => {
+                                const timeline = getJobTimelineData(job);
+                                if (timeline && timeline.dates.length > 1) {
+                                  return (
+                                    <div className="mt-4 pt-3.5 border-t border-dashed border-slate-200">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <span className="text-[9px] font-extrabold uppercase tracking-widest text-slate-400">Project Progress</span>
+                                        <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full ${colors.badge}`}>
+                                          Day {timeline.currentDay} of {timeline.total}
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-2 w-full mt-3">
+                                        {timeline.dates.map((d, dIdx) => {
+                                          const dColors = getJobGroupColors(d.id);
+                                          const isPast = d.dayNum < timeline.currentDay;
+                                          const isFuture = d.dayNum > timeline.currentDay;
+                                          const isCurr = d.isCurrent;
+                                          return (
+                                            <React.Fragment key={d.id}>
+                                              {dIdx > 0 && (
+                                                <div className={`flex-1 h-0.5 transition-all ${isPast || isCurr ? colors.line : 'bg-slate-200'}`} />
+                                              )}
+                                              <div 
+                                                className="relative flex flex-col items-center cursor-pointer group/dot"
+                                                title={`Day ${d.dayNum}: ${new Date(d.date).toLocaleDateString(undefined, {month:'short', day:'numeric'})}`}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  const dayJob = jobs.find(j => j.id === d.id);
+                                                  if (dayJob) {
+                                                    setSelectedJob(dayJob);
+                                                    setCurrentDate(new Date(dayJob.job_date));
+                                                  }
+                                                }}
+                                              >
+                                                <div className={`w-4 h-4 rounded-full flex items-center justify-center border-2 transition-all ${
+                                                  isCurr ? `${colors.line} border-white ring-2 ring-offset-1 ${colors.ring} scale-110 shadow-sm` :
+                                                  isPast ? `${colors.line} border-transparent` :
+                                                  'bg-white border-slate-300 hover:border-slate-400'
+                                                }`}>
+                                                  {isPast && <Check className="w-2.5 h-2.5 text-white" />}
+                                                  {isCurr && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                                                </div>
+                                                <span className={`text-[8px] font-black mt-1 ${isCurr ? 'text-slate-800' : 'text-slate-400'}`}>
+                                                  D{d.dayNum}
+                                                </span>
+                                              </div>
+                                            </React.Fragment>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
+
                               {job.last_edited_by && (
                                  <div className="mt-4 pt-3 border-t border-slate-50 text-[9px] text-slate-400 font-medium tracking-wide">
                                      Last edited by {job.last_edited_by} on {new Date(job.last_edited_at || 0).toLocaleString()}
@@ -759,16 +1147,36 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                   {filteredJobs.map(job => {
                     const requester = users.find(u => u.employee_id === job.requester_id);
                     const dayLabel = getJobDayLabel(job);
+                    const isMulti = isMultiDayJob(job);
+                    const cleanNo = getCleanJobNo(job.id);
+                    const colors = getJobGroupColors(job.id);
+                    const isHovered = hoveredJobCleanNo && hoveredJobCleanNo === cleanNo;
+
                     return (
-                      <tr key={job.id} onClick={() => setSelectedJob(job)} className={`hover:bg-slate-50/50 transition-colors group cursor-pointer ${job.is_locked ? 'bg-amber-50/5' : ''}`}>
-                         <td className="p-6 text-sm font-bold text-blue-600">
+                      <tr 
+                        key={job.id} 
+                        onClick={() => setSelectedJob(job)} 
+                        onMouseEnter={() => isMulti && setHoveredJobCleanNo(cleanNo)}
+                        onMouseLeave={() => isMulti && setHoveredJobCleanNo(null)}
+                        className={`transition-all group cursor-pointer ${
+                          isMulti 
+                            ? `${colors.bg} hover:bg-opacity-80` 
+                            : job.is_locked 
+                              ? 'bg-amber-50/5 hover:bg-slate-50/50' 
+                              : 'hover:bg-slate-50/50'
+                        } ${isHovered ? 'bg-indigo-50/50 ring-1 ring-inset ring-indigo-500' : ''}`}
+                      >
+                         <td className="p-6 text-sm font-bold text-blue-600 relative">
+                            {isMulti && (
+                              <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${colors.line}`} />
+                            )}
                             <div className="flex flex-col gap-1">
                                 <div className="flex items-center gap-2">
-                                    {job.id}
+                                    <span className={isMulti ? colors.text : 'text-blue-600'}>{getCleanJobNo(job.id)}</span>
                                     {job.is_locked && <Lock className="w-3 h-3 text-amber-500" />}
                                 </div>
                                 {dayLabel && (
-                                    <span className="text-[9px] font-bold bg-violet-100 text-violet-700 px-2 py-0.5 rounded border border-violet-200 w-fit">
+                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded border w-fit ${isMulti ? colors.badge : 'bg-violet-100 text-violet-700 border-violet-200'}`}>
                                         {dayLabel}
                                     </span>
                                 )}
@@ -786,6 +1194,34 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                 <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                                 <span className="text-[10px] text-slate-500 font-bold">{requester ? requester.name : job.requester_id}</span>
                               </div>
+                              
+                              {/* Progressive Timeline Tracker for Multi-day jobs */}
+                              {isMulti && (
+                                <div className="mt-2.5 bg-white/60 p-2.5 rounded-xl border border-slate-200/60 max-w-xs shadow-sm">
+                                  <div className="flex items-center justify-between text-[8px] font-black uppercase tracking-wider text-slate-400 mb-1.5">
+                                    <span>TIMELINE (Day {getJobDayNumber(job.id)} of {job.duration || '?'})</span>
+                                    <span>{job.job_date}</span>
+                                  </div>
+                                  <div className="flex gap-1.5 mt-1">
+                                    {Array.from({ length: job.duration || 1 }).map((_, i) => {
+                                      const dNum = i + 1;
+                                      const isCurr = dNum === getJobDayNumber(job.id);
+                                      const isPassed = dNum < getJobDayNumber(job.id);
+                                      return (
+                                        <div 
+                                          key={i} 
+                                          className={`h-1 flex-1 rounded-full ${
+                                            isCurr ? colors.line :
+                                            isPassed ? 'bg-slate-400' :
+                                            'bg-slate-200'
+                                          }`} 
+                                        />
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
                               {job.last_edited_by && (
                                 <div className="mt-1 text-[9px] text-slate-400 font-medium tracking-wide">
                                     Last edited by {job.last_edited_by} on {new Date(job.last_edited_at || 0).toLocaleString()}
@@ -1019,7 +1455,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
               <div className="p-8 border-b bg-slate-900 flex justify-between items-center text-white shrink-0">
                  <div>
                    <h3 className="text-lg font-bold uppercase tracking-widest">Dispatch Allocation</h3>
-                   <p className="text-[10px] font-medium opacity-70 uppercase tracking-tighter">Job No: {showAllocationModal.id}</p>
+                   <p className="text-[10px] font-medium opacity-70 uppercase tracking-tighter">Job No: {getCleanJobNo(showAllocationModal.id)}</p>
                  </div>
                  <div className="flex items-center gap-2">
                     {expandedSection && (
@@ -1266,6 +1702,78 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                         </select>
                     </div>
                   </div>
+                  
+                  {newJob.duration && newJob.duration > 1 && (
+                    <div className="col-span-1 md:col-span-2 mt-4 p-5 bg-blue-50/60 border border-blue-100 rounded-2xl space-y-4">
+                      <div className="flex items-center gap-2">
+                        <CalendarIcon className="w-4 h-4 text-blue-600" />
+                        <h5 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Multi-day Schedule Planner</h5>
+                      </div>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        Specify/adjust the execution date for each day of the job below. 
+                        If you move any day (e.g., Day 3 is moved after 1 week), subsequent days will automatically be shifted, and you can freely adjust their dates.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {Array.from({ length: newJob.duration }).map((_, index) => {
+                          const dayNum = index + 1;
+                          return (
+                            <div key={index} className="space-y-1.5 bg-white p-3 rounded-xl border border-slate-200">
+                              <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center justify-between">
+                                <span>Day {dayNum} Date</span>
+                                <span className="bg-blue-100 text-blue-700 font-extrabold px-1.5 py-0.5 rounded text-[8px]">Tag</span>
+                              </label>
+                              <input 
+                                required
+                                type="date"
+                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold outline-none focus:ring-1 focus:ring-blue-500"
+                                value={dayDates[index] || ''}
+                                onChange={(e) => {
+                                  const oldVal = dayDates[index];
+                                  const newVal = e.target.value;
+                                  if (oldVal && newVal) {
+                                    const oldDateObj = new Date(`${oldVal}T00:00:00Z`);
+                                    const newDateObj = new Date(`${newVal}T00:00:00Z`);
+                                    const diffMs = newDateObj.getTime() - oldDateObj.getTime();
+                                    
+                                    const updatedDates = [...dayDates];
+                                    updatedDates[index] = newVal;
+                                    
+                                    // Shift subsequent days by the same difference
+                                    for (let j = index + 1; j < updatedDates.length; j++) {
+                                      if (updatedDates[j]) {
+                                        const subDateObj = new Date(`${updatedDates[j]}T00:00:00Z`);
+                                        const shiftedDateObj = new Date(subDateObj.getTime() + diffMs);
+                                        updatedDates[j] = shiftedDateObj.toISOString().split('T')[0];
+                                      }
+                                    }
+                                    
+                                    setDayDates(updatedDates);
+                                    
+                                    // If it's Day 1 (index === 0), also update newJob.job_date
+                                    if (index === 0) {
+                                      setNewJob(prev => ({ ...prev, job_date: newVal }));
+                                    }
+                                    
+                                    // Prompt the user to confirm/adjust succeeding days
+                                    if (index < updatedDates.length - 1) {
+                                      alert(`You moved Day ${dayNum}. We shifted subsequent days accordingly. Please review the dates for Day ${index + 2} onwards and adjust them if needed!`);
+                                    }
+                                  } else {
+                                    const updatedDates = [...dayDates];
+                                    updatedDates[index] = newVal;
+                                    setDayDates(updatedDates);
+                                    if (index === 0) {
+                                      setNewJob(prev => ({ ...prev, job_date: newVal }));
+                                    }
+                                  }
+                                }}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </section>
 

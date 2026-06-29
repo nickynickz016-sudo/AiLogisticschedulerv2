@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { getUAEToday } from './utils';
+import { getUAEToday, getCleanJobNo, getJobDayNumber, safeLocalStorage, safeSessionStorage } from './utils';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { ScheduleView } from './components/ScheduleView';
@@ -29,57 +29,24 @@ import { UserRole, Job, JobStatus, UserProfile, Personnel, Vehicle, SystemSettin
 import { Bell, Search, Menu, LogOut, X, CheckCircle2, XCircle, AlertTriangle, Info, Lock, Unlock } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { USERS, MockUser } from './mockData';
+import * as XLSX from 'xlsx';
 
-const safeLocalStorage = {
-  getItem: (key: string): string | null => {
-    try {
-      return localStorage.getItem(key);
-    } catch (e) {
-      console.warn("Storage access denied for key:", key, e);
-      return null;
-    }
-  },
-  setItem: (key: string, value: string): void => {
-    try {
-      localStorage.setItem(key, value);
-    } catch (e) {
-      console.warn("Storage set failed for key:", key, e);
-    }
-  },
-  removeItem: (key: string): void => {
-    try {
-      localStorage.removeItem(key);
-    } catch (e) {
-      console.warn("Storage remove failed for key:", key, e);
-    }
-  }
+
+// --- Robust Offline Cache & Fallback Data System Helper ---
+export const isOfflineError = (errMsg?: any): boolean => {
+  if (!errMsg) return false;
+  const str = typeof errMsg === 'string' ? errMsg : (errMsg.message || JSON.stringify(errMsg));
+  const lower = str.toLowerCase();
+  return lower.includes('failed to fetch') || 
+         lower.includes('network') || 
+         lower.includes('unreachable') || 
+         lower.includes('typeerror') || 
+         lower.includes('preload') ||
+         lower.includes('cors') ||
+         lower.includes('load failed') ||
+         lower.includes('fetch failed') ||
+         lower.includes('offline');
 };
-
-const safeSessionStorage = {
-  getItem: (key: string): string | null => {
-    try {
-      return sessionStorage.getItem(key);
-    } catch (e) {
-      console.warn("SessionStorage access denied for key:", key, e);
-      return null;
-    }
-  },
-  setItem: (key: string, value: string): void => {
-    try {
-      sessionStorage.setItem(key, value);
-    } catch (e) {
-      console.warn("SessionStorage set failed for key:", key, e);
-    }
-  },
-  removeItem: (key: string): void => {
-    try {
-      sessionStorage.removeItem(key);
-    } catch (e) {
-      console.warn("SessionStorage remove failed for key:", key, e);
-    }
-  }
-};
-
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
@@ -124,6 +91,8 @@ const App: React.FC = () => {
   const [dailyMonitoring, setDailyMonitoring] = useState<DailyMonitoringChecklist[]>([]);
   const [systemUsers, setSystemUsers] = useState<UserProfile[]>([]);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ jobId: string; title: string } | null>(null);
+  const [deleteInputText, setDeleteInputText] = useState('');
   const [allCredentials, setAllCredentials] = useState<MockUser[]>(() => {
     const saved = safeLocalStorage.getItem('writer_system_users');
     let users = USERS;
@@ -300,7 +269,14 @@ const App: React.FC = () => {
   }, [activeTab]);
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [settings, setSettings] = useState<SystemSettings>({ daily_job_limits: {}, holidays: [] });
+  const [settings, setSettings] = useState<SystemSettings>(() => {
+    try {
+      const saved = safeLocalStorage.getItem('writer_local_settings');
+      return saved ? JSON.parse(saved) : { daily_job_limits: {}, holidays: [] };
+    } catch (_) {
+      return { daily_job_limits: {}, holidays: [] };
+    }
+  });
   const [googleTokens, setGoogleTokens] = useState<any>(() => {
     const saved = safeLocalStorage.getItem('google_calendar_tokens');
     return saved ? JSON.parse(saved) : null;
@@ -368,17 +344,198 @@ const App: React.FC = () => {
     addNotification('Google Calendar disconnected', 'info');
   };
 
+  // --- Robust Offline Cache & Falback Data System ---
+
+  const defaultPersonnel: Personnel[] = [
+    { id: 'p1', employee_id: 'EMP-001', name: 'Alun John', type: 'Team Leader', status: 'Available', emirates_id: '784-1985-1234567-1' },
+    { id: 'p2', employee_id: 'EMP-002', name: 'Sujith Kumar', type: 'Driver', status: 'Available', emirates_id: '784-1990-2345678-2', license_number: 'LIC-55442' },
+    { id: 'p3', employee_id: 'EMP-003', name: 'Nikhil Das', type: 'Writer Crew', status: 'Available', emirates_id: '784-1992-3456789-3' },
+    { id: 'p4', employee_id: 'EMP-004', name: 'Karthik Raja', type: 'Writer Crew', status: 'Available', emirates_id: '784-1988-4567890-4' }
+  ];
+
+  const defaultVehicles: Vehicle[] = [
+    { id: 'v1', name: '3-Ton pickup (M-1)', plate: 'A-12345', status: 'Available' },
+    { id: 'v2', name: '5-Ton pickup (M-2)', plate: 'B-67890', status: 'Available' },
+    { id: 'v3', name: 'Box Trailer (M-3)', plate: 'C-54321', status: 'Available' }
+  ];
+
+  const defaultJobs: Job[] = [
+    {
+      id: 'WR-100245',
+      title: 'Move across Dubai Marina',
+      shipper_name: 'John Doe',
+      shipper_phone: '+971501234567',
+      client_email: 'john.doe@example.com',
+      location: 'Dubai Marina, Elite Residence',
+      priority: 'High' as any,
+      loading_type: 'House Move' as any,
+      volume_cbm: 12,
+      job_date: new Date().toISOString().split('T')[0],
+      status: 'Active' as any,
+      created_at: Date.now() - 86450000,
+      requester_id: 'user1',
+      assigned_to: 'EMP-001',
+      vehicles: ['v1'],
+      is_confirmed: true
+    },
+    {
+      id: 'WR-100246',
+      title: 'Relocation to Abu Dhabi',
+      shipper_name: 'Sarah Smith',
+      shipper_phone: '+971509876543',
+      client_email: 'sarah.smith@example.com',
+      location: 'Jumeirah Heights to Corniche, Abu Dhabi',
+      priority: 'Medium' as any,
+      loading_type: 'Apartment Move' as any,
+      volume_cbm: 24,
+      job_date: new Date().toISOString().split('T')[0],
+      status: 'Active' as any,
+      created_at: Date.now() - 43200000,
+      requester_id: 'user1',
+      assigned_to: 'EMP-002',
+      vehicles: ['v2'],
+      is_confirmed: false
+    }
+  ];
+
+  const defaultSurveys: Survey[] = [
+    {
+      id: 'SRV-101',
+      surveyor_name: 'Alun John',
+      survey_type: 'Physical',
+      enquiry_number: 'ENQ-2026-001',
+      shipper_name: 'Robert Vance',
+      survey_date: new Date().toISOString().split('T')[0],
+      start_time: '10:00 AM',
+      end_time: '11:00 AM',
+      location: 'Downtown Dubai, Boulevard Heights',
+      mode: 'Domestic',
+      status: 'Booked' as any,
+      created_by_id: 'unknown',
+      created_at: Date.now() - 172800000
+    }
+  ];
+
+  const loadOfflineJobs = useCallback(() => {
+    const saved = safeLocalStorage.getItem('writer_local_jobs_data');
+    if (saved) {
+      try {
+        setJobs(JSON.parse(saved));
+        return;
+      } catch (e) {
+        console.error("Failed to parse cached jobs", e);
+      }
+    }
+    setJobs(defaultJobs);
+    safeLocalStorage.setItem('writer_local_jobs_data', JSON.stringify(defaultJobs));
+  }, []);
+
+  const loadOfflinePersonnel = useCallback(() => {
+    const saved = safeLocalStorage.getItem('writer_local_personnel_data');
+    if (saved) {
+      try {
+        setPersonnel(JSON.parse(saved));
+        return;
+      } catch (e) {}
+    }
+    setPersonnel(defaultPersonnel);
+    safeLocalStorage.setItem('writer_local_personnel_data', JSON.stringify(defaultPersonnel));
+  }, []);
+
+  const loadOfflineVehicles = useCallback(() => {
+    const saved = safeLocalStorage.getItem('writer_local_vehicles_data');
+    if (saved) {
+      try {
+        setVehicles(JSON.parse(saved));
+        return;
+      } catch (e) {}
+    }
+    setVehicles(defaultVehicles);
+    safeLocalStorage.setItem('writer_local_vehicles_data', JSON.stringify(defaultVehicles));
+  }, []);
+
+  const loadOfflineSurveys = useCallback(() => {
+    const saved = safeLocalStorage.getItem('writer_local_surveys_data');
+    if (saved) {
+      try {
+        setSurveys(JSON.parse(saved));
+        return;
+      } catch (e) {}
+    }
+    setSurveys(defaultSurveys);
+    safeLocalStorage.setItem('writer_local_surveys_data', JSON.stringify(defaultSurveys));
+  }, []);
+
+  const loadOfflineChecklists = useCallback(() => {
+    try {
+      const savedChecklists = safeLocalStorage.getItem('writer_local_checklists_data');
+      if (savedChecklists) setChecklists(JSON.parse(savedChecklists));
+      
+      const savedPatrol = safeLocalStorage.getItem('writer_local_patrol_logs_data');
+      if (savedPatrol) setPatrolLogs(JSON.parse(savedPatrol));
+      
+      const savedSafety = safeLocalStorage.getItem('writer_local_safety_checks_data');
+      if (savedSafety) setSafetyChecks(JSON.parse(savedSafety));
+      
+      const savedSurprise = safeLocalStorage.getItem('writer_local_surprise_visits_data');
+      if (savedSurprise) setSurpriseVisits(JSON.parse(savedSurprise));
+      
+      const savedDaily = safeLocalStorage.getItem('writer_local_daily_monitoring_data');
+      if (savedDaily) setDailyMonitoring(JSON.parse(savedDaily));
+    } catch (e) {
+      console.error("Failed to load offline checklists", e);
+    }
+  }, []);
+
   // Data Fetching Functions
   const fetchJobs = useCallback(async () => {
     try {
       const { data, error } = await supabase.from('jobs').select('*').order('created_at', { ascending: false });
       if (error) {
-        console.error('Error fetching jobs:', error.message);
-        addNotification(`Error fetching jobs: ${error.message}`, 'error');
+        if (isOfflineError(error.message)) {
+          console.warn('Network offline during fetching jobs:', error.message);
+          loadOfflineJobs();
+        } else {
+          console.error('Error fetching jobs:', error.message);
+          addNotification(`Error fetching jobs: ${error.message}`, 'error');
+        }
       } else {
         // Normalize data: Ensure 'vehicles' array exists. 
         // If 'vehicles' is null but 'vehicle' exists (legacy), convert 'vehicle' string to array.
-        const normalizedData = (data || []).map((j: any) => {
+        let fetchedData = data || [];
+        
+        // If Supabase returned empty data but we have cached offline jobs,
+        // auto-upload them to Supabase so they are not deleted or lost!
+        if (fetchedData.length === 0) {
+          const savedStr = safeLocalStorage.getItem('writer_local_jobs_data');
+          if (savedStr) {
+            try {
+              const cachedJobs = JSON.parse(savedStr);
+              if (Array.isArray(cachedJobs) && cachedJobs.length > 0) {
+                // Filter out standard default template jobs to only upload real user records, or upload all if needed
+                const hasRealJobs = cachedJobs.some(j => j.id !== 'WR-100245' && j.id !== 'WR-100246');
+                if (hasRealJobs) {
+                  console.log("Empty Supabase detected. Auto-migrating local jobs to Supabase:", cachedJobs);
+                  let { error: insertErr } = await supabase.from('jobs').insert(cachedJobs);
+                  if (insertErr && (insertErr.message.includes("is_confirmed") || insertErr.message.includes("column"))) {
+                    const stripped = cachedJobs.map(({ is_confirmed, ...j }: any) => j);
+                    await supabase.from('jobs').insert(stripped);
+                  }
+                  
+                  // Re-fetch to ensure database state is properly synced
+                  const { data: refetched } = await supabase.from('jobs').select('*').order('created_at', { ascending: false });
+                  if (refetched && refetched.length > 0) {
+                    fetchedData = refetched;
+                  }
+                }
+              }
+            } catch (e) {
+              console.error('Failed to auto-migrate local jobs to Supabase:', e);
+            }
+          }
+        }
+
+        const normalizedData = fetchedData.map((j: any) => {
           const cachedConfirmation = safeLocalStorage.getItem(`job_confirmed_${j.id}`);
           const is_confirmed = (j.is_confirmed !== undefined && j.is_confirmed !== null) 
             ? !!j.is_confirmed 
@@ -389,13 +546,61 @@ const App: React.FC = () => {
             vehicles: j.vehicles || (j.vehicle ? j.vehicle.split(',').map((s: string) => s.trim()) : [])
           };
         });
+
+        // Archive deleted jobs by comparing old cache with new data
+        try {
+          const oldCacheStr = safeLocalStorage.getItem('writer_local_jobs_data');
+          if (oldCacheStr) {
+            const oldJobs = JSON.parse(oldCacheStr);
+            if (Array.isArray(oldJobs) && oldJobs.length > 0) {
+              const newIds = new Set(normalizedData.map(j => j.id));
+              const deletedJobs = oldJobs.filter(j => j && j.id && !newIds.has(j.id));
+              if (deletedJobs.length > 0) {
+                const savedArchive = safeLocalStorage.getItem('writer_deleted_jobs_archive');
+                let archive: any[] = [];
+                if (savedArchive) {
+                  try {
+                    archive = JSON.parse(savedArchive);
+                    if (!Array.isArray(archive)) archive = [];
+                  } catch (_) {}
+                }
+                
+                deletedJobs.forEach(job => {
+                  if (!archive.some(a => a.id === job.id)) {
+                    archive.push({
+                      ...job,
+                      deleted_at: Date.now()
+                    });
+                  }
+                });
+                
+                // Keep the last 100 items to avoid taking up too much space
+                if (archive.length > 100) {
+                  archive = archive.slice(-100);
+                }
+                
+                safeLocalStorage.setItem('writer_deleted_jobs_archive', JSON.stringify(archive));
+                console.log(`Archived ${deletedJobs.length} deleted jobs into recovery backup`);
+              }
+            }
+          }
+        } catch (archiveErr) {
+          console.error("Failed to archive deleted jobs during fetch diff:", archiveErr);
+        }
+
         setJobs(normalizedData);
+        safeLocalStorage.setItem('writer_local_jobs_data', JSON.stringify(normalizedData));
       }
     } catch (err: any) {
-      console.error('Unexpected error fetching jobs:', err);
-      addNotification(`Unexpected error fetching jobs: ${err.message}`, 'error');
+      if (isOfflineError(err.message)) {
+        console.warn('Unexpected offline error fetching jobs:', err.message);
+        loadOfflineJobs();
+      } else {
+        console.error('Unexpected error fetching jobs:', err);
+        addNotification(`Unexpected error fetching jobs: ${err.message}`, 'error');
+      }
     }
-  }, [addNotification]);
+  }, [addNotification, loadOfflineJobs]);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -416,34 +621,65 @@ const App: React.FC = () => {
     try {
         const { data, error } = await supabase.from('personnel').select('*');
         if (error) {
-          console.error('Error fetching personnel:', error.message);
-          addNotification(`Error fetching personnel: ${error.message}`, 'error');
-        } else setPersonnel(data || []);
+          if (isOfflineError(error.message)) {
+            console.warn('Network offline during fetching personnel:', error.message);
+            loadOfflinePersonnel();
+          } else {
+            console.error('Error fetching personnel:', error.message);
+            addNotification(`Error fetching personnel: ${error.message}`, 'error');
+          }
+        } else {
+          setPersonnel(data || []);
+          safeLocalStorage.setItem('writer_local_personnel_data', JSON.stringify(data || []));
+        }
     } catch (err: any) {
-        console.error('Unexpected error fetching personnel:', err);
-        addNotification(`Unexpected error fetching personnel: ${err.message}`, 'error');
+        if (isOfflineError(err.message)) {
+          console.warn('Unexpected offline error fetching personnel:', err.message);
+          loadOfflinePersonnel();
+        } else {
+          console.error('Unexpected error fetching personnel:', err);
+          addNotification(`Unexpected error fetching personnel: ${err.message}`, 'error');
+        }
     }
-  }, [addNotification]);
+  }, [addNotification, loadOfflinePersonnel]);
 
   const fetchVehicles = useCallback(async () => {
     try {
         const { data, error } = await supabase.from('vehicles').select('*');
         if (error) {
-          console.error('Error fetching vehicles:', error.message);
-          addNotification(`Error fetching vehicles: ${error.message}`, 'error');
-        } else setVehicles(data || []);
+          if (isOfflineError(error.message)) {
+            console.warn('Network offline during fetching vehicles:', error.message);
+            loadOfflineVehicles();
+          } else {
+            console.error('Error fetching vehicles:', error.message);
+            addNotification(`Error fetching vehicles: ${error.message}`, 'error');
+          }
+        } else {
+          setVehicles(data || []);
+          safeLocalStorage.setItem('writer_local_vehicles_data', JSON.stringify(data || []));
+        }
     } catch (err: any) {
-        console.error('Unexpected error fetching vehicles:', err);
-        addNotification(`Unexpected error fetching vehicles: ${err.message}`, 'error');
+        if (isOfflineError(err.message)) {
+          console.warn('Unexpected offline error fetching vehicles:', err.message);
+          loadOfflineVehicles();
+        } else {
+          console.error('Unexpected error fetching vehicles:', err);
+          addNotification(`Unexpected error fetching vehicles: ${err.message}`, 'error');
+        }
     }
-  }, [addNotification]);
+  }, [addNotification, loadOfflineVehicles]);
 
   const fetchSurveys = useCallback(async () => {
     try {
       const { data, error } = await supabase.from('surveys').select('*').order('created_at', { ascending: false });
       if (error) {
-        console.error('Error fetching surveys:', error.message);
-        addNotification(`Error fetching surveys: ${error.message}`, 'error');
+        if (isOfflineError(error.message)) {
+          console.warn('Network offline during fetching surveys:', error.message);
+          loadOfflineSurveys();
+        } else {
+          console.error('Error fetching surveys:', error.message);
+          addNotification(`Error fetching surveys: ${error.message}`, 'error');
+        }
       } else {
         const normalizedData = (data || []).map((s: any) => {
           const cachedLostReason = safeLocalStorage.getItem(`survey_lost_reason_${s.id}`);
@@ -454,59 +690,96 @@ const App: React.FC = () => {
           };
         });
         setSurveys(normalizedData);
+        safeLocalStorage.setItem('writer_local_surveys_data', JSON.stringify(normalizedData));
       }
     } catch (err: any) {
-      console.error('Unexpected error fetching surveys:', err);
-      addNotification(`Unexpected error fetching surveys: ${err.message}`, 'error');
+      if (isOfflineError(err.message)) {
+        console.warn('Unexpected offline error fetching surveys:', err.message);
+        loadOfflineSurveys();
+      } else {
+        console.error('Unexpected error fetching surveys:', err);
+        addNotification(`Unexpected error fetching surveys: ${err.message}`, 'error');
+      }
     }
-  }, [addNotification]);
+  }, [addNotification, loadOfflineSurveys]);
 
   const fetchChecklists = useCallback(async () => {
     try {
       const { data, error } = await supabase.from('warehouse_checklists').select('*').order('created_at', { ascending: false });
       if (error) {
-        console.error('Error fetching checklists:', error.message);
-        addNotification(`Error fetching warehouse checklists: ${error.message}`, 'error');
+        if (isOfflineError(error.message)) {
+          console.warn('Network offline during fetching checklists:', error.message);
+          loadOfflineChecklists();
+        } else {
+          console.error('Error fetching checklists:', error.message);
+          addNotification(`Error fetching warehouse checklists: ${error.message}`, 'error');
+        }
       } else {
         setChecklists(data || []);
+        safeLocalStorage.setItem('writer_local_checklists_data', JSON.stringify(data || []));
       }
       
       const { data: patrolData, error: patrolError } = await supabase.from('night_patrolling_checklists').select('*').order('created_at', { ascending: false });
       if (patrolError) {
-        console.error('Error fetching patrol logs:', patrolError.message);
-        addNotification(`Error fetching patrol logs: ${patrolError.message}`, 'error');
+        if (isOfflineError(patrolError.message)) {
+          console.warn('Network offline during fetching patrol logs:', patrolError.message);
+        } else {
+          console.error('Error fetching patrol logs:', patrolError.message);
+          addNotification(`Error fetching patrol logs: ${patrolError.message}`, 'error');
+        }
       } else {
         setPatrolLogs(patrolData || []);
+        safeLocalStorage.setItem('writer_local_patrol_logs_data', JSON.stringify(patrolData || []));
       }
 
       const { data: safetyData, error: safetyError } = await supabase.from('safety_monitoring_checklists').select('*').order('created_at', { ascending: false });
       if (safetyError) {
-        console.error('Error fetching safety logs:', safetyError.message);
-        addNotification(`Error fetching safety logs: ${safetyError.message}`, 'error');
+        if (isOfflineError(safetyError.message)) {
+          console.warn('Network offline during fetching safety logs:', safetyError.message);
+        } else {
+          console.error('Error fetching safety logs:', safetyError.message);
+          addNotification(`Error fetching safety logs: ${safetyError.message}`, 'error');
+        }
       } else {
         setSafetyChecks(safetyData || []);
+        safeLocalStorage.setItem('writer_local_safety_checks_data', JSON.stringify(safetyData || []));
       }
 
       const { data: surpriseData, error: surpriseError } = await supabase.from('surprise_visits').select('*').order('created_at', { ascending: false });
       if (surpriseError) {
-        console.error('Error fetching surprise visits:', surpriseError.message);
-        addNotification(`Error fetching surprise visits: ${surpriseError.message}`, 'error');
+        if (isOfflineError(surpriseError.message)) {
+          console.warn('Network offline during fetching surprise visits:', surpriseError.message);
+        } else {
+          console.error('Error fetching surprise visits:', surpriseError.message);
+          addNotification(`Error fetching surprise visits: ${surpriseError.message}`, 'error');
+        }
       } else {
         setSurpriseVisits(surpriseData || []);
+        safeLocalStorage.setItem('writer_local_surprise_visits_data', JSON.stringify(surpriseData || []));
       }
 
       const { data: dailyData, error: dailyError } = await supabase.from('daily_monitoring_checklists').select('*').order('created_at', { ascending: false });
       if (dailyError) {
-        console.error('Error fetching daily monitoring:', dailyError.message);
-        addNotification(`Error fetching daily monitoring: ${dailyError.message}`, 'error');
+        if (isOfflineError(dailyError.message)) {
+          console.warn('Network offline during fetching daily monitoring:', dailyError.message);
+        } else {
+          console.error('Error fetching daily monitoring:', dailyError.message);
+          addNotification(`Error fetching daily monitoring: ${dailyError.message}`, 'error');
+        }
       } else {
         setDailyMonitoring(dailyData || []);
+        safeLocalStorage.setItem('writer_local_daily_monitoring_data', JSON.stringify(dailyData || []));
       }
     } catch (err: any) {
-      console.error('Unexpected error fetching checklists:', err);
-      addNotification(`Unexpected error: ${err.message}`, 'error');
+      if (isOfflineError(err.message)) {
+        console.warn('Unexpected error fetching checklists:', err.message);
+        loadOfflineChecklists();
+      } else {
+        console.error('Unexpected error fetching checklists:', err);
+        addNotification(`Unexpected error: ${err.message}`, 'error');
+      }
     }
-  }, [addNotification]);
+  }, [addNotification, loadOfflineChecklists]);
 
   const handleSaveChecklist = async (checklist: Omit<WarehouseChecklist, 'id'>) => {
     try {
@@ -643,15 +916,16 @@ const App: React.FC = () => {
         // Use select('*') to gracefully handle missing columns in legacy schemas
         // This prevents the app from crashing if 'system_alert' or other new columns don't exist yet
         const { data, error } = await supabase.from('system_settings').select('*').eq('id', 1).single();
-        
+         
         if (data) {
-          setSettings({
+          const settingsData = {
             daily_job_limits: data.daily_job_limits || {},
             holidays: data.holidays || [],
             company_logo: data.company_logo || undefined,
-            // Fallback for system_alert if column is missing
             system_alert: data.system_alert || { active: false, title: '', message: '', type: 'info' }
-          });
+          };
+          setSettings(settingsData);
+          safeLocalStorage.setItem('writer_local_settings', JSON.stringify(settingsData));
           
           // Synchronize credentials from Supabase
           const dbCredentials = data.daily_job_limits?.__credentials;
@@ -691,15 +965,23 @@ const App: React.FC = () => {
              const { error: insertError } = await supabase.from('system_settings').insert([{ id: 1, daily_job_limits: {}, holidays: [] as string[] }]);
              if (insertError) console.error('Error creating initial settings:', insertError.message);
           } else {
-             console.error('Error fetching settings:', error.message);
-             addNotification(`Error fetching settings: ${error.message}`, 'error');
+             if (isOfflineError(error.message)) {
+               console.warn('Network offline during fetching settings:', error.message);
+             } else {
+               console.error('Error fetching settings:', error.message);
+               addNotification(`Error fetching settings: ${error.message}`, 'error');
+             }
           }
         }
     } catch (err: any) {
-        console.error('Unexpected error fetching settings:', err);
-        addNotification(`Unexpected error fetching settings: ${err.message}`, 'error');
+        if (isOfflineError(err.message)) {
+          console.warn('Unexpected offline error fetching settings:', err.message);
+        } else {
+          console.error('Unexpected error fetching settings:', err);
+          addNotification(`Unexpected error fetching settings: ${err.message}`, 'error');
+        }
     }
-  }, []);
+  }, [addNotification]);
 
   // Fetch settings on initial load to ensure Logo is available for Login Screen
   useEffect(() => {
@@ -725,6 +1007,104 @@ const App: React.FC = () => {
       return () => clearInterval(interval);
     }
   }, [currentUser, fetchJobs, fetchUsers, fetchPersonnel, fetchVehicles, fetchSettings, fetchChecklists]);
+
+  // Friday Auto-Backup background checker/cron-like utility for Admin
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const isAdmin = currentUser.role === UserRole.ADMIN || currentUser.employee_id === 'OPS-ADMIN-01';
+    if (!isAdmin) return;
+
+    const triggerBackupFlow = async () => {
+      const uaeTodayStr = getUAEToday();
+      if (!uaeTodayStr) return;
+
+      // Check if today is Friday in UAE (Friday = day 5)
+      const uaeTodayDate = new Date(`${uaeTodayStr}T00:00:00`);
+      const isFriday = uaeTodayDate.getDay() === 5;
+      if (!isFriday) return;
+
+      const localStorageKey = `friday_auto_backup_${uaeTodayStr}`;
+      const alreadyDownloaded = safeLocalStorage.getItem(localStorageKey) === 'downloaded';
+
+      if (!alreadyDownloaded) {
+        console.log("Friday detected! Automatically running fetch-all-jobs action for backup...");
+        
+        try {
+          // Explicitly fetch all jobs from Supabase to guarantee fresh data
+          const { data, error } = await supabase.from('jobs').select('*').order('created_at', { ascending: false });
+          if (error) throw error;
+
+          const fetchedJobs = data || [];
+          
+          // Calculate 1 month back from today
+          const oneMonthBackDate = new Date(uaeTodayDate);
+          oneMonthBackDate.setMonth(oneMonthBackDate.getMonth() - 1);
+          const oneMonthBackStr = oneMonthBackDate.toISOString().split('T')[0];
+
+          // Filter jobs scheduled in the 1 month back range
+          const jobsToBackup = fetchedJobs.filter(job => {
+            return job.job_date >= oneMonthBackStr && job.job_date <= uaeTodayStr;
+          });
+
+          // Prepare the Excel data
+          const excelData = jobsToBackup.map(job => {
+            const requester = systemUsers?.find(u => u.employee_id === job.requester_id);
+            return {
+              'Job no.': job.id,
+              'Date': job.job_date,
+              'Shipper Name': job.shipper_name,
+              'Location': job.location || '',
+              'Requestor': requester ? requester.name : job.requester_id,
+              'CBM': job.volume_cbm || 0,
+              'Shipment Details': job.shipment_details || '',
+              'Loading Type': job.loading_type,
+              'Status': job.status || '',
+              'Assigned To': job.assigned_to || 'Unassigned'
+            };
+          });
+
+          // Generate workbook
+          const ws = XLSX.utils.json_to_sheet(excelData);
+          const colWidths = [
+            { wch: 15 }, // Job no.
+            { wch: 12 }, // Date
+            { wch: 25 }, // Shipper Name
+            { wch: 30 }, // Location
+            { wch: 20 }, // Requestor
+            { wch: 10 }, // CBM
+            { wch: 20 }, // Shipment Details
+            { wch: 20 }, // Loading Type
+            { wch: 15 }, // Status
+            { wch: 15 }  // Assigned To
+          ];
+          ws['!cols'] = colWidths;
+
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Weekly Backup');
+
+          const fileName = `Job_Schedule_AutoBackup_${uaeTodayStr}.xlsx`;
+          XLSX.writeFile(wb, fileName);
+
+          // Mark as downloaded
+          safeLocalStorage.setItem(localStorageKey, 'downloaded');
+          console.log(`Background Friday auto-backup downloaded successfully: ${fileName}`);
+        } catch (err) {
+          console.error("Failed to run background Friday auto-backup:", err);
+        }
+      }
+    };
+
+    // Run immediately on user login/mount
+    triggerBackupFlow();
+
+    // Cron-like check: Run the check every 15 minutes to handle long-running sessions shifting into Friday
+    const backupInterval = setInterval(() => {
+      triggerBackupFlow();
+    }, 15 * 60 * 1000);
+
+    return () => clearInterval(backupInterval);
+  }, [currentUser, systemUsers]);
 
   // Click outside handler for notifications
   useEffect(() => {
@@ -1052,13 +1432,70 @@ const App: React.FC = () => {
     addNotification(`Job ${jobId} marked as ${isConfirmed ? 'Confirmed' : 'Not Confirmed'}.`, 'success');
   };
 
+  const generateUnderTheHoodId = (baseId: string, dayNum: number, existingJobs: Job[], batchJobs: Job[]): string => {
+    const targetId = dayNum === 1 ? baseId : `${baseId}#day${dayNum}`;
+    let uniqueId = targetId;
+    let counter = 1;
+    while (
+      existingJobs.some(j => j.id === uniqueId) || 
+      batchJobs.some(j => j.id === uniqueId)
+    ) {
+      uniqueId = `${targetId}-${counter}`;
+      counter++;
+    }
+    return uniqueId;
+  };
+
   const handleEditJob = async (job: Job, oldId?: string) => {
+    if (!currentUser) return;
+    
     const targetId = oldId || job.id;
     const oldJob = jobs.find(j => j.id === targetId);
     
+    let currentTargetId = targetId;
+    const oldCleanNo = getCleanJobNo(targetId);
+    const newCleanNo = getCleanJobNo(job.id);
+    const isJobNumberEdited = oldCleanNo && newCleanNo && oldCleanNo !== newCleanNo;
+    const isMultiDay = isJobNumberEdited && ((oldJob?.duration && oldJob.duration > 1) || 
+                       jobs.filter(j => getCleanJobNo(j.id) === oldCleanNo).length > 1);
+
+    if (isJobNumberEdited) {
+      if (isMultiDay) {
+        // Multi-day job: Edit the IDs of all related days
+        const related = jobs.filter(j => getCleanJobNo(j.id) === oldCleanNo);
+        
+        for (const rJob of related) {
+          const dayNum = getJobDayNumber(rJob.id);
+          const newDayId = dayNum === 1 ? newCleanNo : `${newCleanNo}#day${dayNum}`;
+          
+          // 1. Update referencing tables
+          await supabase.from('job_cost_sheets').update({ job_id: newDayId }).eq('job_id', rJob.id);
+          await supabase.from('inventory_consumptions').update({ job_id: newDayId }).eq('job_id', rJob.id);
+          
+          // 2. Update primary key in 'jobs'
+          await supabase.from('jobs').update({ id: newDayId }).eq('id', rJob.id);
+          
+          if (rJob.id === targetId) {
+            currentTargetId = newDayId;
+          }
+        }
+      } else {
+        // Single-day job: Only update this specific job's ID
+        const newDayId = job.id;
+        
+        // 1. Update referencing tables
+        await supabase.from('job_cost_sheets').update({ job_id: newDayId }).eq('job_id', targetId);
+        await supabase.from('inventory_consumptions').update({ job_id: newDayId }).eq('job_id', targetId);
+        
+        // 2. Update primary key in 'jobs'
+        await supabase.from('jobs').update({ id: newDayId }).eq('id', targetId);
+        
+        currentTargetId = newDayId;
+      }
+    }
+
     const updateData: any = {
-        id: job.id,
-        title: job.id,
+        title: currentTargetId,
         shipper_name: job.shipper_name,
         shipper_phone: job.shipper_phone,
         client_email: job.client_email,
@@ -1083,135 +1520,135 @@ const App: React.FC = () => {
         last_edited_at: Date.now()
     };
 
-    const { error } = await updateJobInSupabase(targetId, updateData);
+    const { error } = await updateJobInSupabase(currentTargetId, updateData);
 
     if (error) {
         alert(`Error updating job: ${error.message}`);
         return;
     }
 
-    // Handle duration or date adjustment for multi-day jobs
-    const baseId = job.id.replace(/-D\d+(-\d+)?$/, '');
-    const isBaseJob = job.id === baseId;
+    const cleanNo = newCleanNo;
+    const relatedJobs = jobs.filter(j => getCleanJobNo(j.id) === oldCleanNo);
+    const duration = job.duration || 1;
 
-    if (oldJob && (oldJob.duration !== job.duration || (isBaseJob && oldJob.job_date !== job.job_date))) {
-        const relatedJobs = jobs.filter(j => j.id === baseId || j.id.startsWith(`${baseId}-D`));
-        
-        // Find the base job to get the starting date
-        const baseJob = (job.id === baseId ? job : relatedJobs.find(j => j.id === baseId)) || job;
-        const duration = job.duration || 1;
-        
-    // --- Sunday Handling Detection ---
-    // Use explicit UTC construction to avoid local timezone shifts
-    const startDateStr = baseJob.job_date || getUAEToday();
-    let testDate = new Date(`${startDateStr}T00:00:00Z`);
-    let hasSundayRange = false;
-    let daysChecked = 0;
-    while (daysChecked < duration) {
-        if (testDate.getUTCDay() === 0) {
-            hasSundayRange = true;
-            break;
-        }
-        daysChecked++;
-        testDate.setUTCDate(testDate.getUTCDate() + 1);
-    }
-
-    if (hasSundayRange && !job.sunday_handling) {
-        setSundayPrompt({ job, mode: 'edit', oldId });
-        return;
-    }
-    // --- End Sunday Handling ---
-
-    // Calculate the required dates based on the new duration
-    let currentDateObj = new Date(`${baseJob.job_date || getUAEToday()}T00:00:00Z`);
-    let daysScheduled = 0;
-    const requiredDates: { date: string, isSunday: boolean }[] = [];
-    
-    while (daysScheduled < duration) {
+    let computedDates: string[] = [];
+    if (job.day_dates && job.day_dates.length === duration) {
+      computedDates = job.day_dates;
+    } else {
+      let currentDateObj = new Date(`${job.job_date || getUAEToday()}T00:00:00Z`);
+      let daysScheduled = 0;
+      while (daysScheduled < duration) {
         const isSunday = currentDateObj.getUTCDay() === 0;
         if (isSunday && job.sunday_handling !== 'Include') {
-            currentDateObj.setUTCDate(currentDateObj.getUTCDate() + 1);
-            continue;
+          currentDateObj.setUTCDate(currentDateObj.getUTCDate() + 1);
+          continue;
         }
-        requiredDates.push({ date: currentDateObj.toISOString().split('T')[0], isSunday });
+        computedDates.push(currentDateObj.toISOString().split('T')[0]);
         daysScheduled++;
         currentDateObj.setUTCDate(currentDateObj.getUTCDate() + 1);
+      }
     }
 
-        const jobsToCreate: Job[] = [];
-        const jobsToDelete: string[] = [];
-        const jobsToUpdate: Job[] = [];
-        
-        for (let i = 0; i < requiredDates.length; i++) {
-            const expectedId = i === 0 ? baseId : `${baseId}-D${i + 1}`;
-            const existingJob = relatedJobs.find(j => j.id === expectedId);
-            const isSunday = requiredDates[i].isSunday;
-            
-            if (existingJob) {
-                // Update its date and duration, and potentially status if Sunday
-                const needsUpdate = existingJob.id !== job.id && (
-                    existingJob.job_date !== requiredDates[i].date || 
-                    existingJob.duration !== duration ||
-                    (isSunday && existingJob.status === JobStatus.ACTIVE && currentUser.role !== UserRole.ADMIN)
-                );
+    const jobsToCreate: Job[] = [];
+    const jobsToUpdate: Job[] = [];
 
-                if (needsUpdate) {
-                    jobsToUpdate.push({
-                        ...existingJob,
-                        job_date: requiredDates[i].date,
-                        duration: duration,
-                        status: isSunday 
-                          ? (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD) 
-                          : existingJob.status,
-                        last_edited_by: currentUser?.name || 'Unknown',
-                        last_edited_at: Date.now()
-                    });
-                }
-            } else {
-                // Create new job for this day
-                jobsToCreate.push({
-                    ...baseJob,
-                    id: expectedId,
-                    title: expectedId,
-                    job_date: requiredDates[i].date,
-                    duration: duration,
-                    status: isSunday 
-                      ? (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD) 
-                      : (baseJob.status || (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD)),
-                    created_at: Date.now(),
-                    last_edited_by: currentUser?.name || 'Unknown',
-                    last_edited_at: Date.now()
-                });
-            }
+    for (let index = 0; index < duration; index++) {
+      const dayNum = index + 1;
+      const targetDate = computedDates[index];
+      let currentDateObj = new Date(`${targetDate}T00:00:00Z`);
+      const isSunday = currentDateObj.getUTCDay() === 0;
+
+      const existingJob = relatedJobs.find(j => getJobDayNumber(j.id) === dayNum);
+
+      if (existingJob) {
+        if (existingJob.id !== targetId) {
+          const mappedNewDayId = isJobNumberEdited 
+            ? (isMultiDay ? (dayNum === 1 ? newCleanNo : `${newCleanNo}#day${dayNum}`) : job.id) 
+            : existingJob.id;
+
+          jobsToUpdate.push({
+            ...existingJob,
+            id: mappedNewDayId,
+            title: mappedNewDayId,
+            shipper_name: job.shipper_name,
+            shipper_phone: job.shipper_phone,
+            client_email: job.client_email,
+            location: job.location,
+            shipment_details: job.shipment_details,
+            description: job.description,
+            priority: job.priority,
+            loading_type: job.loading_type,
+            volume_cbm: job.volume_cbm,
+            job_time: job.job_time,
+            job_date: targetDate,
+            duration: duration,
+            special_requests: job.special_requests,
+            shuttle: job.shuttle,
+            long_carry: job.long_carry,
+            team_leader: job.team_leader,
+            writer_crew: job.writer_crew,
+            vehicles: job.vehicles,
+            vehicle: job.vehicles?.join(', '),
+            activity_name: job.activity_name,
+            status: isSunday 
+              ? (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD) 
+              : existingJob.status,
+            last_edited_by: currentUser?.name || 'Unknown',
+            last_edited_at: Date.now()
+          });
         }
-        
-        // Find jobs to delete (those that are beyond the new duration)
-        for (const existingJob of relatedJobs) {
-            const match = existingJob.id.match(/-D(\d+)$/);
-            const dayNum = match ? parseInt(match[1]) : 1;
-            if (dayNum > duration) {
-                jobsToDelete.push(existingJob.id);
-            }
-        }
-        
-        // Execute the changes
-        if (jobsToDelete.length > 0) {
-            await supabase.from('jobs').delete().in('id', jobsToDelete);
-        }
-        if (jobsToUpdate.length > 0) {
-            for (const updateJob of jobsToUpdate) {
-                const updatePayload: any = {
-                    job_date: updateJob.job_date,
-                    duration: updateJob.duration,
-                    last_edited_by: updateJob.last_edited_by,
-                    last_edited_at: updateJob.last_edited_at
-                };
-                await updateJobInSupabase(updateJob.id, updatePayload);
-            }
-        }
-        if (jobsToCreate.length > 0) {
-            await insertJobsInSupabase(jobsToCreate);
-        }
+      } else {
+        const uniqueId = generateUnderTheHoodId(cleanNo, dayNum, jobs, jobsToCreate);
+        jobsToCreate.push({
+          ...job,
+          id: uniqueId,
+          title: uniqueId,
+          job_date: targetDate,
+          duration: duration,
+          status: isSunday 
+            ? (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD) 
+            : (job.status || (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD)),
+          created_at: Date.now(),
+          last_edited_by: currentUser?.name || 'Unknown',
+          last_edited_at: Date.now()
+        } as Job);
+      }
+    }
+
+    if (jobsToUpdate.length > 0) {
+      for (const updateJob of jobsToUpdate) {
+        const updatePayload: any = {
+          title: updateJob.title,
+          shipper_name: updateJob.shipper_name,
+          shipper_phone: updateJob.shipper_phone,
+          client_email: updateJob.client_email,
+          location: updateJob.location,
+          shipment_details: updateJob.shipment_details,
+          description: updateJob.description,
+          priority: updateJob.priority,
+          loading_type: updateJob.loading_type,
+          volume_cbm: updateJob.volume_cbm,
+          job_time: updateJob.job_time,
+          job_date: updateJob.job_date,
+          duration: updateJob.duration,
+          special_requests: updateJob.special_requests,
+          shuttle: updateJob.shuttle,
+          long_carry: updateJob.long_carry,
+          team_leader: updateJob.team_leader,
+          writer_crew: updateJob.writer_crew,
+          vehicles: updateJob.vehicles,
+          vehicle: updateJob.vehicle,
+          activity_name: updateJob.activity_name,
+          status: updateJob.status,
+          last_edited_by: updateJob.last_edited_by,
+          last_edited_at: updateJob.last_edited_at
+        };
+        await updateJobInSupabase(updateJob.id, updatePayload);
+      }
+    }
+
+    if (jobsToCreate.length > 0) {
+      await insertJobsInSupabase(jobsToCreate);
     }
 
     await fetchJobs();
@@ -1220,8 +1657,6 @@ const App: React.FC = () => {
   const handleAddJob = async (job: Partial<Job>) => {
     if (!currentUser) return;
     
-    // Ensure we use a date string. If none provided, use LOCAL today, not UTC.
-    // However, job.job_date usually comes from inputs which are YYYY-MM-DD.
     let baseDate = job.job_date;
     if (!baseDate) {
         baseDate = getUAEToday();
@@ -1231,7 +1666,6 @@ const App: React.FC = () => {
     const baseId = job.id!;
 
     // --- Sunday Handling Detection ---
-    // Use explicit UTC construction
     let testDate = new Date(`${baseDate}T00:00:00Z`);
     let hasSundayRange = false;
     let daysChecked = 0;
@@ -1250,101 +1684,87 @@ const App: React.FC = () => {
     }
     // --- End Sunday Handling ---
     
-    // Logic to create multiple jobs based on duration
-    const jobsToCreate: Job[] = [];
-    
-    // Explicit UTC Midnight
-    let currentDateObj = new Date(`${baseDate}T00:00:00Z`); 
-    
-    let daysScheduled = 0;
-    
-    while (daysScheduled < duration) {
-       // Check if Sunday (0).
-       const isSunday = currentDateObj.getUTCDay() === 0;
-       if (isSunday && job.sunday_handling !== 'Include') {
-          // Skip Sunday
+    const dayDatesArray = job.day_dates && job.day_dates.length === duration 
+      ? job.day_dates 
+      : [];
+
+    let computedDates: string[] = [];
+    if (dayDatesArray.length > 0) {
+      computedDates = dayDatesArray;
+    } else {
+      let currentDateObj = new Date(`${baseDate}T00:00:00Z`);
+      let daysScheduled = 0;
+      while (daysScheduled < duration) {
+        const isSunday = currentDateObj.getUTCDay() === 0;
+        if (isSunday && job.sunday_handling !== 'Include') {
           currentDateObj.setUTCDate(currentDateObj.getUTCDate() + 1);
           continue;
-       }
+        }
+        computedDates.push(currentDateObj.toISOString().split('T')[0]);
+        daysScheduled++;
+        currentDateObj.setUTCDate(currentDateObj.getUTCDate() + 1);
+      }
+    }
 
-       const currentDateStr = currentDateObj.toISOString().split('T')[0];
-       
-       // Check for holiday logic for this specific date
-       if (settings.holidays.includes(currentDateStr)) {
-          setShowHolidayAlert(true);
-          return; // Abort entire creation
-       }
+    const jobsToCreate: Job[] = [];
+    
+    for (let index = 0; index < duration; index++) {
+        const currentDateStr = computedDates[index];
+        const dayNum = index + 1;
+        
+        let currentDateObj = new Date(`${currentDateStr}T00:00:00Z`);
+        const isSunday = currentDateObj.getUTCDay() === 0;
 
-       // Check capacity for this specific date
-       // Only enforce limit for job schedule jobs
-       if (!job.is_warehouse_activity && !job.is_import_clearance && !job.is_transporter) {
-           const limit = settings.daily_job_limits[currentDateStr] ?? 10;
-           const currentCount = jobs.filter(j => 
-               j.job_date === currentDateStr && 
-               j.status !== JobStatus.REJECTED &&
-               !j.is_warehouse_activity &&
-               !j.is_import_clearance &&
-               !j.is_transporter
-           ).length;
-           
-           if (currentCount >= limit) {
-             alert(`Daily limit of ${limit} reached for ${currentDateStr}. Cannot schedule multi-day job.`);
-             return;
-           }
-       }
+        // Check for holiday logic for this specific date
+        if (settings.holidays.includes(currentDateStr)) {
+           setShowHolidayAlert(true);
+           return; // Abort entire creation
+        }
 
-       // Generate ID
-       let dayId = daysScheduled === 0 ? baseId : `${baseId}-D${daysScheduled + 1}`;
-       
-       // Allow duplicate base IDs by appending suffix if ID already exists
-       // This handles the request: "User can use the same unique ID" by making it technically unique but same base.
-       let uniqueId = dayId;
-       let counter = 1;
-       
-       // Check if it's a duplicate and show warning if it's the first day of creation
-       if (daysScheduled === 0 && jobs.some(j => j.id === uniqueId)) {
-           // We don't alert here to not block the loop, but we could.
-           // The user specifically asked for an informational prompt.
-           // However, handleAddJob is called on submit.
-       }
+        // Check capacity for this specific date
+        if (!job.is_warehouse_activity && !job.is_import_clearance && !job.is_transporter) {
+            const limit = settings.daily_job_limits[currentDateStr] ?? 10;
+            const currentCount = jobs.filter(j => 
+                j.job_date === currentDateStr && 
+                j.status !== JobStatus.REJECTED &&
+                !j.is_warehouse_activity &&
+                !j.is_import_clearance &&
+                !j.is_transporter
+            ).length;
+            
+            if (currentCount >= limit) {
+              alert(`Daily limit of ${limit} reached for ${currentDateStr}. Cannot schedule multi-day job.`);
+              return;
+            }
+        }
 
-       // Check against local jobs state AND jobs being created in this batch
-       while (jobs.some(j => j.id === uniqueId) || jobsToCreate.some(j => j.id === uniqueId)) {
-           uniqueId = `${dayId}-${counter}`;
-           counter++;
-       }
-       
-       // Prepare vehicles data
-       const vehiclesArray = job.vehicles || [];
-       const vehicleString = vehiclesArray.length > 0 ? vehiclesArray.join(', ') : job.vehicle;
+        const uniqueId = generateUnderTheHoodId(baseId, dayNum, jobs, jobsToCreate);
 
-       const newJobEntry: Job = {
-         ...job,
-         id: uniqueId,
-         title: uniqueId,
-         // If it's Sunday, it always needs approval (PENDING_ADD) regardless of admin role, per user request.
-         status: isSunday 
-           ? (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD) 
-           : (job.status || (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD)),
-         created_at: Date.now(),
-         requester_id: currentUser.employee_id,
-         assigned_to: job.assigned_to || 'Unassigned',
-         priority: job.priority || 'LOW',
-         description: job.description || 'N/A',
-         shipment_details: job.shipment_details || 'N/A',
-         job_date: currentDateStr,
-         is_locked: false,
-         vehicles: vehiclesArray,
-         vehicle: vehicleString,
-         duration: duration, 
-         sunday_handling: job.sunday_handling
-       } as Job;
+        const vehiclesArray = job.vehicles || [];
+        const vehicleString = vehiclesArray.length > 0 ? vehiclesArray.join(', ') : job.vehicle;
 
-       jobsToCreate.push(newJobEntry);
-       
-       // Increment loop
-       daysScheduled++;
-       currentDateObj.setUTCDate(currentDateObj.getUTCDate() + 1);
+        const newJobEntry: Job = {
+          ...job,
+          id: uniqueId,
+          title: uniqueId,
+          status: isSunday 
+            ? (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD) 
+            : (job.status || (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD)),
+          created_at: Date.now(),
+          requester_id: currentUser.employee_id,
+          assigned_to: job.assigned_to || 'Unassigned',
+          priority: job.priority || 'LOW',
+          description: job.description || 'N/A',
+          shipment_details: job.shipment_details || 'N/A',
+          job_date: currentDateStr,
+          is_locked: false,
+          vehicles: vehiclesArray,
+          vehicle: vehicleString,
+          duration: duration, 
+          sunday_handling: job.sunday_handling
+        } as Job;
+
+        jobsToCreate.push(newJobEntry);
     }
     
     // Batch Insert
@@ -1423,8 +1843,12 @@ const App: React.FC = () => {
     }
 
     if (currentUser.role === UserRole.ADMIN) {
-      const { error } = await supabase.from('jobs').delete().eq('id', jobId);
-      if (error) alert(`Error: ${error.message}`);
+      // Trigger custom admin confirmation modal
+      setDeleteConfirmation({
+        jobId,
+        title: job.title || `Job ID: ${job.id}`
+      });
+      setDeleteInputText('');
     } else {
       const { error } = await updateJobInSupabase(jobId, { 
         status: JobStatus.PENDING_DELETE,
@@ -1432,7 +1856,27 @@ const App: React.FC = () => {
         last_edited_at: Date.now()
       });
       if (error) alert(`Error: ${error.message}`);
+      await fetchJobs();
     }
+  };
+
+  const handleConfirmAdminDelete = async () => {
+    if (!deleteConfirmation || !currentUser) return;
+    if (deleteInputText.trim().toLowerCase() !== 'confirm') {
+      alert("Verification mismatch. Please type the word 'Confirm' exactly to proceed with deletion.");
+      return;
+    }
+
+    const { jobId } = deleteConfirmation;
+    const { error } = await supabase.from('jobs').delete().eq('id', jobId);
+    if (error) {
+      alert(`Error: ${error.message}`);
+    } else {
+      addNotification(`Job "${deleteConfirmation.title}" deleted completely.`, 'success');
+    }
+    
+    setDeleteConfirmation(null);
+    setDeleteInputText('');
     await fetchJobs();
   };
 
@@ -1797,6 +2241,84 @@ const App: React.FC = () => {
           onClose={() => setShowSystemAlert(false)}
         />
       )}
+
+      {/* Admin Delete Confirmation Modal */}
+      {deleteConfirmation && (
+        <div className="fixed inset-0 bg-slate-900/45 backdrop-blur-sm z-[9999] flex items-center justify-center p-4" id="admin_delete_confirm_overlay">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-100 max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200" id="admin_delete_confirm_modal">
+            {/* Header */}
+            <div className="bg-rose-50 px-6 py-5 border-b border-rose-100 flex items-start gap-4">
+              <div className="p-2 bg-rose-100 text-rose-600 rounded-lg">
+                <AlertTriangle className="w-6 h-6 animate-bounce" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-sm font-black text-rose-950 uppercase tracking-wider">Confirm Job Deletion</h3>
+                <p className="text-xs text-rose-700/80 mt-1 font-semibold">This is a highly destructive, irreversible operation!</p>
+              </div>
+              <button 
+                onClick={() => setDeleteConfirmation(null)}
+                className="text-rose-400 hover:text-rose-700 p-1 rounded-lg hover:bg-rose-100/50 transition-colors"
+                type="button"
+                id="admin_delete_close_btn"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <form onSubmit={(e) => { e.preventDefault(); handleConfirmAdminDelete(); }} className="p-6 space-y-4">
+              <p className="text-xs text-slate-600 leading-relaxed">
+                You are about to permanently delete <strong className="text-slate-900 font-bold">"{deleteConfirmation.title}"</strong> from the active job schedule.
+              </p>
+              
+              <div className="bg-slate-50 p-3.5 rounded-lg border border-slate-200/60 text-[11px] text-slate-500 space-y-1 font-mono">
+                <p>• Removes all driver and writer vehicle allocations</p>
+                <p>• Clears scheduled dates and logs permanently</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+                  Type <span className="text-rose-600 font-black">"Confirm"</span> to proceed:
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={deleteInputText}
+                  onChange={(e) => setDeleteInputText(e.target.value)}
+                  placeholder="Confirm"
+                  className="w-full px-3 py-2 text-sm border-2 border-slate-200 rounded-lg focus:border-rose-500 focus:ring-0 outline-none transition-all font-mono placeholder:text-slate-300"
+                  autoFocus
+                  id="admin_delete_input"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmation(null)}
+                  className="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 text-slate-700 tracking-wide rounded-lg transition-colors border border-slate-200"
+                  id="admin_delete_cancel_btn"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={deleteInputText.trim().toLowerCase() !== "confirm"}
+                  className={`px-5 py-2 text-xs font-semibold text-white tracking-wide rounded-lg transition-all shadow-sm ${
+                    deleteInputText.trim().toLowerCase() === "confirm"
+                      ? "bg-rose-600 hover:bg-rose-700 hover:shadow-md cursor-pointer"
+                      : "bg-rose-300 cursor-not-allowed opacity-60"
+                  }`}
+                  id="admin_delete_btn"
+                >
+                  Permanently Delete
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       
       {/* Mobile Sidebar Overlay */}
       {isMobileMenuOpen && (
@@ -2102,6 +2624,7 @@ const App: React.FC = () => {
                 isAdmin={currentUser.role === UserRole.ADMIN}
                 systemAlert={settings.system_alert}
                 onUpdateSystemAlert={handleUpdateSystemAlert}
+                jobs={jobs}
               />
             )}
             {activeTab === 'ai' && <AIPlanner jobs={jobs} />}

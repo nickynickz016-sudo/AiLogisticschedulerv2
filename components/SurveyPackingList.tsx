@@ -10,6 +10,10 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from '../supabaseClient';
 import { UserProfile, UserRole } from '../types';
+import { safeLocalStorage } from '../utils';
+
+const localStorage = safeLocalStorage;
+
 
 // Preset lists for common room household items
 const ROOM_PRESETS: Record<string, string[]> = {

@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { getCleanJobNo } from '../utils';
 import { Job, JobStatus, TrackingStepDetails } from '../types';
 import { Search, Map, Truck, Globe, FileCheck, Home, CheckCircle2, Share2, Package, Save, Loader2, Phone, User, Building2, FileText, Check, MessageSquare, Copy, ExternalLink, X, ArrowLeft } from 'lucide-react';
 import { supabase } from '../supabaseClient';
@@ -65,7 +66,11 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ jobs, onUpdateJob, l
   // If selected job updates in parent, update local reference
   useEffect(() => {
     if (selectedJob) {
-        const updated = jobs.find(j => j.id === selectedJob.id);
+        let updated = jobs.find(j => j.id === selectedJob.id);
+        if (!updated) {
+          const oldCleanNo = getCleanJobNo(selectedJob.id);
+          updated = jobs.find(j => getCleanJobNo(j.id) === oldCleanNo);
+        }
         if (updated) setSelectedJob(updated);
     }
   }, [jobs]);

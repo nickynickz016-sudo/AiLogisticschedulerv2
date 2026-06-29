@@ -207,6 +207,7 @@ export interface Job {
   job_time?: string;
   job_date: string;
   duration?: number; // New field for multi-day jobs
+  day_dates?: string[]; // Custom array for multi-day job custom dates
   status: JobStatus;
   created_at: number;
   requester_id: string;

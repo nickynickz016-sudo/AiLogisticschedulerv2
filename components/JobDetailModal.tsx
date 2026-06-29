@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { Job, UserProfile } from '../types';
+import { getCleanJobNo } from '../utils';
 import { X, Package, Truck, User, Users, Clock, Calendar, MapPin, Tag, CheckSquare, FileText, Wind, Anchor, Phone, Mail, Send, Loader2 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 
@@ -83,7 +84,7 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({ job, onClose, us
           <div>
             <div className="flex items-center gap-3 flex-wrap">
               <span className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase ${getStatusInfo().color}`}>{getStatusInfo().text}</span>
-              <span className="text-xs font-bold text-slate-400 uppercase">Job ID: {job.id}</span>
+              <span className="text-xs font-bold text-slate-400 uppercase">Job ID: {getCleanJobNo(job.id)}</span>
             </div>
             <h3 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight mt-2">{job.shipper_name}</h3>
           </div>

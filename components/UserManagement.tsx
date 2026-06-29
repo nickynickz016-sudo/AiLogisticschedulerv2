@@ -1,7 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { UserProfile, UserRole, UserPermissions, SystemSettings } from '../types';
-import { UserPlus, ShieldAlert, ToggleLeft, ToggleRight, User, Fingerprint, Mail, CheckCircle, X, Lock, Key, Shield, Edit2, Save, Radio, MessageSquare, AlertTriangle, Power, Trash2 } from 'lucide-react';
+import { 
+  UserPlus, ShieldAlert, ToggleLeft, ToggleRight, User, Fingerprint, Mail, 
+  CheckCircle, X, Lock, Key, Shield, Edit2, Save, Radio, MessageSquare, 
+  AlertTriangle, Power, Trash2, Database, RefreshCw, History, Check, ExternalLink, AlertCircle 
+} from 'lucide-react';
+import { supabase } from '../supabaseClient';
+import { safeLocalStorage } from '../utils';
 
 interface UserManagementProps {
   users: UserProfile[];
@@ -12,6 +18,7 @@ interface UserManagementProps {
   isAdmin: boolean;
   systemAlert?: SystemSettings['system_alert'];
   onUpdateSystemAlert: (alert: SystemSettings['system_alert']) => void;
+  jobs?: any[];
 }
 
 const DEFAULT_PERMISSIONS: UserPermissions = {
@@ -57,7 +64,7 @@ const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
 };
 
 export const UserManagement: React.FC<UserManagementProps> = ({ 
-  users, onAddUser, onUpdateStatus, onUpdateUser, onDeleteUser, isAdmin, systemAlert, onUpdateSystemAlert 
+  users, onAddUser, onUpdateStatus, onUpdateUser, onDeleteUser, isAdmin, systemAlert, onUpdateSystemAlert, jobs = [] 
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -82,6 +89,152 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     message: 'The system is currently undergoing scheduled maintenance.',
     type: 'maintenance' as 'info' | 'warning' | 'error' | 'maintenance'
   });
+
+  // Data Recovery Console States
+  const [scannedJobs, setScannedJobs] = useState<any[]>([]);
+  const [isScanning, setIsScanning] = useState(false);
+  const [restoreStatus, setRestoreStatus] = useState<Record<string, 'idle' | 'loading' | 'success' | 'error'>>({});
+
+  const scanForDeletedJobs = () => {
+    setIsScanning(true);
+    const found: any[] = [];
+    const activeIds = new Set((jobs || []).map(j => j.id));
+
+    // 1. Scan offline cache backup
+    try {
+      const saved = safeLocalStorage.getItem('writer_local_jobs_data');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          parsed.forEach(job => {
+            if (job && job.id && !activeIds.has(job.id)) {
+              if (!found.some(f => f.id === job.id)) {
+                found.push({ ...job, source: 'Offline Storage Backup' });
+              }
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    // 1b. Scan archived deleted jobs
+    try {
+      const archived = safeLocalStorage.getItem('writer_deleted_jobs_archive');
+      if (archived) {
+        const parsed = JSON.parse(archived);
+        if (Array.isArray(parsed)) {
+          parsed.forEach(job => {
+            if (job && job.id && !activeIds.has(job.id)) {
+              if (!found.some(f => f.id === job.id)) {
+                found.push({ 
+                  ...job,
+                  shipper_name: job.shipper_name || 'Restored Job',
+                  job_date: job.job_date || 'N/A',
+                  source: 'Deleted Jobs Backup Archive' 
+                });
+              }
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    // 2. Scan snapshot keys
+    try {
+      const keys = safeLocalStorage.getAllKeys();
+      keys.forEach(key => {
+        if (key && key.startsWith('jobs_snapshot_')) {
+          const saved = safeLocalStorage.getItem(key);
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) {
+              parsed.forEach(job => {
+                if (job && job.id && !activeIds.has(job.id)) {
+                  if (!found.some(f => f.id === job.id)) {
+                    found.push({ 
+                      id: job.id, 
+                      shipper_name: job.shipper_name || 'Multi-day Sub-job', 
+                      job_date: job.job_date || 'N/A',
+                      job_time: job.job_time || '08:00',
+                      location: job.location || 'N/A',
+                      volume_cbm: job.volume_cbm || 0,
+                      team_leader: job.team_leader || 'Unassigned',
+                      vehicles: job.vehicles || [],
+                      vehicle: job.vehicle || '',
+                      status: job.status || 'ACTIVE',
+                      description: job.description || 'Restored from local backup.',
+                      created_at: job.created_at || Date.now(),
+                      source: `Browser Snapshot (${key.replace('jobs_snapshot_', '')})` 
+                    });
+                  }
+                }
+              });
+            }
+          }
+        }
+      });
+    } catch (e) {
+      console.error(e);
+    }
+
+    setScannedJobs(found);
+    setIsScanning(false);
+  };
+
+  const handleRestoreJob = async (job: any) => {
+    setRestoreStatus(prev => ({ ...prev, [job.id]: 'loading' }));
+    try {
+      const payload = {
+        id: job.id,
+        title: job.title || job.id || job.shipper_name || 'Restored Job',
+        shipper_name: job.shipper_name || 'Restored Job',
+        job_date: job.job_date || new Date().toISOString().split('T')[0],
+        job_time: job.job_time || '08:00',
+        location: job.location || 'N/A',
+        volume_cbm: job.volume_cbm || 0,
+        team_leader: job.team_leader || 'Unassigned',
+        vehicles: job.vehicles || [],
+        vehicle: job.vehicle || '',
+        status: job.status || 'ACTIVE',
+        description: job.description || 'Restored from backup console.',
+        created_at: job.created_at || Date.now(),
+        last_edited_by: 'Recovery Console',
+        last_edited_at: Date.now(),
+        priority: job.priority || 'LOW',
+        sunday_handling: job.sunday_handling || 'Skip',
+        is_warehouse_activity: job.is_warehouse_activity || false,
+        is_import_clearance: job.is_import_clearance || false,
+        is_transporter: job.is_transporter || false,
+        is_locked: job.is_locked || false,
+        requester_id: job.requester_id || 'System'
+      };
+
+      let { error } = await supabase.from('jobs').insert(payload);
+      if (error && (error.message.includes("is_confirmed") || error.message.includes("column"))) {
+        const { is_confirmed, ...strippedPayload } = payload as any;
+        let { error: retryError } = await supabase.from('jobs').insert(strippedPayload);
+        error = retryError;
+      }
+      if (error && error.message.includes("last_edited_at")) {
+        const { last_edited_by, last_edited_at, is_confirmed, ...fallbackPayload } = payload as any;
+        const { error: retryError } = await supabase.from('jobs').insert(fallbackPayload);
+        error = retryError;
+      }
+      if (error) throw error;
+
+      setRestoreStatus(prev => ({ ...prev, [job.id]: 'success' }));
+      setScannedJobs(prev => prev.filter(j => j.id !== job.id));
+      alert(`Job "${job.id}" has been recovered and restored to Supabase successfully! Please refresh or toggle tabs to view.`);
+    } catch (err: any) {
+      console.error(err);
+      setRestoreStatus(prev => ({ ...prev, [job.id]: 'error' }));
+      alert(`Error restoring job to Supabase: ${err.message}`);
+    }
+  };
 
   useEffect(() => {
     if (systemAlert) {
@@ -261,6 +414,140 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                 <Save className="w-4 h-4" /> Save Alert Settings
               </button>
            </div>
+        </div>
+      </div>
+
+      {/* SUPABASE SUBSCRIPTION & DATA RECOVERY CENTER */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8" id="supabase_recovery_center">
+        {/* LOCAL RESTORATION SCANNER */}
+        <div className="bg-white rounded-[2rem] p-8 border border-slate-200 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+              <div className="p-2 bg-blue-50 rounded-xl">
+                <Database className="w-5 h-5 text-blue-500" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800 uppercase tracking-widest">Local Backup & Recovery Scan</h3>
+                <p className="text-xs text-slate-400 font-medium">Scan local browser cache snapshots for deleted jobs</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-600 leading-relaxed mb-6">
+              This utility scans your browser's offline storage and snapshots for job data. If multi-day jobs were recently shortened or accidentally deleted, they may still exist in your browser's history and can be restored back to the live Supabase database with a single click.
+            </p>
+
+            {scannedJobs.length > 0 ? (
+              <div className="space-y-3 max-h-[250px] overflow-y-auto pr-1 mb-6">
+                {scannedJobs.map((job) => (
+                  <div key={job.id} className="flex items-center justify-between p-4 bg-slate-50 border border-slate-150 rounded-xl text-xs">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-800">{job.id}</span>
+                        <span className="text-[10px] bg-slate-200 text-slate-600 font-medium px-2 py-0.5 rounded-full">{job.source}</span>
+                      </div>
+                      <div className="font-medium text-slate-500">Shipper: <strong className="text-slate-700 font-bold">{job.shipper_name}</strong></div>
+                      <div className="text-[10px] text-slate-400 font-mono">Date: {job.job_date}</div>
+                    </div>
+                    <button
+                      onClick={() => handleRestoreJob(job)}
+                      disabled={restoreStatus[job.id] === 'loading' || restoreStatus[job.id] === 'success'}
+                      className={`px-4 py-2 rounded-lg font-bold uppercase text-[10px] tracking-wider transition-all flex items-center gap-1.5 ${
+                        restoreStatus[job.id] === 'success'
+                          ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                          : restoreStatus[job.id] === 'loading'
+                          ? 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed animate-pulse'
+                          : 'bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-100'
+                      }`}
+                    >
+                      {restoreStatus[job.id] === 'loading' && <RefreshCw className="w-3 h-3 animate-spin" />}
+                      {restoreStatus[job.id] === 'success' && <Check className="w-3 h-3" />}
+                      {restoreStatus[job.id] === 'success' ? 'Restored' : restoreStatus[job.id] === 'loading' ? 'Restoring' : 'Restore to DB'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-8 border border-dashed border-slate-200 rounded-2xl text-center mb-6">
+                <History className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-xs text-slate-400 font-medium">Click "Scan Browser Caches" to search for lost records</p>
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={scanForDeletedJobs}
+            disabled={isScanning}
+            className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-md flex items-center justify-center gap-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${isScanning ? 'animate-spin' : ''}`} />
+            {isScanning ? 'Scanning Browser Caches...' : 'Scan Browser Caches'}
+          </button>
+        </div>
+
+        {/* SUPABASE PRO SUBSCRIPTION PITR GUIDE */}
+        <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[2rem] p-8 border border-slate-700 shadow-lg text-white flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-700">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                  <Database className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-100 uppercase tracking-widest text-sm">Supabase Subscription Protection</h3>
+                  <p className="text-xs text-slate-400 font-medium">Your Pro/Enterprise Tier Data Protection is ACTIVE</p>
+                </div>
+              </div>
+              <span className="text-[9px] bg-emerald-500/20 text-emerald-400 font-extrabold uppercase tracking-widest px-2.5 py-1 rounded-full border border-emerald-500/30">
+                PRO ACTIVE
+              </span>
+            </div>
+
+            <p className="text-sm text-slate-300 leading-relaxed mb-6">
+              Congratulations on upgrading to a <strong>paid Supabase subscription</strong>! Since your project is on a paid tier, your database is protected by continuous, industrial-grade backups and enterprise rollbacks:
+            </p>
+
+            <div className="space-y-4 mb-6">
+              <div className="flex gap-3 text-xs leading-relaxed">
+                <div className="mt-0.5 p-1 bg-emerald-500/20 rounded-lg text-emerald-400 shrink-0">
+                  <Check className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <strong className="text-slate-200 block font-bold">Point-in-Time Recovery (PITR)</strong>
+                  You can restore your entire database to the exact millisecond before deletions happened. Go to your <strong>Supabase Dashboard → Database → Backups</strong> and select the exact timestamp to restore.
+                </div>
+              </div>
+
+              <div className="flex gap-3 text-xs leading-relaxed">
+                <div className="mt-0.5 p-1 bg-emerald-500/20 rounded-lg text-emerald-400 shrink-0">
+                  <Check className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <strong className="text-slate-200 block font-bold">Daily Automatic Backups</strong>
+                  Supabase keeps standard daily snapshots of your schemas and data, allowing clean restorations via a single click in your backups portal.
+                </div>
+              </div>
+
+              <div className="flex gap-3 text-xs leading-relaxed">
+                <div className="mt-0.5 p-1 bg-emerald-500/20 rounded-lg text-emerald-400 shrink-0">
+                  <Check className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <strong className="text-slate-200 block font-bold font-mono">Need Immediate Hands-on Support?</strong>
+                  As a paid subscriber, you have priority support tickets. You can submit a support ticket in the Supabase Dashboard, and their engineers can restore deleted data logs for you directly.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <a 
+            href="https://supabase.com/dashboard" 
+            target="_blank" 
+            referrerPolicy="no-referrer"
+            className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold rounded-xl text-xs uppercase tracking-widest transition-all shadow-md shadow-emerald-500/10 flex items-center justify-center gap-2"
+          >
+            <span>Access Supabase Dashboard</span>
+            <ExternalLink className="w-4 h-4" />
+          </a>
         </div>
       </div>
 

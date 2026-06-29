@@ -6,6 +6,10 @@ import {
   MoreVertical, ArrowUpRight, Check, History, List, LayoutGrid, Download
 } from 'lucide-react';
 import { Survey, SurveyStatus, SurveyType, SurveyMode, UserProfile } from '../types';
+import { safeLocalStorage } from '../utils';
+
+const localStorage = safeLocalStorage;
+
 
 interface SurveyTrackerProps {
   surveys: Survey[];
