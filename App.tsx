@@ -1306,14 +1306,15 @@ const App: React.FC = () => {
 
   // Helper for safe Supabase operations
   const updateJobInSupabase = async (jobId: string, payload: any) => {
-    let { error } = await supabase.from('jobs').update(payload).eq('id', jobId);
+    const { day_dates, ...dbPayload } = payload;
+    let { error } = await supabase.from('jobs').update(dbPayload).eq('id', jobId);
     if (error && (error.message.includes("is_confirmed") || error.message.includes("column"))) {
-      const { is_confirmed, ...strippedPayload } = payload;
+      const { is_confirmed, ...strippedPayload } = dbPayload;
       let { error: retryError } = await supabase.from('jobs').update(strippedPayload).eq('id', jobId);
       error = retryError;
     }
     if (error && error.message.includes("last_edited_at")) {
-      const { last_edited_by, last_edited_at, is_confirmed, ...fallbackPayload } = payload;
+      const { last_edited_by, last_edited_at, is_confirmed, ...fallbackPayload } = dbPayload;
       const { error: retryError } = await supabase.from('jobs').update(fallbackPayload).eq('id', jobId);
       error = retryError;
     }
@@ -1321,14 +1322,15 @@ const App: React.FC = () => {
   };
 
   const insertJobsInSupabase = async (jobsToInsert: Job[]) => {
-    let { error } = await supabase.from('jobs').insert(jobsToInsert);
+    const dbJobsToInsert = jobsToInsert.map(({ day_dates, ...j }: any) => j);
+    let { error } = await supabase.from('jobs').insert(dbJobsToInsert);
     if (error && (error.message.includes("is_confirmed") || error.message.includes("column"))) {
-      const strippedJobs = jobsToInsert.map(({ is_confirmed, ...j }: any) => j);
+      const strippedJobs = dbJobsToInsert.map(({ is_confirmed, ...j }: any) => j);
       let { error: retryError } = await supabase.from('jobs').insert(strippedJobs);
       error = retryError;
     }
     if (error && error.message.includes("last_edited_at")) {
-      const fallbackJobs = jobsToInsert.map(({ last_edited_by, last_edited_at, is_confirmed, ...j }: any) => j);
+      const fallbackJobs = dbJobsToInsert.map(({ last_edited_by, last_edited_at, is_confirmed, ...j }: any) => j);
       const { error: retryError } = await supabase.from('jobs').insert(fallbackJobs);
       error = retryError;
     }
