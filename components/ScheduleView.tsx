@@ -218,7 +218,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
     const copiedJob: Partial<Job> = {
       ...showCopyModal,
-      id: showCopyModal.id, // Will be regenerated in onAddJob logic if duplicate
+      id: getCleanJobNo(showCopyModal.id), // Ensure we use the clean base ID to start a fresh schedule
       job_date: copyDate,
       status: JobStatus.PENDING_ADD, // Reset status for new schedule
       is_locked: false, // Reset lock

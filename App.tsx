@@ -1490,6 +1490,27 @@ const App: React.FC = () => {
     const isMultiDay = isJobNumberEdited && ((oldJob?.duration && oldJob.duration > 1) || 
                        jobs.filter(j => getCleanJobNo(j.id) === oldCleanNo).length > 1);
 
+    const duration = job.duration || 1;
+
+    // 1. Compute dates first so they are available for target ID calculations
+    let computedDates: string[] = [];
+    if (job.day_dates && job.day_dates.length === duration) {
+      computedDates = job.day_dates;
+    } else {
+      let currentDateObj = new Date(`${job.job_date || getUAEToday()}T00:00:00Z`);
+      let daysScheduled = 0;
+      while (daysScheduled < duration) {
+        const isSunday = currentDateObj.getUTCDay() === 0;
+        if (isSunday && job.sunday_handling !== 'Include') {
+          currentDateObj.setUTCDate(currentDateObj.getUTCDate() + 1);
+          continue;
+        }
+        computedDates.push(currentDateObj.toISOString().split('T')[0]);
+        daysScheduled++;
+        currentDateObj.setUTCDate(currentDateObj.getUTCDate() + 1);
+      }
+    }
+
     if (isJobNumberEdited) {
       if (isMultiDay) {
         // Multi-day job: Edit the IDs of all related days
@@ -1525,6 +1546,10 @@ const App: React.FC = () => {
       }
     }
 
+    // Since we know the day number of the current target job, get its correct date from computedDates
+    const targetDayNumber = getJobDayNumber(currentTargetId);
+    const correctTargetDate = computedDates[targetDayNumber - 1] || job.job_date;
+
     const updateData: any = {
         title: currentTargetId,
         shipper_name: job.shipper_name,
@@ -1537,7 +1562,7 @@ const App: React.FC = () => {
         loading_type: job.loading_type,
         volume_cbm: job.volume_cbm,
         job_time: job.job_time,
-        job_date: job.job_date, 
+        job_date: correctTargetDate, 
         duration: job.duration,
         special_requests: job.special_requests,
         shuttle: job.shuttle,
@@ -1560,28 +1585,17 @@ const App: React.FC = () => {
 
     const cleanNo = newCleanNo;
     const relatedJobs = jobs.filter(j => getCleanJobNo(j.id) === oldCleanNo);
-    const duration = job.duration || 1;
-
-    let computedDates: string[] = [];
-    if (job.day_dates && job.day_dates.length === duration) {
-      computedDates = job.day_dates;
-    } else {
-      let currentDateObj = new Date(`${job.job_date || getUAEToday()}T00:00:00Z`);
-      let daysScheduled = 0;
-      while (daysScheduled < duration) {
-        const isSunday = currentDateObj.getUTCDay() === 0;
-        if (isSunday && job.sunday_handling !== 'Include') {
-          currentDateObj.setUTCDate(currentDateObj.getUTCDate() + 1);
-          continue;
-        }
-        computedDates.push(currentDateObj.toISOString().split('T')[0]);
-        daysScheduled++;
-        currentDateObj.setUTCDate(currentDateObj.getUTCDate() + 1);
-      }
-    }
 
     const jobsToCreate: Job[] = [];
     const jobsToUpdate: Job[] = [];
+    const matchedJobIds = new Set<string>();
+
+    // Mark currentTargetId as matched since we updated it above
+    matchedJobIds.add(currentTargetId);
+    const oldTargetJob = relatedJobs.find(j => j.id === targetId);
+    if (oldTargetJob) {
+      matchedJobIds.add(oldTargetJob.id);
+    }
 
     for (let index = 0; index < duration; index++) {
       const dayNum = index + 1;
@@ -1589,47 +1603,70 @@ const App: React.FC = () => {
       let currentDateObj = new Date(`${targetDate}T00:00:00Z`);
       const isSunday = currentDateObj.getUTCDay() === 0;
 
-      const existingJob = relatedJobs.find(j => getJobDayNumber(j.id) === dayNum);
+      // Skip the targetId since it was updated directly above
+      if (dayNum === targetDayNumber) {
+        continue;
+      }
+
+      // Find existing job for this day, preferring correct day number match, then falling back to targetDate
+      let existingJob = relatedJobs.find(j => !matchedJobIds.has(j.id) && getJobDayNumber(j.id) === dayNum);
+      if (!existingJob) {
+        existingJob = relatedJobs.find(j => !matchedJobIds.has(j.id) && j.job_date === targetDate);
+      }
 
       if (existingJob) {
-        if (existingJob.id !== targetId) {
-          const mappedNewDayId = isJobNumberEdited 
-            ? (isMultiDay ? (dayNum === 1 ? newCleanNo : `${newCleanNo}#day${dayNum}`) : job.id) 
-            : existingJob.id;
+        const oldId = existingJob.id;
+        const correctDayId = dayNum === 1 ? newCleanNo : `${newCleanNo}#day${dayNum}`;
 
-          jobsToUpdate.push({
-            ...existingJob,
-            id: mappedNewDayId,
-            title: mappedNewDayId,
-            shipper_name: job.shipper_name,
-            shipper_phone: job.shipper_phone,
-            client_email: job.client_email,
-            location: job.location,
-            shipment_details: job.shipment_details,
-            description: job.description,
-            priority: job.priority,
-            loading_type: job.loading_type,
-            volume_cbm: job.volume_cbm,
-            job_time: job.job_time,
-            job_date: targetDate,
-            duration: duration,
-            special_requests: job.special_requests,
-            shuttle: job.shuttle,
-            long_carry: job.long_carry,
-            team_leader: job.team_leader,
-            writer_crew: job.writer_crew,
-            vehicles: job.vehicles,
-            vehicle: job.vehicles?.join(', '),
-            activity_name: job.activity_name,
-            status: isSunday 
-              ? (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD) 
-              : existingJob.status,
-            last_edited_by: currentUser?.name || 'Unknown',
-            last_edited_at: Date.now()
-          });
+        // If the ID actually needs to be renamed in Supabase (e.g., job number edited or corrupted ID)
+        if (existingJob.id !== correctDayId) {
+          console.log(`Renaming job ID from ${existingJob.id} to ${correctDayId}`);
+          
+          // 1. Update referencing tables
+          await supabase.from('job_cost_sheets').update({ job_id: correctDayId }).eq('job_id', existingJob.id);
+          await supabase.from('inventory_consumptions').update({ job_id: correctDayId }).eq('job_id', existingJob.id);
+          
+          // 2. Update primary key in 'jobs'
+          await supabase.from('jobs').update({ id: correctDayId }).eq('id', existingJob.id);
+          
+          existingJob.id = correctDayId;
         }
+
+        matchedJobIds.add(correctDayId);
+        matchedJobIds.add(oldId);
+
+        jobsToUpdate.push({
+          ...existingJob,
+          id: correctDayId,
+          title: correctDayId,
+          shipper_name: job.shipper_name,
+          shipper_phone: job.shipper_phone,
+          client_email: job.client_email,
+          location: job.location,
+          shipment_details: job.shipment_details,
+          description: job.description,
+          priority: job.priority,
+          loading_type: job.loading_type,
+          volume_cbm: job.volume_cbm,
+          job_time: job.job_time,
+          job_date: targetDate,
+          duration: duration,
+          special_requests: job.special_requests,
+          shuttle: job.shuttle,
+          long_carry: job.long_carry,
+          team_leader: job.team_leader,
+          writer_crew: job.writer_crew,
+          vehicles: job.vehicles,
+          vehicle: job.vehicles?.join(', '),
+          activity_name: job.activity_name,
+          status: isSunday 
+            ? (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD) 
+            : existingJob.status,
+          last_edited_by: currentUser?.name || 'Unknown',
+          last_edited_at: Date.now()
+        });
       } else {
-        const uniqueId = generateUnderTheHoodId(cleanNo, dayNum, jobs, jobsToCreate);
+        const uniqueId = dayNum === 1 ? newCleanNo : `${newCleanNo}#day${dayNum}`;
         jobsToCreate.push({
           ...job,
           id: uniqueId,
@@ -1644,6 +1681,13 @@ const App: React.FC = () => {
           last_edited_at: Date.now()
         } as Job);
       }
+    }
+
+    // Delete/reject unmatched related jobs that were NOT matched by the loop
+    const unmatchedJobs = relatedJobs.filter(j => !matchedJobIds.has(j.id) && j.status !== JobStatus.REJECTED);
+    for (const j of unmatchedJobs) {
+      console.log(`Deleting unmatched related job ID: ${j.id}`);
+      await supabase.from('jobs').delete().eq('id', j.id);
     }
 
     if (jobsToUpdate.length > 0) {
@@ -1694,7 +1738,7 @@ const App: React.FC = () => {
     }
 
     const duration = job.duration || 1;
-    const baseId = job.id!;
+    const cleanBaseId = getCleanJobNo(job.id || `AE-${Date.now()}`);
 
     // --- Sunday Handling Detection ---
     let testDate = new Date(`${baseDate}T00:00:00Z`);
@@ -1739,6 +1783,17 @@ const App: React.FC = () => {
 
     const jobsToCreate: Job[] = [];
     
+    // Find a unique baseId that is not used as a clean job number by any existing or batch jobs
+    let uniqueBaseId = cleanBaseId;
+    let counter = 1;
+    while (
+      jobs.some(j => getCleanJobNo(j.id) === uniqueBaseId) ||
+      jobsToCreate.some(j => getCleanJobNo(j.id) === uniqueBaseId)
+    ) {
+      uniqueBaseId = `${cleanBaseId}-${counter}`;
+      counter++;
+    }
+    
     for (let index = 0; index < duration; index++) {
         const currentDateStr = computedDates[index];
         const dayNum = index + 1;
@@ -1769,7 +1824,7 @@ const App: React.FC = () => {
             }
         }
 
-        const uniqueId = generateUnderTheHoodId(baseId, dayNum, jobs, jobsToCreate);
+        const uniqueId = dayNum === 1 ? uniqueBaseId : `${uniqueBaseId}#day${dayNum}`;
 
         const vehiclesArray = job.vehicles || [];
         const vehicleString = vehiclesArray.length > 0 ? vehiclesArray.join(', ') : job.vehicle;
