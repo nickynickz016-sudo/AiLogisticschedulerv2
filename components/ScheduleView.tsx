@@ -807,8 +807,12 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   };
 
   // Filter lists based on search term
-  const teamLeaders = personnel.filter(p => p.type === 'Team Leader' && p.name.toLowerCase().includes(searchTerm.toLowerCase()));
-  const allCrew = personnel.filter(p => p.type !== 'Team Leader' && p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const teamLeaders = personnel.filter(p => (p.type && p.type.trim() === 'Team Leader') && p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const allCrew = personnel.filter(p => (p.type && p.type.trim() !== 'Team Leader') && p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  // Identify crew members assigned to this job but NOT present in the personnel resource list
+  const registeredPersonnelNames = new Set(personnel.map(p => p.name));
+  const ghostCrewNames = editAllocation.writer_crew.filter(name => !registeredPersonnelNames.has(name));
 
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
@@ -1555,7 +1559,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                         </div>
                     </div>
                     <div className={`p-2 overflow-y-auto custom-scrollbar grid grid-cols-2 gap-2 ${expandedSection === 'crew' ? 'flex-1 auto-rows-min' : 'max-h-48'}`}>
-                      {allCrew.length === 0 && <p className="text-xs text-slate-400 p-4 col-span-2 text-center">No crew found.</p>}
+                      {allCrew.length === 0 && ghostCrewNames.length === 0 && <p className="text-xs text-slate-400 p-4 col-span-2 text-center">No crew found.</p>}
                       {allCrew.map(crew => (
                         <button
                           key={crew.id}
@@ -1577,6 +1581,28 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                              </div>
                           </div>
                           {editAllocation.writer_crew.includes(crew.name) && <CheckCircle2 className="w-4 h-4 shrink-0" />}
+                        </button>
+                      ))}
+                      
+                      {/* Render ghost crew members (assigned names that are not in the personnel table) */}
+                      {ghostCrewNames.filter(name => name.toLowerCase().includes(searchTerm.toLowerCase())).map(ghostName => (
+                        <button
+                          key={`ghost-${ghostName}`}
+                          type="button"
+                          onClick={() => toggleCrewMember(ghostName)}
+                          className="px-3 py-3 rounded-xl border text-[11px] font-bold transition-all text-left flex justify-between items-center group relative bg-amber-600 border-amber-600 text-white shadow-md hover:bg-amber-700 hover:border-amber-700 animate-pulse-subtle"
+                          title="This crew member is currently assigned to this job, but is not registered in the general Fleet & Crew database."
+                        >
+                          <div className="flex flex-col min-w-0">
+                             <span className="truncate pr-2">{ghostName}</span>
+                             <div className="flex items-center gap-1.5 mt-0.5">
+                               <div className="w-1.5 h-1.5 rounded-full bg-amber-300"></div>
+                               <span className="text-[8px] uppercase tracking-tighter truncate text-amber-100">
+                                 Not in Resource Pool (Click to Remove)
+                               </span>
+                             </div>
+                          </div>
+                          <CheckCircle2 className="w-4 h-4 shrink-0" />
                         </button>
                       ))}
                     </div>

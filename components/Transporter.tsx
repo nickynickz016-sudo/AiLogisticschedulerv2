@@ -47,8 +47,8 @@ export const Transporter: React.FC<TransporterProps> = ({
   // Filter for Transporter jobs
   const transporterJobs = jobs.filter(j => (j.is_transporter || j.id.startsWith('TR-')) && j.job_date === selectedDate);
 
-  const drivers = personnel.filter(p => p.type === 'Driver' || p.type === 'Team Leader');
-  const availableCrew = personnel.filter(p => p.type !== 'Driver'); // Everyone else can be crew
+  const drivers = personnel.filter(p => p.type && (p.type.trim() === 'Driver' || p.type.trim() === 'Team Leader'));
+  const availableCrew = personnel.filter(p => p.type && p.type.trim() !== 'Driver'); // Everyone else can be crew
 
   useEffect(() => {
     if (!isEditing && !showModal) {

@@ -48,8 +48,8 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
   });
 
   // Safe filtering
-  const teamLeaders = personnel ? personnel.filter(p => p.type === 'Team Leader') : [];
-  const availableCrew = personnel ? personnel.filter(p => p.type !== 'Team Leader') : [];
+  const teamLeaders = personnel ? personnel.filter(p => p.type && p.type.trim() === 'Team Leader') : [];
+  const availableCrew = personnel ? personnel.filter(p => p.type && p.type.trim() !== 'Team Leader') : [];
 
   useEffect(() => {
       if (!isEditing && !showModal) {

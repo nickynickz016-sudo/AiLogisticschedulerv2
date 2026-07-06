@@ -85,8 +85,8 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({
   const totalPending = pendingJobs.length + pendingWarehouse.length;
 
   // Filtered lists based on search
-  const teamLeaders = personnel.filter(p => p.type === 'Team Leader' && p.name.toLowerCase().includes(searchTerm.toLowerCase()));
-  const allCrew = personnel.filter(p => p.type !== 'Team Leader' && p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const teamLeaders = personnel.filter(p => (p.type && p.type.trim() === 'Team Leader') && p.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const allCrew = personnel.filter(p => (p.type && p.type.trim() !== 'Team Leader') && p.name.toLowerCase().includes(searchTerm.toLowerCase()));
   const allVehicles = vehicles; 
 
   const startApproval = (job: Job) => {

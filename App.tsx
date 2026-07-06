@@ -48,6 +48,76 @@ export const isOfflineError = (errMsg?: any): boolean => {
          lower.includes('offline');
 };
 
+const defaultPersonnel: Personnel[] = [
+  { id: 'p1', employee_id: 'EMP-001', name: 'Alun John', type: 'Team Leader', status: 'Available', emirates_id: '784-1985-1234567-1' },
+  { id: 'p2', employee_id: 'EMP-002', name: 'Sujith Kumar', type: 'Driver', status: 'Available', emirates_id: '784-1990-2345678-2', license_number: 'LIC-55442' },
+  { id: 'p3', employee_id: 'EMP-003', name: 'Nikhil Das', type: 'Writer Crew', status: 'Available', emirates_id: '784-1992-3456789-3' },
+  { id: 'p4', employee_id: 'EMP-004', name: 'Karthik Raja', type: 'Writer Crew', status: 'Available', emirates_id: '784-1988-4567890-4' }
+];
+
+const defaultVehicles: Vehicle[] = [
+  { id: 'v1', name: '3-Ton pickup (M-1)', plate: 'A-12345', status: 'Available' },
+  { id: 'v2', name: '5-Ton pickup (M-2)', plate: 'B-67890', status: 'Available' },
+  { id: 'v3', name: 'Box Trailer (M-3)', plate: 'C-54321', status: 'Available' }
+];
+
+const defaultJobs: Job[] = [
+  {
+    id: 'WR-100245',
+    title: 'Move across Dubai Marina',
+    shipper_name: 'John Doe',
+    shipper_phone: '+971501234567',
+    client_email: 'john.doe@example.com',
+    location: 'Dubai Marina, Elite Residence',
+    priority: 'High' as any,
+    loading_type: 'House Move' as any,
+    volume_cbm: 12,
+    job_date: new Date().toISOString().split('T')[0],
+    status: 'Active' as any,
+    created_at: Date.now() - 86450000,
+    requester_id: 'user1',
+    assigned_to: 'EMP-001',
+    vehicles: ['v1'],
+    is_confirmed: true
+  },
+  {
+    id: 'WR-100246',
+    title: 'Relocation to Abu Dhabi',
+    shipper_name: 'Sarah Smith',
+    shipper_phone: '+971509876543',
+    client_email: 'sarah.smith@example.com',
+    location: 'Jumeirah Heights to Corniche, Abu Dhabi',
+    priority: 'Medium' as any,
+    loading_type: 'Apartment Move' as any,
+    volume_cbm: 24,
+    job_date: new Date().toISOString().split('T')[0],
+    status: 'Active' as any,
+    created_at: Date.now() - 43200000,
+    requester_id: 'user1',
+    assigned_to: 'EMP-002',
+    vehicles: ['v2'],
+    is_confirmed: false
+  }
+];
+
+const defaultSurveys: Survey[] = [
+  {
+    id: 'SRV-101',
+    surveyor_name: 'Alun John',
+    survey_type: 'Physical',
+    enquiry_number: 'ENQ-2026-001',
+    shipper_name: 'Robert Vance',
+    survey_date: new Date().toISOString().split('T')[0],
+    start_time: '10:00 AM',
+    end_time: '11:00 AM',
+    location: 'Downtown Dubai, Boulevard Heights',
+    mode: 'Domestic',
+    status: 'Booked' as any,
+    created_by_id: 'unknown',
+    created_at: Date.now() - 172800000
+  }
+];
+
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
     try {
@@ -346,76 +416,6 @@ const App: React.FC = () => {
 
   // --- Robust Offline Cache & Falback Data System ---
 
-  const defaultPersonnel: Personnel[] = [
-    { id: 'p1', employee_id: 'EMP-001', name: 'Alun John', type: 'Team Leader', status: 'Available', emirates_id: '784-1985-1234567-1' },
-    { id: 'p2', employee_id: 'EMP-002', name: 'Sujith Kumar', type: 'Driver', status: 'Available', emirates_id: '784-1990-2345678-2', license_number: 'LIC-55442' },
-    { id: 'p3', employee_id: 'EMP-003', name: 'Nikhil Das', type: 'Writer Crew', status: 'Available', emirates_id: '784-1992-3456789-3' },
-    { id: 'p4', employee_id: 'EMP-004', name: 'Karthik Raja', type: 'Writer Crew', status: 'Available', emirates_id: '784-1988-4567890-4' }
-  ];
-
-  const defaultVehicles: Vehicle[] = [
-    { id: 'v1', name: '3-Ton pickup (M-1)', plate: 'A-12345', status: 'Available' },
-    { id: 'v2', name: '5-Ton pickup (M-2)', plate: 'B-67890', status: 'Available' },
-    { id: 'v3', name: 'Box Trailer (M-3)', plate: 'C-54321', status: 'Available' }
-  ];
-
-  const defaultJobs: Job[] = [
-    {
-      id: 'WR-100245',
-      title: 'Move across Dubai Marina',
-      shipper_name: 'John Doe',
-      shipper_phone: '+971501234567',
-      client_email: 'john.doe@example.com',
-      location: 'Dubai Marina, Elite Residence',
-      priority: 'High' as any,
-      loading_type: 'House Move' as any,
-      volume_cbm: 12,
-      job_date: new Date().toISOString().split('T')[0],
-      status: 'Active' as any,
-      created_at: Date.now() - 86450000,
-      requester_id: 'user1',
-      assigned_to: 'EMP-001',
-      vehicles: ['v1'],
-      is_confirmed: true
-    },
-    {
-      id: 'WR-100246',
-      title: 'Relocation to Abu Dhabi',
-      shipper_name: 'Sarah Smith',
-      shipper_phone: '+971509876543',
-      client_email: 'sarah.smith@example.com',
-      location: 'Jumeirah Heights to Corniche, Abu Dhabi',
-      priority: 'Medium' as any,
-      loading_type: 'Apartment Move' as any,
-      volume_cbm: 24,
-      job_date: new Date().toISOString().split('T')[0],
-      status: 'Active' as any,
-      created_at: Date.now() - 43200000,
-      requester_id: 'user1',
-      assigned_to: 'EMP-002',
-      vehicles: ['v2'],
-      is_confirmed: false
-    }
-  ];
-
-  const defaultSurveys: Survey[] = [
-    {
-      id: 'SRV-101',
-      surveyor_name: 'Alun John',
-      survey_type: 'Physical',
-      enquiry_number: 'ENQ-2026-001',
-      shipper_name: 'Robert Vance',
-      survey_date: new Date().toISOString().split('T')[0],
-      start_time: '10:00 AM',
-      end_time: '11:00 AM',
-      location: 'Downtown Dubai, Boulevard Heights',
-      mode: 'Domestic',
-      status: 'Booked' as any,
-      created_by_id: 'unknown',
-      created_at: Date.now() - 172800000
-    }
-  ];
-
   const loadOfflineJobs = useCallback(() => {
     const saved = safeLocalStorage.getItem('writer_local_jobs_data');
     if (saved) {
@@ -434,12 +434,29 @@ const App: React.FC = () => {
     const saved = safeLocalStorage.getItem('writer_local_personnel_data');
     if (saved) {
       try {
-        setPersonnel(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        const cleaned = (parsed || []).map((p: any) => ({
+          ...p,
+          name: typeof p.name === 'string' ? p.name.trim() : p.name,
+          type: typeof p.type === 'string' ? p.type.trim() : p.type,
+          status: typeof p.status === 'string' ? p.status.trim() : p.status,
+          employee_id: typeof p.employee_id === 'string' ? p.employee_id.trim() : p.employee_id,
+          emirates_id: typeof p.emirates_id === 'string' ? p.emirates_id.trim() : p.emirates_id,
+        }));
+        setPersonnel(cleaned);
         return;
       } catch (e) {}
     }
-    setPersonnel(defaultPersonnel);
-    safeLocalStorage.setItem('writer_local_personnel_data', JSON.stringify(defaultPersonnel));
+    const cleanedDefault = defaultPersonnel.map((p: any) => ({
+      ...p,
+      name: typeof p.name === 'string' ? p.name.trim() : p.name,
+      type: typeof p.type === 'string' ? p.type.trim() : p.type,
+      status: typeof p.status === 'string' ? p.status.trim() : p.status,
+      employee_id: typeof p.employee_id === 'string' ? p.employee_id.trim() : p.employee_id,
+      emirates_id: typeof p.emirates_id === 'string' ? p.emirates_id.trim() : p.emirates_id,
+    }));
+    setPersonnel(cleanedDefault);
+    safeLocalStorage.setItem('writer_local_personnel_data', JSON.stringify(cleanedDefault));
   }, []);
 
   const loadOfflineVehicles = useCallback(() => {
@@ -605,7 +622,7 @@ const App: React.FC = () => {
   const fetchUsers = useCallback(async () => {
     try {
         // Sync systemUsers with the profiles in allCredentials
-        const userProfiles = allCredentials.filter(u => u && u.profile).map(u => ({
+        const userProfiles = allCredentialsRef.current.filter(u => u && u.profile).map(u => ({
             ...u.profile,
             username: u.username,
             password: u.password
@@ -615,7 +632,11 @@ const App: React.FC = () => {
         console.error('Unexpected error fetching users:', err);
         addNotification(`Unexpected error fetching users: ${err.message}`, 'error');
     }
-  }, [addNotification, allCredentials]);
+  }, [addNotification]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [allCredentials, fetchUsers]);
 
   const fetchPersonnel = useCallback(async () => {
     try {
@@ -629,8 +650,16 @@ const App: React.FC = () => {
             addNotification(`Error fetching personnel: ${error.message}`, 'error');
           }
         } else {
-          setPersonnel(data || []);
-          safeLocalStorage.setItem('writer_local_personnel_data', JSON.stringify(data || []));
+          const cleaned = (data || []).map((p: any) => ({
+            ...p,
+            name: typeof p.name === 'string' ? p.name.trim() : p.name,
+            type: typeof p.type === 'string' ? p.type.trim() : p.type,
+            status: typeof p.status === 'string' ? p.status.trim() : p.status,
+            employee_id: typeof p.employee_id === 'string' ? p.employee_id.trim() : p.employee_id,
+            emirates_id: typeof p.emirates_id === 'string' ? p.emirates_id.trim() : p.emirates_id,
+          }));
+          setPersonnel(cleaned);
+          safeLocalStorage.setItem('writer_local_personnel_data', JSON.stringify(cleaned));
         }
     } catch (err: any) {
         if (isOfflineError(err.message)) {
@@ -1006,7 +1035,7 @@ const App: React.FC = () => {
       }, 10000);
       return () => clearInterval(interval);
     }
-  }, [currentUser, fetchJobs, fetchUsers, fetchPersonnel, fetchVehicles, fetchSettings, fetchChecklists]);
+  }, [currentUser, fetchJobs, fetchUsers, fetchPersonnel, fetchVehicles, fetchSettings, fetchChecklists, fetchSurveys]);
 
   // Friday Auto-Backup background checker/cron-like utility for Admin
   useEffect(() => {
@@ -1963,7 +1992,14 @@ const App: React.FC = () => {
   };
 
   const handleAddPersonnel = async (person: Omit<Personnel, 'id'>) => {
-    const { error } = await supabase.from('personnel').insert([person]);
+    const sanitizedPerson = {
+      ...person,
+      name: typeof person.name === 'string' ? person.name.trim() : person.name,
+      type: typeof person.type === 'string' ? person.type.trim() as any : person.type,
+      employee_id: typeof person.employee_id === 'string' ? person.employee_id.trim() : person.employee_id,
+      emirates_id: typeof person.emirates_id === 'string' ? person.emirates_id.trim() : person.emirates_id,
+    };
+    const { error } = await supabase.from('personnel').insert([sanitizedPerson]);
     if (error) {
       if (error.message.includes("Could not find the 'type' column") || error.message.includes("column \"type\" of relation \"personnel\" does not exist")) {
         alert("Database Error: The 'personnel' table is missing the 'type' column. Please run the migration script in Supabase.");
@@ -1976,14 +2012,21 @@ const App: React.FC = () => {
   };
 
   const handleEditPersonnel = async (person: Personnel) => {
+    const sanitizedPerson = {
+      ...person,
+      name: typeof person.name === 'string' ? person.name.trim() : person.name,
+      type: typeof person.type === 'string' ? person.type.trim() as any : person.type,
+      employee_id: typeof person.employee_id === 'string' ? person.employee_id.trim() : person.employee_id,
+      emirates_id: typeof person.emirates_id === 'string' ? person.emirates_id.trim() : person.emirates_id,
+    };
     const { error } = await supabase.from('personnel').update({
-        name: person.name,
-        type: person.type,
-        employee_id: person.employee_id,
-        emirates_id: person.emirates_id,
-        license_number: person.license_number,
-        status: person.status
-    }).eq('id', person.id);
+        name: sanitizedPerson.name,
+        type: sanitizedPerson.type,
+        employee_id: sanitizedPerson.employee_id,
+        emirates_id: sanitizedPerson.emirates_id,
+        license_number: sanitizedPerson.license_number,
+        status: sanitizedPerson.status
+    }).eq('id', sanitizedPerson.id);
 
     if (error) alert(`Error updating personnel: ${error.message}`);
     else await fetchPersonnel();
