@@ -30,6 +30,7 @@ export interface ShipperEntry {
   container_booking_id?: string | null;
   job_no?: string | null;
   packing_date?: string | null;
+  quote_amount?: number | null;
 }
 
 export interface ContainerBooking {
@@ -69,6 +70,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
     destination_country: '',
     job_no: '',
     packing_date: '',
+    quote_amount: '',
   });
   const [showShipperModal, setShowShipperModal] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
@@ -144,11 +146,13 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
             const cachedMeta = localStorage.getItem(`groupage_meta_${item.id}`);
             let job_no = item.job_no;
             let packing_date = item.packing_date;
+            let quote_amount = item.quote_amount;
             if (cachedMeta) {
               try {
                 const parsed = JSON.parse(cachedMeta);
                 if (job_no === undefined || job_no === null) job_no = parsed.job_no;
                 if (packing_date === undefined || packing_date === null) packing_date = parsed.packing_date;
+                if (quote_amount === undefined || quote_amount === null) quote_amount = parsed.quote_amount;
               } catch (e) {
                 // ignore
               }
@@ -156,7 +160,8 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
             return {
               ...item,
               job_no,
-              packing_date
+              packing_date,
+              quote_amount: quote_amount !== undefined && quote_amount !== null ? Number(quote_amount) : null
             };
           });
           setShipperEntries(enrichedShippers);
@@ -192,6 +197,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
           created_by_name: 'Roxanne',
           created_at: new Date(Date.now() - 3600000 * 5).toISOString(),
           status: 'Pending',
+          quote_amount: 1500,
         },
         {
           id: 'CARGO-102',
@@ -204,6 +210,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
           created_by_name: 'Poonam',
           created_at: new Date(Date.now() - 12 * 3600000).toISOString(),
           status: 'Pending',
+          quote_amount: 3200,
         },
         {
           id: 'CARGO-103',
@@ -216,6 +223,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
           created_by_name: 'Divya',
           created_at: new Date(Date.now() - 24 * 3600000).toISOString(),
           status: 'Pending',
+          quote_amount: 980,
         }
       ];
       localStorage.setItem('writer_groupage_shippers', JSON.stringify(defaultShippers));
@@ -262,6 +270,8 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
       return;
     }
 
+    const quoteAmtNum = shipperForm.quote_amount ? parseFloat(shipperForm.quote_amount) : null;
+
     const itemData = {
       id: editingEntryId || `SHI-${Date.now()}`,
       shipper_name: shipperForm.shipper_name,
@@ -275,15 +285,16 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
       status: 'Pending' as const,
       container_booking_id: null,
       job_no: shipperForm.job_no || null,
-      packing_date: shipperForm.packing_date || null
+      packing_date: shipperForm.packing_date || null,
+      quote_amount: quoteAmtNum
     };
 
     try {
       if (dbMode === 'supabase') {
         if (editingEntryId) {
-          // Verify ownership (Admin can edit any, user can only edit their own)
+          // Verify ownership (Admin, authorized specialists, or the author can edit)
           const target = shipperEntries.find(s => s.id === editingEntryId);
-          if (target && target.created_by_id !== currentUser.id && !isAdmin) {
+          if (target && target.created_by_id !== currentUser.id && !isAdmin && !isWI061938) {
              alert("Access Denied: You cannot modify details recorded by other users.");
              return;
           }
@@ -295,7 +306,8 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
             destination_city: shipperForm.destination_city,
             destination_country: shipperForm.destination_country,
             job_no: shipperForm.job_no || null,
-            packing_date: shipperForm.packing_date || null
+            packing_date: shipperForm.packing_date || null,
+            quote_amount: quoteAmtNum
           };
 
           const { error } = await supabase
@@ -304,15 +316,16 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
             .eq('id', editingEntryId);
 
           if (error) {
-            if (error.message.includes('column') || error.message.includes('job_no') || error.message.includes('packing_date')) {
+            if (error.message.includes('column') || error.message.includes('job_no') || error.message.includes('packing_date') || error.message.includes('quote_amount')) {
               // Store locally in fallback
               localStorage.setItem(`groupage_meta_${editingEntryId}`, JSON.stringify({
                 job_no: shipperForm.job_no || '',
-                packing_date: shipperForm.packing_date || ''
+                packing_date: shipperForm.packing_date || '',
+                quote_amount: shipperForm.quote_amount || ''
               }));
 
               // Retry stripped
-              const { job_no, packing_date, ...strippedPayload } = payload;
+              const { job_no, packing_date, quote_amount, ...strippedPayload } = payload;
               const { error: retryError } = await supabase
                 .from('groupage_shipper_entries')
                 .update(strippedPayload)
@@ -336,15 +349,16 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
             .insert([insertPayload]);
 
           if (error) {
-            if (error.message.includes('column') || error.message.includes('job_no') || error.message.includes('packing_date')) {
+            if (error.message.includes('column') || error.message.includes('job_no') || error.message.includes('packing_date') || error.message.includes('quote_amount')) {
               // Store locally in fallback
               localStorage.setItem(`groupage_meta_${entryId}`, JSON.stringify({
                 job_no: shipperForm.job_no || '',
-                packing_date: shipperForm.packing_date || ''
+                packing_date: shipperForm.packing_date || '',
+                quote_amount: shipperForm.quote_amount || ''
               }));
 
               // Retry stripped
-              const { job_no, packing_date, ...strippedPayload } = insertPayload;
+              const { job_no, packing_date, quote_amount, ...strippedPayload } = insertPayload;
               const { error: retryError } = await supabase
                 .from('groupage_shipper_entries')
                 .insert([strippedPayload]);
@@ -361,9 +375,9 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
         let updatedShippers = [...shipperEntries];
         if (editingEntryId) {
           const target = shipperEntries.find(s => s.id === editingEntryId);
-          if (target && target.created_by_id !== currentUser.id && !isAdmin) {
-             alert("Access Denied: You cannot modify details recorded by other users.");
-             return;
+          if (target && target.created_by_id !== currentUser.id && !isAdmin && !isWI061938) {
+              alert("Access Denied: You cannot modify details recorded by other users.");
+              return;
           }
           updatedShippers = updatedShippers.map(item => 
             item.id === editingEntryId 
@@ -388,6 +402,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
         destination_country: '',
         job_no: '',
         packing_date: '',
+        quote_amount: '',
       });
       fetchData();
     } catch (err: any) {
@@ -396,7 +411,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
   };
 
   const handleEditShipper = (entry: ShipperEntry) => {
-    if (entry.created_by_id !== currentUser.id && !isAdmin) {
+    if (entry.created_by_id !== currentUser.id && !isAdmin && !isWI061938) {
       alert("Access Denied: You cannot edit details recorded by other users.");
       return;
     }
@@ -410,6 +425,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
       destination_country: entry.destination_country || '',
       job_no: entry.job_no || '',
       packing_date: entry.packing_date || '',
+      quote_amount: (entry.quote_amount !== undefined && entry.quote_amount !== null) ? entry.quote_amount.toString() : '',
     });
     setShowShipperModal(true);
   };
@@ -418,8 +434,8 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
     const target = shipperEntries.find(s => s.id === id);
     if (!target) return;
 
-    if (target.created_by_id !== currentUser.id && !isAdmin) {
-      alert("Access Denied: Only the author of the entries can delete details.");
+    if (target.created_by_id !== currentUser.id && !isAdmin && !isWI061938) {
+      alert("Access Denied: Only authorized coordinators can delete details.");
       return;
     }
 
@@ -787,7 +803,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
   const exportBookingToExcel = (booking?: ContainerBooking) => {
     // Unicode BOM for Excel UTF-8 display compatibility
     let csvContent = "\uFEFF";
-    csvContent += "Booking ID,Container Type,Capacity (CBM),Destination Country,Destination City,Status,Container No,Estimated Departure Date,Dispatcher,Shipper Name,Shipper Volume (CBM),Destination Address\n";
+    csvContent += "Booking ID,Container Type,Capacity (CBM),Destination Country,Destination City,Status,Container No,Estimated Departure Date,Dispatcher,Shipper Name,Shipper Volume (CBM),Quote Amount (AED),Destination Address\n";
     
     const bookingsToExport = booking ? [booking] : containerBookings;
     
@@ -806,10 +822,11 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
       const etd = b.estimated_departure_date || dispatchDetail?.estimated_departure_date || 'N/A';
       
       if (members.length === 0) {
-        csvContent += `"${b.id}","${b.container_type}",${b.capacity_cbm},"${b.destination_country}","${b.destination_city}","${status}","${containerNo}","${etd}","${b.created_by_name}","N/A",0,"N/A"\n`;
+        csvContent += `"${b.id}","${b.container_type}",${b.capacity_cbm},"${b.destination_country}","${b.destination_city}","${status}","${containerNo}","${etd}","${b.created_by_name}","N/A",0,"N/A","N/A"\n`;
       } else {
         members.forEach(m => {
-          csvContent += `"${b.id}","${b.container_type}",${b.capacity_cbm},"${b.destination_country}","${b.destination_city}","${status}","${containerNo}","${etd}","${b.created_by_name}","${m.shipper_name}",${m.volume_cbm},"${m.destination_address.replace(/"/g, '""').replace(/\n/g, ' ')}"\n`;
+          const qAmt = (m.quote_amount !== undefined && m.quote_amount !== null) ? m.quote_amount : 'N/A';
+          csvContent += `"${b.id}","${b.container_type}",${b.capacity_cbm},"${b.destination_country}","${b.destination_city}","${status}","${containerNo}","${etd}","${b.created_by_name}","${m.shipper_name}",${m.volume_cbm},"${qAmt}","${m.destination_address.replace(/"/g, '""').replace(/\n/g, ' ')}"\n`;
         });
       }
     });
@@ -880,6 +897,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
                 destination_country: '',
                 job_no: '',
                 packing_date: '',
+                quote_amount: '',
               });
               setShowShipperModal(true);
             }}
@@ -1016,7 +1034,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
                     <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
                       {filteredShippers.map((shipper) => {
                         const isAuthor = shipper.created_by_id === currentUser.id;
-                        const canManage = isAuthor || isAdmin;
+                        const canManage = isAuthor || isAdmin || isWI061938;
                         
                         return (
                           <div 
@@ -1054,7 +1072,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
                                   Address: {shipper.destination_address}
                                 </p>
 
-                                {(shipper.job_no || shipper.packing_date) && (
+                                {(shipper.job_no || shipper.packing_date || shipper.quote_amount) && (
                                   <div className="flex flex-wrap gap-2 mt-2">
                                     {shipper.job_no && (
                                       <span className="text-[10px] font-mono font-bold bg-sky-50 text-sky-700 border border-sky-100 rounded-lg px-2 py-0.5">
@@ -1064,6 +1082,11 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
                                     {shipper.packing_date && (
                                       <span className="text-[10px] font-mono font-bold bg-amber-50 text-amber-700 border border-amber-100 rounded-lg px-2 py-0.5">
                                         Packing: {new Date(shipper.packing_date).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                                      </span>
+                                    )}
+                                    {shipper.quote_amount !== undefined && shipper.quote_amount !== null && (
+                                      <span className="text-[10px] font-mono font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-lg px-2 py-0.5">
+                                        Quote: AED {Number(shipper.quote_amount).toLocaleString()}
                                       </span>
                                     )}
                                   </div>
@@ -1404,6 +1427,9 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                  {item.quote_amount !== undefined && item.quote_amount !== null && (
+                                    <span className="font-mono text-emerald-600 text-[9px] bg-emerald-50 px-1.5 py-0.5 rounded">AED {Number(item.quote_amount).toLocaleString()}</span>
+                                  )}
                                   <span className="font-mono text-slate-500 text-[9px] bg-slate-100 px-1.5 py-0.5 rounded">{item.volume_cbm} CBM</span>
                                   {isAuthorizedToBook && (
                                     <button
@@ -1636,6 +1662,19 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
                     className="w-full text-xs font-bold border rounded-xl p-3.5 bg-slate-50 outline-none focus:ring-1 focus:ring-indigo-500 text-slate-800"
                     value={shipperForm.packing_date}
                     onChange={(e) => setShipperForm({ ...shipperForm, packing_date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Quote Amount (AED) (Optional)</label>
+                  <input 
+                    type="number"
+                    placeholder="e.g. 2500"
+                    className="w-full text-xs font-bold border rounded-xl p-3.5 bg-slate-50 outline-none focus:ring-1 focus:ring-indigo-500"
+                    value={shipperForm.quote_amount}
+                    onChange={(e) => setShipperForm({ ...shipperForm, quote_amount: e.target.value })}
                   />
                 </div>
               </div>

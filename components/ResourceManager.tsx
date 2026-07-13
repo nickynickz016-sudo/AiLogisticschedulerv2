@@ -190,14 +190,9 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
                 {p.status}
               </span>
               <button 
-                onClick={() => openEditPersonModal(p)}
-                className="p-1.5 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
-              >
-                <Edit2 className="w-4 h-4" />
-              </button>
-              <button 
                 onClick={() => onDeletePersonnel(p.id)}
                 className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
+                title="Delete Crew Member"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -234,6 +229,9 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
         <div>
           <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Fleet & Crew</h2>
           <p className="text-slate-500 text-sm font-medium mt-1">Resource readiness and availability monitoring</p>
+          <p className="text-amber-700 text-[10px] font-bold uppercase tracking-wider mt-2 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl inline-block">
+            ⚠️ Editing crew, crew leader, or vehicle names is not permitted. Only Add or Delete options are available.
+          </p>
         </div>
         <div className="flex items-center gap-4">
           <div className="relative hidden md:block">
@@ -273,14 +271,9 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
                           {v.status}
                         </span>
                         <button 
-                            onClick={() => openEditVehicleModal(v)}
-                            className="p-1.5 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
-                        >
-                            <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button 
                           onClick={() => onDeleteVehicle(v.id)}
                           className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-100 rounded-lg transition-all"
+                          title="Delete Fleet Unit"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

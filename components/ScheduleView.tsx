@@ -814,6 +814,10 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   const registeredPersonnelNames = new Set(personnel.map(p => p.name));
   const ghostCrewNames = editAllocation.writer_crew.filter(name => !registeredPersonnelNames.has(name));
 
+  // Identify vehicles assigned to this job but NOT present in the vehicles resource list
+  const registeredVehicleNames = new Set(vehicles.map(v => v.name));
+  const ghostVehicleNames = editAllocation.vehicles.filter(name => name && !registeredVehicleNames.has(name));
+
   return (
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white p-4 md:p-8 rounded-[2rem] shadow-sm border border-slate-200">
@@ -1631,6 +1635,25 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                  <span className={`text-[8px] uppercase tracking-tighter ${editAllocation.vehicles.includes(v.name) ? 'text-blue-100' : 'text-slate-400'}`}>{v.plate}</span>
                               </div>
                               {editAllocation.vehicles.includes(v.name) && <CheckCircle2 className="w-4 h-4 shrink-0" />}
+                            </button>
+                          ))}
+
+                          {/* Render ghost vehicles (assigned vehicles that are not in the vehicles table) */}
+                          {ghostVehicleNames.map(ghostName => (
+                            <button
+                              key={`ghost-vehicle-${ghostName}`}
+                              type="button"
+                              onClick={() => toggleVehicle(ghostName)}
+                              className="px-4 py-3 rounded-xl border text-[11px] font-bold transition-all text-left flex justify-between items-center bg-amber-600 border-amber-600 text-white shadow-md hover:bg-amber-700 hover:border-amber-700 animate-pulse-subtle animate-duration-1000"
+                              title="This vehicle is currently assigned to this job, but is not registered in the general fleet database."
+                            >
+                              <div className="flex flex-col min-w-0">
+                                 <span className="truncate pr-2">{ghostName}</span>
+                                 <span className="text-[8px] uppercase tracking-tighter text-amber-100">
+                                   Not in Resource Pool (Click to Remove)
+                                 </span>
+                              </div>
+                              <CheckCircle2 className="w-4 h-4 shrink-0" />
                             </button>
                           ))}
                         </div>
