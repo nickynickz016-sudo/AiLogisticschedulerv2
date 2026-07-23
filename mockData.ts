@@ -26,6 +26,7 @@ const FULL_ACCESS = {
   ai: true,
   digitalPackingList: true,
   groupageTracker: true,
+  activityLog: true,
 };
 
 const STANDARD_ACCESS = {
@@ -47,6 +48,7 @@ const STANDARD_ACCESS = {
   ai: false,
   digitalPackingList: true,
   groupageTracker: true,
+  activityLog: true,
 };
 
 const WRITER_ACCESS = {
@@ -68,6 +70,7 @@ const WRITER_ACCESS = {
   transporter: false,
   ai: false,
   groupageTracker: true,
+  activityLog: false,
 };
 
 const SENIOR_OPS_ACCESS = {
@@ -89,6 +92,7 @@ const SENIOR_OPS_ACCESS = {
   ai: false,
   digitalPackingList: true,
   groupageTracker: true,
+  activityLog: true,
 };
 
 const SANTOSH_ACCESS = {
@@ -110,6 +114,7 @@ const SANTOSH_ACCESS = {
   transporter: false,
   ai: false,
   groupageTracker: false,
+  activityLog: false,
 };
 
 const SEMI_ADMIN_ACCESS = {
@@ -131,6 +136,7 @@ const SEMI_ADMIN_ACCESS = {
   ai: true,
   digitalPackingList: true,
   groupageTracker: true,
+  activityLog: true,
 };
 
 const ACCOUNTS_ACCESS = {
@@ -152,6 +158,7 @@ const ACCOUNTS_ACCESS = {
   ai: false,
   digitalPackingList: true,
   groupageTracker: true,
+  activityLog: true,
 };
 
 const SECURITY_ONLY_ACCESS = {
@@ -173,6 +180,7 @@ const SECURITY_ONLY_ACCESS = {
   transporter: false,
   ai: false,
   groupageTracker: false,
+  activityLog: false,
 };
 
 export const USERS: MockUser[] = [

@@ -56,6 +56,45 @@ export interface UserPermissions {
   transporter: boolean;
   ai: boolean;
   groupageTracker: boolean;
+  activityLog: boolean;
+}
+
+export type ActionType = 
+  | 'CREATE' 
+  | 'UPDATE' 
+  | 'DELETE' 
+  | 'ALLOCATE' 
+  | 'LOCK' 
+  | 'UNLOCK' 
+  | 'APPROVE' 
+  | 'REJECT' 
+  | 'STATUS_CHANGE'
+  | 'RESTORE';
+
+export type EntityType = 
+  | 'Job Schedule' 
+  | 'Groupage Tracker' 
+  | 'Survey' 
+  | 'Fleet & Crew' 
+  | 'Warehouse' 
+  | 'Import Clearance' 
+  | 'User Management' 
+  | 'Inventory'
+  | 'System Settings';
+
+export interface ActivityLog {
+  id: string;
+  timestamp: number;
+  user_id: string;
+  user_name: string;
+  user_role?: string;
+  action_type: ActionType;
+  entity_type: EntityType;
+  entity_id: string;
+  entity_title?: string;
+  details: string;
+  previous_data?: any;
+  new_data?: any;
 }
 
 export interface PackageDetail {

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { LayoutDashboard, Calendar, CheckSquare, Zap, Box, Users, SlidersHorizontal, UserCog, FileCheck, ChevronLeft, ChevronRight, ClipboardList, X, FileText, Clipboard, Map, Bus, ClipboardCheck } from 'lucide-react';
+import { LayoutDashboard, Calendar, CheckSquare, Zap, Box, Users, SlidersHorizontal, UserCog, FileCheck, ChevronLeft, ChevronRight, ClipboardList, X, FileText, Clipboard, Map, Bus, ClipboardCheck, History } from 'lucide-react';
 import { UserProfile, UserRole } from '../types';
 
 interface SidebarProps {
@@ -37,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'tracking', label: 'Tracking', icon: Map, permission: 'tracking' },
     { id: 'transporter', label: 'Transporter', icon: Bus, permission: 'transporter' }, // New Transporter Module
     { id: 'groupage-tracker', label: 'Groupage Tracker', icon: ClipboardList, permission: 'groupageTracker' },
+    { id: 'activity-log', label: 'Activity Audit Log', icon: History, permission: 'activityLog' },
     { id: 'resources', label: 'Fleet & Crew', icon: Users, permission: 'resources' },
     { id: 'capacity', label: 'Capacity Settings', icon: SlidersHorizontal, permission: 'capacity' },
     { id: 'users', label: 'User Access', icon: UserCog, permission: 'users' },

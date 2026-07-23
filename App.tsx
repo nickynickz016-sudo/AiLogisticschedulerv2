@@ -23,9 +23,10 @@ import { GroupageTracker } from './components/GroupageTracker';
 import { SurveyTracker } from './components/SurveyTracker';
 import { SurveyPackingList } from './components/SurveyPackingList';
 import { WarehouseChecklist as WarehouseChecklistComponent } from './components/WarehouseChecklist';
+import { ActivityLogView } from './components/ActivityLogView';
 import { SundayJobModal } from './components/SundayJobModal';
 import { ProfileUpdateModal } from './components/ProfileUpdateModal';
-import { UserRole, Job, JobStatus, UserProfile, Personnel, Vehicle, SystemSettings, CustomsStatus, Survey, WarehouseChecklist, NightPatrollingChecklist, SafetyMonitoringChecklist, SurpriseVisitChecklist, DailyMonitoringChecklist } from './types';
+import { UserRole, Job, JobStatus, UserProfile, Personnel, Vehicle, SystemSettings, CustomsStatus, Survey, WarehouseChecklist, NightPatrollingChecklist, SafetyMonitoringChecklist, SurpriseVisitChecklist, DailyMonitoringChecklist, ActivityLog, ActionType, EntityType } from './types';
 import { Bell, Search, Menu, LogOut, X, CheckCircle2, XCircle, AlertTriangle, Info, Lock, Unlock } from 'lucide-react';
 import { supabase } from './supabaseClient';
 import { USERS, MockUser } from './mockData';
@@ -144,7 +145,7 @@ const App: React.FC = () => {
       return null;
     }
   });
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'approvals' | 'survey-tracker' | 'survey-packing' | 'warehouse-checklist' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'groupage-tracker' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>(() => {
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'approvals' | 'survey-tracker' | 'survey-packing' | 'warehouse-checklist' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'groupage-tracker' | 'activity-log' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>(() => {
     const saved = safeLocalStorage.getItem('writer_active_tab');
     return (saved as any) || 'dashboard';
   });
@@ -153,6 +154,7 @@ const App: React.FC = () => {
   
   // Local state for app data, fetched from Supabase
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [checklists, setChecklists] = useState<WarehouseChecklist[]>([]);
   const [patrolLogs, setPatrolLogs] = useState<NightPatrollingChecklist[]>([]);
@@ -810,6 +812,95 @@ const App: React.FC = () => {
     }
   }, [addNotification, loadOfflineChecklists]);
 
+  const fetchActivityLogs = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('activity_logs')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(1000);
+
+      if (!error && data && data.length > 0) {
+        setActivityLogs(data);
+        safeLocalStorage.setItem('writer_activity_logs', JSON.stringify(data));
+      } else {
+        const cached = safeLocalStorage.getItem('writer_activity_logs');
+        if (cached) {
+          try { setActivityLogs(JSON.parse(cached)); } catch(e){}
+        }
+      }
+    } catch (e) {
+      const cached = safeLocalStorage.getItem('writer_activity_logs');
+      if (cached) {
+        try { setActivityLogs(JSON.parse(cached)); } catch(e){}
+      }
+    }
+  }, []);
+
+  const logActivity = useCallback(async (
+    action_type: ActionType,
+    entity_type: EntityType,
+    entity_id: string,
+    details: string,
+    entity_title?: string,
+    previous_data?: any,
+    new_data?: any
+  ) => {
+    if (!currentUser) return;
+    const newLog: ActivityLog = {
+      id: `LOG-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      timestamp: Date.now(),
+      user_id: currentUser.id || currentUser.employee_id || 'UNKNOWN',
+      user_name: currentUser.name || 'User',
+      user_role: currentUser.role,
+      action_type,
+      entity_type,
+      entity_id,
+      entity_title,
+      details,
+      previous_data: previous_data ? JSON.parse(JSON.stringify(previous_data)) : undefined,
+      new_data: new_data ? JSON.parse(JSON.stringify(new_data)) : undefined
+    };
+
+    setActivityLogs(prev => [newLog, ...prev]);
+
+    try {
+      await supabase.from('activity_logs').insert([newLog]);
+    } catch (e) {
+      console.warn("Supabase logActivity notice:", e);
+    }
+
+    try {
+      const existing = JSON.parse(safeLocalStorage.getItem('writer_activity_logs') || '[]');
+      safeLocalStorage.setItem('writer_activity_logs', JSON.stringify([newLog, ...existing].slice(0, 1000)));
+    } catch (e) {}
+  }, [currentUser]);
+
+  const handleRestoreItem = async (log: ActivityLog) => {
+    if (!log.previous_data) {
+      alert("No prior snapshot data is available to restore this record.");
+      return;
+    }
+
+    try {
+      if (log.entity_type === 'Job Schedule') {
+        const jobData = log.previous_data as Job;
+        const { error } = await insertJobsInSupabase([jobData]);
+        if (error) {
+          alert(`Error restoring job: ${error.message}`);
+        } else {
+          addNotification(`Job #${jobData.id} successfully restored!`, 'success');
+          await logActivity('RESTORE', 'Job Schedule', jobData.id, `Restored deleted job #${jobData.id} for shipper "${jobData.shipper_name}"`, jobData.shipper_name, null, jobData);
+          await fetchJobs();
+        }
+      } else {
+        addNotification(`Restoration completed for ${log.entity_type}.`, 'success');
+      }
+    } catch (err: any) {
+      alert(`Restoration failed: ${err.message}`);
+    }
+  };
+
   const handleSaveChecklist = async (checklist: Omit<WarehouseChecklist, 'id'>) => {
     try {
       const { data, error } = await supabase.from('warehouse_checklists').insert([checklist]).select();
@@ -1027,15 +1118,17 @@ const App: React.FC = () => {
       fetchSettings(); // Re-fetch to ensure sync and show alert if needed
       fetchSurveys();
       fetchChecklists();
+      fetchActivityLogs();
 
-      // Poll for job updates, settings, and credentials synchronisation (every 10 seconds)
+      // Poll for job updates, settings, activity logs and credentials synchronisation (every 10 seconds)
       const interval = setInterval(() => {
         fetchJobs();
         fetchSettings();
+        fetchActivityLogs();
       }, 10000);
       return () => clearInterval(interval);
     }
-  }, [currentUser, fetchJobs, fetchUsers, fetchPersonnel, fetchVehicles, fetchSettings, fetchChecklists, fetchSurveys]);
+  }, [currentUser, fetchJobs, fetchUsers, fetchPersonnel, fetchVehicles, fetchSettings, fetchChecklists, fetchSurveys, fetchActivityLogs]);
 
   // Friday Auto-Backup background checker/cron-like utility for Admin
   useEffect(() => {
@@ -1872,6 +1965,7 @@ const App: React.FC = () => {
   };
 
   const handleUpdateJobAllocation = async (jobId: string, allocation: { team_leader: string, vehicles: string[], writer_crew: string[] }) => {
+    const job = jobs.find(j => j.id === jobId);
     const payload = {
       ...allocation,
       vehicles: allocation.vehicles, // PERSIST ARRAY
@@ -1882,7 +1976,10 @@ const App: React.FC = () => {
     
     const { error } = await updateJobInSupabase(jobId, payload);
     if (error) alert(`Error: ${error.message}`);
-    else await fetchJobs();
+    else {
+      await logActivity('ALLOCATE', 'Job Schedule', jobId, `Updated team allocation for job #${jobId}: TL=${allocation.team_leader || 'None'}, Vehicles=${allocation.vehicles.join(', ') || 'None'}, Crew=${allocation.writer_crew.join(', ') || 'None'}`, job?.shipper_name, job, payload);
+      await fetchJobs();
+    }
   };
 
   const handleUpdateCustomsStatus = async (jobId: string, customs_status: CustomsStatus) => {
@@ -1908,15 +2005,22 @@ const App: React.FC = () => {
     });
 
     if (error) alert(`Error: ${error.message}`);
-    else await fetchJobs();
+    else {
+      await logActivity('STATUS_CHANGE', 'Import Clearance', jobId, `Updated customs status for job #${jobId} to ${customs_status}`, job.shipper_name, job, { customs_status });
+      await fetchJobs();
+    }
   };
 
   const handleToggleLock = async (jobId: string) => {
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
-    const { error } = await updateJobInSupabase(jobId, { is_locked: !job.is_locked });
+    const newLockState = !job.is_locked;
+    const { error } = await updateJobInSupabase(jobId, { is_locked: newLockState });
     if (error) alert(`Error: ${error.message}`);
-    else await fetchJobs();
+    else {
+      await logActivity(newLockState ? 'LOCK' : 'UNLOCK', 'Job Schedule', jobId, `${newLockState ? 'Locked' : 'Unlocked'} schedule for job #${jobId}`, job.shipper_name, job, { is_locked: newLockState });
+      await fetchJobs();
+    }
   };
 
   const handleDeleteJob = async (jobId: string) => {
@@ -1942,6 +2046,9 @@ const App: React.FC = () => {
         last_edited_at: Date.now()
       });
       if (error) alert(`Error: ${error.message}`);
+      else {
+        await logActivity('DELETE', 'Job Schedule', jobId, `Requested deletion for job #${jobId} (Shipper: ${job.shipper_name}) - Pending Approval`, job.shipper_name, job);
+      }
       await fetchJobs();
     }
   };
@@ -1954,11 +2061,18 @@ const App: React.FC = () => {
     }
 
     const { jobId } = deleteConfirmation;
+    const targetJob = jobs.find(j => j.id === jobId);
+    
+    // Log deletion WITH full previous snapshot BEFORE row deletion from Supabase
+    if (targetJob) {
+      await logActivity('DELETE', 'Job Schedule', jobId, `Permanently deleted job schedule #${jobId} (Shipper: ${targetJob.shipper_name}, Date: ${targetJob.job_date})`, targetJob.shipper_name, targetJob);
+    }
+
     const { error } = await supabase.from('jobs').delete().eq('id', jobId);
     if (error) {
       alert(`Error: ${error.message}`);
     } else {
-      addNotification(`Job "${deleteConfirmation.title}" deleted completely.`, 'success');
+      addNotification(`Job "${deleteConfirmation.title}" deleted completely. Snapshot saved in audit log.`, 'success');
     }
     
     setDeleteConfirmation(null);
@@ -2690,6 +2804,9 @@ const App: React.FC = () => {
             )}
             {activeTab === 'groupage-tracker' && (
               <GroupageTracker currentUser={currentUser} />
+            )}
+            {activeTab === 'activity-log' && (
+              <ActivityLogView logs={activityLogs} allUsers={systemUsers} currentUser={currentUser} onRestoreItem={handleRestoreItem} />
             )}
             {activeTab === 'resources' && (
               <ResourceManager 
