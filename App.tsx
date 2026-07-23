@@ -908,6 +908,7 @@ const App: React.FC = () => {
       if (data) {
         setChecklists(prev => [data[0], ...prev]);
         addNotification('Warehouse checklist saved successfully', 'success');
+        await logActivity('CREATE', 'Warehouse Checklist', data[0].id, `Filed warehouse inspection checklist for supervisor "${checklist.supervisor_name}"`, checklist.supervisor_name, null, data[0]);
       }
     } catch (err: any) {
       console.error('Error saving checklist:', err);
@@ -921,6 +922,7 @@ const App: React.FC = () => {
       if (error) throw error;
       setChecklists(prev => prev.map(cl => cl.id === id ? { ...cl, ...updates } : cl));
       addNotification('Checklist authorized successfully', 'success');
+      await logActivity('AUTHORIZE', 'Warehouse Checklist', id, `Authorized warehouse checklist #${id}`, id, null, updates);
     } catch (err: any) {
       console.error('Error updating checklist:', err);
       addNotification(err.message || 'Failed to authorize checklist', 'error');
@@ -934,6 +936,7 @@ const App: React.FC = () => {
       if (data) {
         setPatrolLogs(prev => [data[0], ...prev]);
         addNotification('Night patrol log saved successfully', 'success');
+        await logActivity('CREATE', 'Warehouse Checklist', data[0].id, `Logged night patrol check for officer "${log.officer_name}"`, log.officer_name, null, data[0]);
       }
     } catch (err: any) {
       console.error('Error saving patrol log:', err);
@@ -947,6 +950,7 @@ const App: React.FC = () => {
       if (error) throw error;
       setPatrolLogs(prev => prev.map(log => log.id === id ? { ...log, ...updates } : log));
       addNotification('Patrol log authorized successfully', 'success');
+      await logActivity('AUTHORIZE', 'Warehouse Checklist', id, `Authorized night patrol check #${id}`, id, null, updates);
     } catch (err: any) {
       console.error('Error updating patrol log:', err);
       addNotification(err.message || 'Failed to authorize patrol log', 'error');
@@ -960,6 +964,7 @@ const App: React.FC = () => {
       if (data) {
         setSafetyChecks(prev => [data[0], ...prev]);
         addNotification('Safety audit saved successfully', 'success');
+        await logActivity('CREATE', 'Warehouse Checklist', data[0].id, `Completed safety monitoring audit for auditor "${check.auditor_name}"`, check.auditor_name, null, data[0]);
       }
     } catch (err: any) {
       console.error('Error saving safety audit:', err);
@@ -973,6 +978,7 @@ const App: React.FC = () => {
       if (error) throw error;
       setSafetyChecks(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
       addNotification('Safety audit authorized successfully', 'success');
+      await logActivity('AUTHORIZE', 'Warehouse Checklist', id, `Authorized safety audit #${id}`, id, null, updates);
     } catch (err: any) {
       console.error('Error updating safety audit:', err);
       addNotification(err.message || 'Failed to authorize safety audit', 'error');
@@ -986,6 +992,7 @@ const App: React.FC = () => {
       if (data) {
         setSurpriseVisits(prev => [data[0], ...prev]);
         addNotification('Surprise visit report saved successfully', 'success');
+        await logActivity('CREATE', 'Warehouse Checklist', data[0].id, `Filed surprise visit report by "${visit.inspector_name}"`, visit.inspector_name, null, data[0]);
       }
     } catch (err: any) {
       console.error('Error saving surprise visit:', err);
@@ -999,6 +1006,7 @@ const App: React.FC = () => {
       if (error) throw error;
       setSurpriseVisits(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
       addNotification('Surprise visit report authorized successfully', 'success');
+      await logActivity('AUTHORIZE', 'Warehouse Checklist', id, `Authorized surprise visit report #${id}`, id, null, updates);
     } catch (err: any) {
       console.error('Error updating surprise visit:', err);
       addNotification(err.message || 'Failed to authorize surprise visit', 'error');
@@ -1012,6 +1020,7 @@ const App: React.FC = () => {
       if (data) {
         setDailyMonitoring(prev => [data[0], ...prev]);
         addNotification('Daily monitoring checklist saved successfully', 'success');
+        await logActivity('CREATE', 'Warehouse Checklist', data[0].id, `Filed daily monitoring checklist by "${check.inspector_name}"`, check.inspector_name, null, data[0]);
       }
     } catch (err: any) {
       console.error('Error saving daily monitoring:', err);
@@ -1025,6 +1034,7 @@ const App: React.FC = () => {
       if (error) throw error;
       setDailyMonitoring(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
       addNotification('Daily monitoring authorized successfully', 'success');
+      await logActivity('AUTHORIZE', 'Warehouse Checklist', id, `Authorized daily monitoring checklist #${id}`, id, null, updates);
     } catch (err: any) {
       console.error('Error updating daily monitoring:', err);
       addNotification(err.message || 'Failed to authorize daily monitoring', 'error');
@@ -1491,6 +1501,7 @@ const App: React.FC = () => {
       throw error;
     } else {
       addNotification('Survey booked successfully');
+      await logActivity('CREATE', 'Survey Tracker', newSurvey.id, `Booked new survey #${newSurvey.id} for client "${newSurvey.client_name}" (${newSurvey.survey_type})`, newSurvey.client_name, null, newSurvey);
       fetchSurveys();
     }
   };
@@ -1516,11 +1527,13 @@ const App: React.FC = () => {
       throw error;
     } else {
       addNotification('Survey updated successfully');
+      await logActivity('EDIT', 'Survey Tracker', survey.id, `Updated survey #${survey.id} for "${survey.client_name}" (Status: ${survey.status})`, survey.client_name, null, survey);
       fetchSurveys();
     }
   };
 
   const handleDeleteSurvey = async (id: string) => {
+    const targetSurvey = surveys.find(s => s.id === id);
     const { error } = await supabase.from('surveys').delete().eq('id', id);
     if (error) {
       console.error('Error deleting survey:', error.message);
@@ -1529,6 +1542,7 @@ const App: React.FC = () => {
       throw error;
     } else {
       addNotification('Survey deleted successfully');
+      await logActivity('DELETE', 'Survey Tracker', id, `Deleted survey record #${id} (Client: ${targetSurvey?.client_name || 'N/A'})`, targetSurvey?.client_name, targetSurvey);
       fetchSurveys();
     }
   };
@@ -1553,6 +1567,7 @@ const App: React.FC = () => {
     if (error) {
        console.log("Supabase confirm sync skipped (possible column mismatch):", error.message);
     }
+    await logActivity('STATUS_CHANGE', 'Job Schedule', jobId, `Marked job #${jobId} as ${isConfirmed ? 'Confirmed' : 'Not Confirmed'}`, targetJob.shipper_name, targetJob, { is_confirmed: isConfirmed });
     addNotification(`Job ${jobId} marked as ${isConfirmed ? 'Confirmed' : 'Not Confirmed'}.`, 'success');
   };
 
@@ -1819,6 +1834,7 @@ const App: React.FC = () => {
       await insertJobsInSupabase(jobsToCreate);
     }
 
+    await logActivity('EDIT', 'Job Schedule', currentTargetId, `Updated job schedule #${currentTargetId} for shipper "${job.shipper_name}"`, job.shipper_name, oldJob, job);
     await fetchJobs();
   };
 
@@ -1956,6 +1972,9 @@ const App: React.FC = () => {
         alert(`Error: ${error.message}`);
       }
     } else {
+      for (const createdJob of jobsToCreate) {
+        await logActivity('CREATE', 'Job Schedule', createdJob.id, `Created job schedule #${createdJob.id} for shipper "${createdJob.shipper_name}" (${createdJob.job_date})`, createdJob.shipper_name, null, createdJob);
+      }
       await fetchJobs();
       if (duration > 1) {
         const sundayMsg = job.sunday_handling === 'Include' ? "including Sunday" : "skipping Sunday";
@@ -2103,11 +2122,32 @@ const App: React.FC = () => {
 
       const { error } = await updateJobInSupabase(jobId, payload);
       if (error) alert(`Error: ${error.message}`);
+      else {
+        await logActivity(
+          approved ? 'APPROVE' : 'REJECT',
+          'Job Schedule',
+          jobId,
+          `${approved ? 'Approved' : 'Rejected'} new job schedule #${jobId} (Shipper: ${job.shipper_name})`,
+          job.shipper_name,
+          job,
+          payload
+        );
+      }
     }
     if (job.status === JobStatus.PENDING_DELETE) {
       if (approved) {
         const { error } = await supabase.from('jobs').delete().eq('id', jobId);
         if (error) alert(`Error: ${error.message}`);
+        else {
+          await logActivity(
+            'APPROVE',
+            'Job Schedule',
+            jobId,
+            `Approved deletion request for job #${jobId} (Shipper: ${job.shipper_name})`,
+            job.shipper_name,
+            job
+          );
+        }
       } else {
         const { error } = await updateJobInSupabase(jobId, { 
           status: JobStatus.ACTIVE,
@@ -2115,6 +2155,16 @@ const App: React.FC = () => {
           last_edited_at: Date.now()
         });
         if (error) alert(`Error: ${error.message}`);
+        else {
+          await logActivity(
+            'REJECT',
+            'Job Schedule',
+            jobId,
+            `Rejected deletion request for job #${jobId} (Shipper: ${job.shipper_name})`,
+            job.shipper_name,
+            job
+          );
+        }
       }
     }
     await fetchJobs();
@@ -2124,7 +2174,10 @@ const App: React.FC = () => {
     const newLimits = { ...settings.daily_job_limits, [date]: limit };
     const { error } = await supabase.from('system_settings').update({ daily_job_limits: newLimits }).eq('id', 1);
     if (error) alert(`Error: ${error.message}`);
-    else await fetchSettings();
+    else {
+      await logActivity('EDIT', 'Capacity Settings', date, `Set daily job capacity limit for ${date} to ${limit}`, date);
+      await fetchSettings();
+    }
   };
 
   const handleToggleHoliday = async (date: string) => {
@@ -2135,13 +2188,19 @@ const App: React.FC = () => {
     
     const { error } = await supabase.from('system_settings').update({ holidays: newHolidays, daily_job_limits: newLimits }).eq('id', 1);
     if (error) alert(`Error: ${error.message}`);
-    else await fetchSettings();
+    else {
+      await logActivity('EDIT', 'Capacity Settings', date, `${isHoliday ? 'Removed' : 'Added'} holiday override on ${date}`, date);
+      await fetchSettings();
+    }
   };
 
   const handleUpdateLogo = async (base64: string) => {
     const { error } = await supabase.from('system_settings').update({ company_logo: base64 }).eq('id', 1);
     if (error) alert(`Error updating logo: ${error.message}`);
-    else await fetchSettings();
+    else {
+      await logActivity('EDIT', 'System Settings', 'logo', 'Updated company logo brand branding');
+      await fetchSettings();
+    }
   };
 
   const handleUpdateSystemAlert = async (alertData: SystemSettings['system_alert']) => {
@@ -2149,15 +2208,20 @@ const App: React.FC = () => {
     if (error) {
       alert(`Error updating system alert: ${error.message}`);
     } else {
+      await logActivity('EDIT', 'System Settings', 'system_alert', `Updated global banner alert: "${alertData.title}" (${alertData.active ? 'Active' : 'Inactive'})`);
       await fetchSettings();
       alert("System Alert Updated Successfully.");
     }
   };
 
   const handleUpdatePersonnelStatus = async (id: string, status: Personnel['status']) => {
+    const targetPerson = personnel.find(p => p.id === id);
     const { error } = await supabase.from('personnel').update({ status }).eq('id', id);
     if (error) alert(`Error: ${error.message}`);
-    else await fetchPersonnel();
+    else {
+      await logActivity('STATUS_CHANGE', 'Fleet & Crew', id, `Updated duty status to "${status}" for crew member ${targetPerson?.name || id}`, targetPerson?.name);
+      await fetchPersonnel();
+    }
   };
 
   const handleAddPersonnel = async (person: Omit<Personnel, 'id'>) => {
@@ -2176,6 +2240,7 @@ const App: React.FC = () => {
         alert(`Error: ${error.message}`);
       }
     } else {
+      await logActivity('CREATE', 'Fleet & Crew', sanitizedPerson.employee_id || sanitizedPerson.name, `Added crew member ${sanitizedPerson.name} (${sanitizedPerson.type})`, sanitizedPerson.name, null, sanitizedPerson);
       await fetchPersonnel();
     }
   };
@@ -2198,13 +2263,20 @@ const App: React.FC = () => {
     }).eq('id', sanitizedPerson.id);
 
     if (error) alert(`Error updating personnel: ${error.message}`);
-    else await fetchPersonnel();
+    else {
+      await logActivity('EDIT', 'Fleet & Crew', sanitizedPerson.id, `Updated crew member details for ${sanitizedPerson.name}`, sanitizedPerson.name, null, sanitizedPerson);
+      await fetchPersonnel();
+    }
   };
   
   const handleUpdateVehicleStatus = async (id: string, status: Vehicle['status']) => {
+     const targetVehicle = vehicles.find(v => v.id === id);
      const { error } = await supabase.from('vehicles').update({ status }).eq('id', id);
     if (error) alert(`Error: ${error.message}`);
-    else await fetchVehicles();
+    else {
+      await logActivity('STATUS_CHANGE', 'Fleet & Crew', id, `Updated vehicle status to "${status}" for ${targetVehicle?.name || id}`, targetVehicle?.name);
+      await fetchVehicles();
+    }
   };
 
   const handleAddVehicle = async (vehicle: Omit<Vehicle, 'id'>) => {
@@ -2216,6 +2288,7 @@ const App: React.FC = () => {
         alert(`Error: ${error.message}`);
       }
     } else {
+      await logActivity('CREATE', 'Fleet & Crew', vehicle.plate || vehicle.name, `Added fleet vehicle ${vehicle.name} (${vehicle.plate})`, vehicle.name, null, vehicle);
       await fetchVehicles();
     }
   };
@@ -2228,19 +2301,30 @@ const App: React.FC = () => {
      }).eq('id', vehicle.id);
      
      if (error) alert(`Error updating vehicle: ${error.message}`);
-     else await fetchVehicles();
+     else {
+       await logActivity('EDIT', 'Fleet & Crew', vehicle.id, `Updated vehicle details for ${vehicle.name} (${vehicle.plate})`, vehicle.name, null, vehicle);
+       await fetchVehicles();
+     }
   };
 
   const handleDeletePersonnel = async (id: string) => {
+    const targetPerson = personnel.find(p => p.id === id);
     const { error } = await supabase.from('personnel').delete().eq('id', id);
     if (error) alert(`Error: ${error.message}`);
-    else await fetchPersonnel();
+    else {
+      await logActivity('DELETE', 'Fleet & Crew', id, `Removed crew member ${targetPerson?.name || id}`, targetPerson?.name, targetPerson);
+      await fetchPersonnel();
+    }
   };
 
   const handleDeleteVehicle = async (id: string) => {
+    const targetVehicle = vehicles.find(v => v.id === id);
     const { error } = await supabase.from('vehicles').delete().eq('id', id);
     if (error) alert(`Error: ${error.message}`);
-    else await fetchVehicles();
+    else {
+      await logActivity('DELETE', 'Fleet & Crew', id, `Removed vehicle ${targetVehicle?.name || id}`, targetVehicle?.name, targetVehicle);
+      await fetchVehicles();
+    }
   };
 
   const handleDeleteUser = async (id: string) => {
@@ -2248,15 +2332,19 @@ const App: React.FC = () => {
        addNotification('You cannot delete your own active administrator account.', 'warning');
        return;
     }
+    const targetUser = allCredentials.find(u => u.profile.id === id);
     const newList = allCredentials.filter(u => u.profile.id !== id);
     await updateAndSaveCredentials(newList);
+    await logActivity('DELETE', 'User Access', id, `Deleted user account for ${targetUser?.profile?.name || id}`, targetUser?.profile?.name, targetUser?.profile);
     addNotification('User account deleted successfully.', 'success');
   };
 
   const handleUpdateUserStatus = async (id: string, status: 'Active' | 'Disabled') => {
+    const targetUser = allCredentials.find(u => u.profile.id === id);
     // Update local state for credentials and sync immediately
     const newList = allCredentials.map(u => u.profile.id === id ? { ...u, profile: { ...u.profile, status } } : u);
     await updateAndSaveCredentials(newList);
+    await logActivity('STATUS_CHANGE', 'User Access', id, `Set account status to ${status} for user ${targetUser?.profile?.name || id}`, targetUser?.profile?.name);
   };
 
   const handleUpdateUser = async (updatedUser: UserProfile) => {
@@ -2276,6 +2364,7 @@ const App: React.FC = () => {
         return u;
     });
     await updateAndSaveCredentials(newList);
+    await logActivity('EDIT', 'User Access', updatedUser.id, `Updated user profile/permissions for ${updatedUser.name}`, updatedUser.name, null, updatedUser);
 
     // If we're updating the currently logged in user, refresh their session data too
     if (currentUser && currentUser.id === updatedUser.id) {
@@ -2307,6 +2396,7 @@ const App: React.FC = () => {
      
      const newList = [...allCredentials, newMockUser];
      await updateAndSaveCredentials(newList);
+     await logActivity('CREATE', 'User Access', newMockUser.profile.id, `Created new system user account for ${newUser.name} (${newUser.role})`, newUser.name, null, newMockUser.profile);
      alert(`Account created for ${newUser.name}. Login: ${newUser.username} / ${newUser.password}`);
   };
   
@@ -2803,7 +2893,7 @@ const App: React.FC = () => {
               />
             )}
             {activeTab === 'groupage-tracker' && (
-              <GroupageTracker currentUser={currentUser} />
+              <GroupageTracker currentUser={currentUser} onLogActivity={logActivity} />
             )}
             {activeTab === 'activity-log' && (
               <ActivityLogView logs={activityLogs} allUsers={systemUsers} currentUser={currentUser} onRestoreItem={handleRestoreItem} />

@@ -70,7 +70,7 @@ const WRITER_ACCESS = {
   transporter: false,
   ai: false,
   groupageTracker: true,
-  activityLog: false,
+  activityLog: true,
 };
 
 const SENIOR_OPS_ACCESS = {
@@ -114,7 +114,7 @@ const SANTOSH_ACCESS = {
   transporter: false,
   ai: false,
   groupageTracker: false,
-  activityLog: false,
+  activityLog: true,
 };
 
 const SEMI_ADMIN_ACCESS = {
@@ -180,7 +180,7 @@ const SECURITY_ONLY_ACCESS = {
   transporter: false,
   ai: false,
   groupageTracker: false,
-  activityLog: false,
+  activityLog: true,
 };
 
 export const USERS: MockUser[] = [

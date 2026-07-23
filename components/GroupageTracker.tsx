@@ -14,6 +14,15 @@ const localStorage = safeLocalStorage;
 
 interface GroupageTrackerProps {
   currentUser: UserProfile;
+  onLogActivity?: (
+    action_type: any,
+    entity_type: any,
+    entity_id: string,
+    details: string,
+    entity_title?: string,
+    previous_data?: any,
+    new_data?: any
+  ) => void;
 }
 
 export interface ShipperEntry {
@@ -47,7 +56,7 @@ export interface ContainerBooking {
   estimated_departure_date?: string;
 }
 
-export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser }) => {
+export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser, onLogActivity }) => {
   const [shipperEntries, setShipperEntries] = useState<ShipperEntry[]>([]);
   const [containerBookings, setContainerBookings] = useState<ContainerBooking[]>([]);
   const [loading, setLoading] = useState(false);
@@ -404,6 +413,11 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
         packing_date: '',
         quote_amount: '',
       });
+      if (editingEntryId) {
+        onLogActivity?.('EDIT', 'Groupage Tracker', editingEntryId, `Updated shipper cargo entry for "${itemData.shipper_name}" (${itemData.volume_cbm} CBM, Quote: ${itemData.quote_amount ? '$' + itemData.quote_amount : 'N/A'})`, itemData.shipper_name, null, itemData);
+      } else {
+        onLogActivity?.('CREATE', 'Groupage Tracker', itemData.id, `Created shipper cargo entry for "${itemData.shipper_name}" (${itemData.volume_cbm} CBM, Quote: ${itemData.quote_amount ? '$' + itemData.quote_amount : 'N/A'})`, itemData.shipper_name, null, itemData);
+      }
       fetchData();
     } catch (err: any) {
       alert(`Error saving shipper entry: ${err.message}`);
@@ -460,6 +474,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
             localStorage.setItem('writer_groupage_shippers', JSON.stringify(updated));
             setShipperEntries(updated);
           }
+          onLogActivity?.('DELETE', 'Groupage Tracker', id, `Deleted shipper cargo entry for "${target.shipper_name}" (${target.volume_cbm} CBM)`, target.shipper_name, target);
           fetchData();
         } catch (err: any) {
           alert(`Error deleting: ${err.message}`);
@@ -570,6 +585,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser })
       setDestinationCountry('');
       setSelectedShipperIds([]);
       setShowWarning(false);
+      onLogActivity?.('CREATE', 'Groupage Tracker', bookingId, `Consolidated ${containerType} container booking to ${destinationCity}, ${destinationCountry} (${selectedShipperIds.length} shippers, ${totalSelectedVolume} CBM)`, `${containerType} - ${destinationCity}`);
       alert(`Success! Container consolidated successfully with ${selectedShipperIds.length} shipper groups, total volume ${totalSelectedVolume} CBM.`);
       fetchData();
     } catch (err: any) {

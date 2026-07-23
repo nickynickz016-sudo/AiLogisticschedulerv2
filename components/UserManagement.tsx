@@ -40,7 +40,7 @@ const DEFAULT_PERMISSIONS: UserPermissions = {
   transporter: false,
   ai: false,
   groupageTracker: true,
-  activityLog: false,
+  activityLog: true,
 };
 
 const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
