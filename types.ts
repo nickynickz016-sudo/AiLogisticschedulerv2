@@ -62,12 +62,14 @@ export interface UserPermissions {
 export type ActionType = 
   | 'CREATE' 
   | 'UPDATE' 
+  | 'EDIT'
   | 'DELETE' 
   | 'ALLOCATE' 
   | 'LOCK' 
   | 'UNLOCK' 
   | 'APPROVE' 
   | 'REJECT' 
+  | 'AUTHORIZE'
   | 'STATUS_CHANGE'
   | 'RESTORE';
 
@@ -75,11 +77,15 @@ export type EntityType =
   | 'Job Schedule' 
   | 'Groupage Tracker' 
   | 'Survey' 
+  | 'Survey Tracker'
   | 'Fleet & Crew' 
   | 'Warehouse' 
+  | 'Warehouse Checklist'
   | 'Import Clearance' 
   | 'User Management' 
+  | 'User Access'
   | 'Inventory'
+  | 'Capacity Settings'
   | 'System Settings';
 
 export interface ActivityLog {

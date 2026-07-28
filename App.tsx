@@ -908,7 +908,7 @@ const App: React.FC = () => {
       if (data) {
         setChecklists(prev => [data[0], ...prev]);
         addNotification('Warehouse checklist saved successfully', 'success');
-        await logActivity('CREATE', 'Warehouse Checklist', data[0].id, `Filed warehouse inspection checklist for supervisor "${checklist.supervisor_name}"`, checklist.supervisor_name, null, data[0]);
+        await logActivity('CREATE', 'Warehouse Checklist', data[0].id, `Filed warehouse inspection checklist for guard "${checklist.security_guard_name || checklist.submitted_by}"`, checklist.security_guard_name || checklist.submitted_by, null, data[0]);
       }
     } catch (err: any) {
       console.error('Error saving checklist:', err);
@@ -936,7 +936,7 @@ const App: React.FC = () => {
       if (data) {
         setPatrolLogs(prev => [data[0], ...prev]);
         addNotification('Night patrol log saved successfully', 'success');
-        await logActivity('CREATE', 'Warehouse Checklist', data[0].id, `Logged night patrol check for officer "${log.officer_name}"`, log.officer_name, null, data[0]);
+        await logActivity('CREATE', 'Warehouse Checklist', data[0].id, `Logged night patrol check for officer "${log.security_guard_name || log.submitted_by}"`, log.security_guard_name || log.submitted_by, null, data[0]);
       }
     } catch (err: any) {
       console.error('Error saving patrol log:', err);
@@ -964,7 +964,7 @@ const App: React.FC = () => {
       if (data) {
         setSafetyChecks(prev => [data[0], ...prev]);
         addNotification('Safety audit saved successfully', 'success');
-        await logActivity('CREATE', 'Warehouse Checklist', data[0].id, `Completed safety monitoring audit for auditor "${check.auditor_name}"`, check.auditor_name, null, data[0]);
+        await logActivity('CREATE', 'Warehouse Checklist', data[0].id, `Completed safety monitoring audit for auditor "${check.security_guard_name || check.submitted_by}"`, check.security_guard_name || check.submitted_by, null, data[0]);
       }
     } catch (err: any) {
       console.error('Error saving safety audit:', err);
@@ -992,7 +992,7 @@ const App: React.FC = () => {
       if (data) {
         setSurpriseVisits(prev => [data[0], ...prev]);
         addNotification('Surprise visit report saved successfully', 'success');
-        await logActivity('CREATE', 'Warehouse Checklist', data[0].id, `Filed surprise visit report by "${visit.inspector_name}"`, visit.inspector_name, null, data[0]);
+        await logActivity('CREATE', 'Warehouse Checklist', data[0].id, `Filed surprise visit report by "${visit.security_guard_name || visit.submitted_by}"`, visit.security_guard_name || visit.submitted_by, null, data[0]);
       }
     } catch (err: any) {
       console.error('Error saving surprise visit:', err);
@@ -1020,7 +1020,7 @@ const App: React.FC = () => {
       if (data) {
         setDailyMonitoring(prev => [data[0], ...prev]);
         addNotification('Daily monitoring checklist saved successfully', 'success');
-        await logActivity('CREATE', 'Warehouse Checklist', data[0].id, `Filed daily monitoring checklist by "${check.inspector_name}"`, check.inspector_name, null, data[0]);
+        await logActivity('CREATE', 'Warehouse Checklist', data[0].id, `Filed daily monitoring checklist by "${check.security_guard_name || check.submitted_by}"`, check.security_guard_name || check.submitted_by, null, data[0]);
       }
     } catch (err: any) {
       console.error('Error saving daily monitoring:', err);
@@ -1501,7 +1501,7 @@ const App: React.FC = () => {
       throw error;
     } else {
       addNotification('Survey booked successfully');
-      await logActivity('CREATE', 'Survey Tracker', newSurvey.id, `Booked new survey #${newSurvey.id} for client "${newSurvey.client_name}" (${newSurvey.survey_type})`, newSurvey.client_name, null, newSurvey);
+      await logActivity('CREATE', 'Survey Tracker', newSurvey.id, `Booked new survey #${newSurvey.id} for client "${newSurvey.shipper_name}" (${newSurvey.survey_type})`, newSurvey.shipper_name, null, newSurvey);
       fetchSurveys();
     }
   };
@@ -1527,7 +1527,7 @@ const App: React.FC = () => {
       throw error;
     } else {
       addNotification('Survey updated successfully');
-      await logActivity('EDIT', 'Survey Tracker', survey.id, `Updated survey #${survey.id} for "${survey.client_name}" (Status: ${survey.status})`, survey.client_name, null, survey);
+      await logActivity('EDIT', 'Survey Tracker', survey.id, `Updated survey #${survey.id} for "${survey.shipper_name}" (Status: ${survey.status})`, survey.shipper_name, null, survey);
       fetchSurveys();
     }
   };
@@ -1542,7 +1542,7 @@ const App: React.FC = () => {
       throw error;
     } else {
       addNotification('Survey deleted successfully');
-      await logActivity('DELETE', 'Survey Tracker', id, `Deleted survey record #${id} (Client: ${targetSurvey?.client_name || 'N/A'})`, targetSurvey?.client_name, targetSurvey);
+      await logActivity('DELETE', 'Survey Tracker', id, `Deleted survey record #${id} (Client: ${targetSurvey?.shipper_name || 'N/A'})`, targetSurvey?.shipper_name, targetSurvey);
       fetchSurveys();
     }
   };
