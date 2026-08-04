@@ -644,6 +644,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser, o
             setContainerBookings(updatedBookings);
             setShipperEntries(updatedShippers);
           }
+          onLogActivity?.('DELETE', 'Groupage Tracker', booking.id, `Disbanded container booking #${booking.id} (${booking.container_type} to ${booking.destination_city}, ${booking.destination_country})`, `${booking.container_type} - ${booking.destination_city}`, booking);
           alert(`Booking ${booking.id} disbanded successfully.`);
           fetchData();
         } catch (err: any) {
@@ -687,6 +688,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser, o
             localStorage.setItem('writer_groupage_shippers', JSON.stringify(updatedShippers));
             setShipperEntries(updatedShippers);
           }
+          onLogActivity?.('UPDATE', 'Groupage Tracker', shipperId, `Removed shipper shipment "${targetShipper.shipper_name}" from container booking #${bookingId}`, targetShipper.shipper_name, targetShipper);
           alert(`Success! Removed "${targetShipper.shipper_name}" from consolidation.`);
           fetchData();
         } catch (err: any) {

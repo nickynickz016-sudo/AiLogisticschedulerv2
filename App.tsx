@@ -844,15 +844,17 @@ const App: React.FC = () => {
     details: string,
     entity_title?: string,
     previous_data?: any,
-    new_data?: any
+    new_data?: any,
+    overrideUser?: UserProfile
   ) => {
-    if (!currentUser) return;
+    const activeUser = overrideUser || currentUser;
+    if (!activeUser) return;
     const newLog: ActivityLog = {
       id: `LOG-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       timestamp: Date.now(),
-      user_id: currentUser.id || currentUser.employee_id || 'UNKNOWN',
-      user_name: currentUser.name || 'User',
-      user_role: currentUser.role,
+      user_id: activeUser.id || activeUser.employee_id || 'UNKNOWN',
+      user_name: activeUser.name || 'User',
+      user_role: activeUser.role,
       action_type,
       entity_type,
       entity_id,
@@ -2439,6 +2441,19 @@ const App: React.FC = () => {
       safeLocalStorage.setItem('writer_system_users', JSON.stringify(latestUsers));
     }
     setCurrentUser(user);
+
+    // Synchronize & record login event into centralized audit log
+    logActivity(
+      'STATUS_CHANGE', 
+      'User Access', 
+      user.id || user.employee_id || 'LOGIN', 
+      `User "${user.name}" (${user.role} - ID: ${user.employee_id || user.id}) logged into the system.`,
+      user.name,
+      null,
+      null,
+      user
+    );
+
     // Reset active tab to a safe default if current default isn't allowed
     if (user.role !== UserRole.ADMIN && (!user.permissions || !user.permissions.dashboard)) {
         // Find first allowed tab
@@ -2475,6 +2490,15 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
+    if (currentUser) {
+      logActivity(
+        'STATUS_CHANGE',
+        'User Access',
+        currentUser.id || currentUser.employee_id || 'LOGOUT',
+        `User "${currentUser.name}" logged out of the system.`,
+        currentUser.name
+      );
+    }
     setCurrentUser(null);
   };
 
@@ -2876,7 +2900,7 @@ const App: React.FC = () => {
               <Inventory 
                 jobs={jobs} 
                 logo={settings.company_logo} 
-                isReadOnly={currentUser.role !== UserRole.ADMIN} // Only full Admins can edit inventory
+                isReadOnly={currentUser.role !== UserRole.ADMIN && currentUser.employee_id !== 'OPS-ADMIN-01'} // Full Admins or OPS-ADMIN-01 can edit inventory
                 onlyFinalAssessment={restrictedCostingUsers.includes(currentUser.employee_id)} // Restrict costing view for specific users
               />
             )}
