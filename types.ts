@@ -172,6 +172,8 @@ export interface Personnel {
   status: 'Available' | 'Annual Leave' | 'Sick Leave' | 'Personal Leave';
   emirates_id: string; // Mandatory
   license_number?: string; // Optional, specific for Drivers
+  is_outsource?: boolean;
+  vendor_name?: string;
 }
 
 export interface Vehicle {
@@ -179,6 +181,8 @@ export interface Vehicle {
   name: string;
   plate: string; // Mandatory
   status: 'Available' | 'Out of Service' | 'Maintenance';
+  is_outsource?: boolean;
+  vendor_name?: string;
 }
 
 export interface TrackingStepDetails {
@@ -652,6 +656,8 @@ export interface SurpriseVisitChecklist {
 
 export interface SystemSettings {
   daily_job_limits: Record<string, number>; // date -> max jobs
+  warehouse_daily_job_limits?: Record<string, number>; // date -> max warehouse jobs (5 to 10)
+  warehouse_default_capacity?: number; // default max warehouse jobs (default 10, min 5)
   holidays: string[]; // array of ISO date strings (YYYY-MM-DD)
   company_logo?: string; // Base64 string of the logo
   system_alert?: {

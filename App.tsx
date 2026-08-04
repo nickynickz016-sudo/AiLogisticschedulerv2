@@ -151,6 +151,7 @@ const App: React.FC = () => {
   });
   const [isNavigationLocked, setIsNavigationLocked] = useState(false);
   const [preloadPackingSurvey, setPreloadPackingSurvey] = useState<any>(null);
+  const [costingJobId, setCostingJobId] = useState<string | undefined>(undefined);
   
   // Local state for app data, fetched from Supabase
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -1050,8 +1051,12 @@ const App: React.FC = () => {
         const { data, error } = await supabase.from('system_settings').select('*').eq('id', 1).single();
          
         if (data) {
+          const whLimits = data.daily_job_limits?.__warehouse_limits || data.warehouse_daily_job_limits || {};
+          const whDefault = data.daily_job_limits?.__warehouse_default || data.warehouse_default_capacity || 10;
           const settingsData = {
             daily_job_limits: data.daily_job_limits || {},
+            warehouse_daily_job_limits: whLimits,
+            warehouse_default_capacity: whDefault,
             holidays: data.holidays || [],
             company_logo: data.company_logo || undefined,
             system_alert: data.system_alert || { active: false, title: '', message: '', type: 'info' }
@@ -2182,6 +2187,40 @@ const App: React.FC = () => {
     }
   };
 
+  const handleSetWarehouseLimit = async (date: string, limit: number) => {
+    // Clamp capacity between 5 and 10 per day
+    const clampedLimit = Math.min(10, Math.max(5, limit));
+    const currentWhLimits = settings.warehouse_daily_job_limits || {};
+    const updatedWhLimits = { ...currentWhLimits, [date]: clampedLimit };
+    
+    const updatedDailyLimits = {
+      ...(settings.daily_job_limits || {}),
+      __warehouse_limits: updatedWhLimits
+    };
+
+    const { error } = await supabase.from('system_settings').update({ daily_job_limits: updatedDailyLimits }).eq('id', 1);
+    if (error) alert(`Error updating warehouse capacity: ${error.message}`);
+    else {
+      await logActivity('EDIT', 'Capacity Settings', date, `Set warehouse daily job capacity for ${date} to ${clampedLimit} (Min 5, Max 10)`, date);
+      await fetchSettings();
+    }
+  };
+
+  const handleSetWarehouseDefaultCapacity = async (capacity: number) => {
+    const clamped = Math.min(10, Math.max(5, capacity));
+    const updatedDailyLimits = {
+      ...(settings.daily_job_limits || {}),
+      __warehouse_default: clamped
+    };
+
+    const { error } = await supabase.from('system_settings').update({ daily_job_limits: updatedDailyLimits }).eq('id', 1);
+    if (error) alert(`Error updating default warehouse capacity: ${error.message}`);
+    else {
+      await logActivity('EDIT', 'Capacity Settings', 'warehouse_default', `Set default warehouse daily capacity to ${clamped} (Min 5, Max 10)`);
+      await fetchSettings();
+    }
+  };
+
   const handleToggleHoliday = async (date: string) => {
     const isHoliday = settings.holidays.includes(date);
     const newHolidays = isHoliday ? settings.holidays.filter(h => h !== date) : [...settings.holidays, date];
@@ -2261,7 +2300,9 @@ const App: React.FC = () => {
         employee_id: sanitizedPerson.employee_id,
         emirates_id: sanitizedPerson.emirates_id,
         license_number: sanitizedPerson.license_number,
-        status: sanitizedPerson.status
+        status: sanitizedPerson.status,
+        is_outsource: sanitizedPerson.is_outsource || false,
+        vendor_name: sanitizedPerson.vendor_name || null
     }).eq('id', sanitizedPerson.id);
 
     if (error) alert(`Error updating personnel: ${error.message}`);
@@ -2299,7 +2340,9 @@ const App: React.FC = () => {
      const { error } = await supabase.from('vehicles').update({
         name: vehicle.name,
         plate: vehicle.plate,
-        status: vehicle.status
+        status: vehicle.status,
+        is_outsource: vehicle.is_outsource || false,
+        vendor_name: vehicle.vendor_name || null
      }).eq('id', vehicle.id);
      
      if (error) alert(`Error updating vehicle: ${error.message}`);
@@ -2814,6 +2857,12 @@ const App: React.FC = () => {
                 personnel={personnel}
                 vehicles={vehicles}
                 users={systemUsers}
+                settings={settings}
+                onSetWarehouseLimit={handleSetWarehouseLimit}
+                onOpenCosting={(jobId) => {
+                  setCostingJobId(jobId);
+                  setActiveTab('inventory');
+                }}
               />
             )}
             {activeTab === 'import-clearance' && (
@@ -2899,9 +2948,11 @@ const App: React.FC = () => {
             {activeTab === 'inventory' && (
               <Inventory 
                 jobs={jobs} 
+                users={systemUsers}
                 logo={settings.company_logo} 
                 isReadOnly={currentUser.role !== UserRole.ADMIN && currentUser.employee_id !== 'OPS-ADMIN-01'} // Full Admins or OPS-ADMIN-01 can edit inventory
                 onlyFinalAssessment={restrictedCostingUsers.includes(currentUser.employee_id)} // Restrict costing view for specific users
+                initialSelectedJobId={costingJobId}
               />
             )}
             {activeTab === 'tracking' && <TrackingView jobs={jobs} onUpdateJob={handleUpdateJob} logo={settings.company_logo} />}
@@ -2941,6 +2992,8 @@ const App: React.FC = () => {
               <CapacityManager 
                 settings={settings}
                 onSetLimit={handleSetLimit}
+                onSetWarehouseLimit={handleSetWarehouseLimit}
+                onSetWarehouseDefaultCapacity={handleSetWarehouseDefaultCapacity}
                 onToggleHoliday={handleToggleHoliday}
                 isAdmin={currentUser.role === UserRole.ADMIN}
               />

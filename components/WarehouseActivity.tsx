@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { getUAEToday } from '../utils';
-import { Job, JobStatus, UserProfile, Personnel, Vehicle, UserRole } from '../types';
-import { Plus, X, Box, User, Clock, AlertCircle, Info, Calendar, RefreshCw, ChevronLeft, ChevronRight, Activity, LayoutList, CalendarDays, Edit2, Truck, Users, ArrowRight, FileDown } from 'lucide-react';
+import { Job, JobStatus, UserProfile, Personnel, Vehicle, UserRole, SystemSettings } from '../types';
+import { Plus, X, Box, User, Clock, AlertCircle, Info, Calendar, RefreshCw, ChevronLeft, ChevronRight, Activity, LayoutList, CalendarDays, Edit2, Truck, Users, ArrowRight, FileDown, Sliders, Calculator } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -15,6 +15,9 @@ interface WarehouseActivityProps {
   personnel?: Personnel[];
   vehicles?: Vehicle[];
   users?: UserProfile[];
+  settings?: SystemSettings;
+  onSetWarehouseLimit?: (date: string, limit: number) => void;
+  onOpenCosting?: (jobId: string) => void;
 }
 
 // Helper to get UAE date string YYYY-MM-DD
@@ -28,7 +31,10 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
   currentUser, 
   personnel = [], 
   vehicles = [], 
-  users = [] 
+  users = [],
+  settings,
+  onSetWarehouseLimit,
+  onOpenCosting
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -57,13 +63,21 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
       }
   }, [selectedDate, isEditing, showModal]);
 
+  // Capacity calculation
+  const isHoliday = settings?.holidays?.includes(selectedDate);
+  const dateWhLimit = settings?.warehouse_daily_job_limits?.[selectedDate];
+  const defaultWhCapacity = settings?.warehouse_default_capacity ?? 10;
+  const rawWhCapacity = dateWhLimit !== undefined ? dateWhLimit : defaultWhCapacity;
+  // Warehouse area capacity maximum 10 jobs/day, lowest adjustable to 5 jobs/day (0 if holiday)
+  const whCapacity = isHoliday ? 0 : Math.min(10, Math.max(5, rawWhCapacity));
+
   const dailyActivities = jobs.filter(j => j.is_warehouse_activity && j.job_date === selectedDate);
-  const slotsRemaining = 5 - dailyActivities.length;
+  const slotsRemaining = isHoliday ? 0 : Math.max(0, whCapacity - dailyActivities.length);
 
   const canManageWarehouse = currentUser.role === UserRole.ADMIN || currentUser.employee_id === 'OPS-ADMIN-01';
 
   const handleDownloadPDF = () => {
-    const doc = new jsPDF();
+    const doc = new jsPDF({ orientation: 'landscape' });
     
     // Add title
     doc.setFontSize(18);
@@ -76,12 +90,27 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
     // Prepare table data
     const tableData = dailyActivities.map(activity => {
         const requester = users ? users.find(u => u.employee_id === activity.requester_id) : null;
+        
+        const allVehicles: string[] = activity.vehicles && activity.vehicles.length > 0
+          ? activity.vehicles
+          : (activity.vehicle ? activity.vehicle.split(',').map(v => v.trim()).filter(Boolean) : []);
+        
+        const buses = allVehicles.filter(v => /bus/i.test(v));
+        const trucks = allVehicles.filter(v => !/bus/i.test(v));
+
+        const crewAssigned = activity.writer_crew && activity.writer_crew.length > 0 ? activity.writer_crew.join(', ') : '-';
+        const busAssigned = buses.length > 0 ? buses.join(', ') : '-';
+        const truckAssigned = trucks.length > 0 ? trucks.join(', ') : '-';
+
         return [
             activity.id,
             activity.job_date,
             activity.shipper_name,
             activity.activity_name || '-',
             activity.team_leader || '-',
+            crewAssigned,
+            busAssigned,
+            truckAssigned,
             requester ? requester.name : activity.requester_id,
             activity.status
         ];
@@ -89,10 +118,10 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
 
     // Add table
     autoTable(doc, {
-        head: [['Unit ID', 'Date', 'Shipper', 'Activity', 'Team Leader', 'Requested By', 'Status']],
+        head: [['Unit ID', 'Date', 'Shipper', 'Activity', 'Team Leader', 'Crew Assigned', 'Bus Assigned', 'Truck Assigned', 'Requested By', 'Status']],
         body: tableData,
         startY: 40,
-        styles: { fontSize: 9 },
+        styles: { fontSize: 8 },
         headStyles: { fillColor: [37, 99, 235] } // Blue-600
     });
 
@@ -301,7 +330,11 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
                 </button>
             </div>
             <div className="px-4 py-2 bg-slate-900 border border-slate-800 rounded-xl text-center md:text-right flex-1 md:flex-none">
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest text-center">Remaining</p>
+                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest text-center">Booked</p>
+                <p className="text-sm font-black text-white leading-none mt-0.5">{dailyActivities.length} / {whCapacity} Jobs</p>
+            </div>
+            <div className="px-4 py-2 bg-blue-600 border border-blue-500 rounded-xl text-center md:text-right flex-1 md:flex-none">
+                <p className="text-[8px] font-black text-blue-100 uppercase tracking-widest text-center">Remaining</p>
                 <p className="text-sm font-black text-white leading-none mt-0.5">{slotsRemaining} Slots</p>
             </div>
         </div>
@@ -328,6 +361,71 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
                 <button onClick={handleNextDate} className="p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-all text-slate-500 shadow-sm"><ChevronRight className="w-5 h-4" /></button>
             </div>
           </div>
+
+          {/* Admin Capacity Setting Widget */}
+          {canManageWarehouse && onSetWarehouseLimit && (
+            <div className="bg-white p-5 md:p-6 rounded-[2rem] border border-blue-100 shadow-sm relative overflow-hidden">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-blue-600" />
+                  <label className="text-[10px] font-black text-slate-700 uppercase tracking-widest">Dock Capacity Setting</label>
+                </div>
+                <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">Max 10 • Min 5</span>
+              </div>
+              
+              <div className="flex items-center gap-3 mb-3">
+                <input 
+                  type="number"
+                  min="5"
+                  max="10"
+                  disabled={isHoliday}
+                  value={isHoliday ? 0 : whCapacity}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    if (!isNaN(val)) {
+                      onSetWarehouseLimit(selectedDate, val);
+                    }
+                  }}
+                  className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-black text-slate-800 outline-none focus:ring-1 focus:ring-blue-500"
+                />
+                <span className="text-[10px] font-bold text-slate-400 uppercase whitespace-nowrap">Jobs / Day</span>
+              </div>
+
+              {/* Quick preset buttons */}
+              <div className="flex gap-2">
+                <button 
+                  type="button"
+                  disabled={isHoliday}
+                  onClick={() => onSetWarehouseLimit(selectedDate, 5)}
+                  className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${
+                    whCapacity === 5 ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  5 (Min)
+                </button>
+                <button 
+                  type="button"
+                  disabled={isHoliday}
+                  onClick={() => onSetWarehouseLimit(selectedDate, 8)}
+                  className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${
+                    whCapacity === 8 ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  8
+                </button>
+                <button 
+                  type="button"
+                  disabled={isHoliday}
+                  onClick={() => onSetWarehouseLimit(selectedDate, 10)}
+                  className={`flex-1 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${
+                    whCapacity === 10 ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  10 (Max)
+                </button>
+              </div>
+            </div>
+          )}
 
           <button 
             disabled={slotsRemaining <= 0}
@@ -356,7 +454,10 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
                         <div className="flex items-center gap-3 mb-2">
                           <span className="text-[9px] font-black text-blue-600 uppercase tracking-[0.2em] bg-blue-50 px-2 py-0.5 rounded border border-blue-100">UNIT {activity.id}</span>
                           {activity.status === JobStatus.PENDING_ADD && (
-                             <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full uppercase border border-amber-200 shadow-sm shadow-amber-50">Pending</span>
+                             <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full uppercase border border-amber-200 shadow-sm shadow-amber-50">Pending Add</span>
+                          )}
+                          {activity.status === JobStatus.PENDING_DELETE && (
+                             <span className="text-[8px] font-black bg-rose-100 text-rose-700 px-2.5 py-1 rounded-full uppercase border border-rose-200 shadow-sm shadow-rose-50 animate-pulse">Pending Deletion</span>
                           )}
                         </div>
                         <h4 className="font-black text-lg md:text-xl text-slate-800 tracking-tight uppercase leading-tight">{activity.shipper_name}</h4>
@@ -396,9 +497,19 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
                             )}
                         </div>
                     </div>
-                    <div className="flex gap-2 self-end md:self-center bg-slate-50 p-1 rounded-xl md:opacity-0 md:group-hover:opacity-100 transition-all border border-slate-100">
-                        <button onClick={() => openEditModal(activity)} className="p-2.5 hover:bg-white rounded-lg text-slate-400 hover:text-blue-600 transition-all hover:shadow-sm"><Edit2 className="w-4 h-4" /></button>
-                        <button onClick={() => onDeleteJob(activity.id)} className="p-2.5 hover:bg-white rounded-lg text-slate-400 hover:text-rose-600 transition-all hover:shadow-sm"><X className="w-4 h-4" /></button>
+                    <div className="flex items-center gap-1.5 self-end md:self-center bg-slate-50 p-1.5 rounded-xl md:opacity-0 md:group-hover:opacity-100 transition-all border border-slate-100">
+                        {onOpenCosting && (
+                          <button 
+                            onClick={() => onOpenCosting(activity.id)} 
+                            title="Open Job Cost Sheet"
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all shadow-xs active:scale-95"
+                          >
+                            <Calculator className="w-3.5 h-3.5" />
+                            <span>Cost Sheet</span>
+                          </button>
+                        )}
+                        <button onClick={() => openEditModal(activity)} title="Edit Activity" className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-blue-600 transition-all hover:shadow-sm"><Edit2 className="w-4 h-4" /></button>
+                        <button onClick={() => onDeleteJob(activity.id)} title="Delete Activity" className="p-2 hover:bg-white rounded-lg text-slate-400 hover:text-rose-600 transition-all hover:shadow-sm"><X className="w-4 h-4" /></button>
                     </div>
                   </div>
                 )})

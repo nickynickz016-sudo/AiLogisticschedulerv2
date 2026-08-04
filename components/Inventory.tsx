@@ -13,10 +13,18 @@ interface InventoryProps {
   logo?: string;
   isReadOnly?: boolean;
   onlyFinalAssessment?: boolean;
+  initialSelectedJobId?: string;
 }
 
-export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], logo, isReadOnly = false, onlyFinalAssessment = false }) => {
-  const [viewMode, setViewMode] = useState<'inventory' | 'costing'>('inventory');
+export const Inventory: React.FC<InventoryProps> = ({ 
+  jobs = [], 
+  users = [], 
+  logo, 
+  isReadOnly = false, 
+  onlyFinalAssessment = false,
+  initialSelectedJobId
+}) => {
+  const [viewMode, setViewMode] = useState<'inventory' | 'costing'>(initialSelectedJobId ? 'costing' : 'inventory');
   
   // --- Inventory Master State ---
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -88,11 +96,13 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   // --- Cost Sheet State ---
-  const [selectedJobId, setSelectedJobId] = useState<string>('');
+  const [selectedJobId, setSelectedJobId] = useState<string>(initialSelectedJobId || '');
+  const [allJobSheets, setAllJobSheets] = useState<JobCostSheet[]>([]);
   const [currentSheet, setCurrentSheet] = useState<JobCostSheet | null>(null);
   const [costingStage, setCostingStage] = useState<'Issued' | 'Returned' | 'Final'>('Issued');
   const [searchMaterial, setSearchMaterial] = useState('');
   const [sheetLoading, setSheetLoading] = useState(false); // Loading state for specific sheet
+  const [jobFilterCategory, setJobFilterCategory] = useState<'all' | 'schedule' | 'warehouse'>('all');
   
   // Job Search State
   const [jobSearchTerm, setJobSearchTerm] = useState('');
@@ -100,6 +110,19 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [summaryData, setSummaryData] = useState<any[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (initialSelectedJobId) {
+      setViewMode('costing');
+      setSelectedJobId(initialSelectedJobId);
+      const j = jobs.find(job => job.id === initialSelectedJobId);
+      if (j) {
+        setJobSearchTerm(`${j.id} - ${j.shipper_name || j.activity_name || ''}`);
+      } else {
+        setJobSearchTerm(initialSelectedJobId);
+      }
+    }
+  }, [initialSelectedJobId, jobs]);
 
   const fetchSummary = async () => {
     setIsSaving(true);
@@ -112,11 +135,14 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
       
       const summary = (data || []).map(sheet => {
         const job = jobs.find(j => j.id === sheet.job_id);
+        const displayName = job?.shipper_name || job?.activity_name || 'N/A';
+        const categoryName = job?.is_warehouse_activity ? 'Warehouse Area' : (sheet.job_category || '-');
         return {
           jobId: sheet.job_id,
-          shipperName: job?.shipper_name || 'N/A',
-          cbm: sheet.cbm || 0,
-          category: sheet.job_category || '-',
+          shipperName: displayName,
+          cbm: sheet.cbm || job?.volume_cbm || 0,
+          category: categoryName,
+          isWarehouse: job?.is_warehouse_activity || false,
           totalCost: sheet.total_cost || 0
         };
       });
@@ -182,8 +208,21 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
     }
   };
 
+  const fetchVendors = async () => {
+    try {
+      const { data, error } = await supabase.from('vendors').select('name').order('name', { ascending: true });
+      if (!error && data && data.length > 0) {
+        const fetchedNames = data.map((v: any) => v.name);
+        setVendors(prev => Array.from(new Set([...prev, ...fetchedNames])));
+      }
+    } catch (err) {
+      console.log('Vendors fetch note:', err);
+    }
+  };
+
   useEffect(() => {
     fetchInventory();
+    fetchVendors();
   }, []);
 
   // Close dropdown when clicking outside
@@ -197,22 +236,38 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fetchCostSheet = async (jobId: string) => {
+  const fetchCostSheet = async (jobId: string, targetSheetId?: string) => {
     setSheetLoading(true);
-    const { data, error } = await supabase.from('job_cost_sheets').select('*').eq('job_id', jobId).single();
+    const baseJobId = jobId.split('#')[0];
+
+    const { data, error } = await supabase
+      .from('job_cost_sheets')
+      .select('*')
+      .or(`job_id.eq.${baseJobId},job_id.like.${baseJobId}#%`);
     
     if (error && error.code !== 'PGRST116') {
         console.error("Error fetching cost sheet:", error);
     }
 
+    const availableSheets: JobCostSheet[] = (data && data.length > 0)
+      ? data.sort((a, b) => a.job_id.localeCompare(b.job_id, undefined, { numeric: true }))
+      : [];
+    
+    setAllJobSheets(availableSheets);
+
+    let activeData: JobCostSheet | undefined;
+    if (targetSheetId) {
+      activeData = availableSheets.find(s => s.job_id === targetSheetId);
+    }
+    if (!activeData && availableSheets.length > 0) {
+      activeData = availableSheets[0];
+    }
+
     // Merge Logic: Combine Master Inventory with Saved Data
-    // We map over the Master 'items' so every item is present in the sheet.
     const mergedItems: CostSheetItem[] = items.map(masterItem => {
-        // Check if this master item exists in the saved sheet data
-        const savedItem = data?.items?.find((i: any) => i.inventory_id === masterItem.id);
+        const savedItem = activeData?.items?.find((i: any) => i.inventory_id === masterItem.id);
         
         if (savedItem) {
-            // Use saved values but ensure description/code/price/outsource fields are current from master
             return {
                 ...savedItem,
                 code: masterItem.code,
@@ -226,7 +281,6 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                 location: masterItem.location
             };
         } else {
-            // Initialize with 0
             return {
                 inventory_id: masterItem.id,
                 code: masterItem.code,
@@ -244,23 +298,21 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
         }
     });
 
-    if (data) {
-        setCurrentSheet({ ...data, items: mergedItems, manual_items: data.manual_items || [] });
+    if (activeData) {
+        setCurrentSheet({ ...activeData, items: mergedItems, manual_items: activeData.manual_items || [] });
         
-        // Determine stage
         if (onlyFinalAssessment) {
             setCostingStage('Final');
-        } else if (data.status === 'Finalized') {
+        } else if (activeData.status === 'Finalized') {
             setCostingStage('Final');
-        } else if (data.status === 'Returned') {
+        } else if (activeData.status === 'Returned') {
             setCostingStage('Returned');
         } else {
             setCostingStage('Issued');
         }
     } else {
-        // Initialize new sheet with full inventory list
         setCurrentSheet({
-            job_id: jobId,
+            job_id: baseJobId,
             items: mergedItems,
             manual_items: [],
             status: 'Issued',
@@ -269,6 +321,41 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
         setCostingStage(onlyFinalAssessment ? 'Final' : 'Issued');
     }
     setSheetLoading(false);
+  };
+
+  const handleCreateNewSheet = () => {
+    if (!selectedJobId) return;
+    const baseJobId = selectedJobId.split('#')[0];
+    const sheetCount = allJobSheets.length;
+    const nextSheetId = sheetCount === 0 ? `${baseJobId}#2` : `${baseJobId}#${sheetCount + 1}`;
+
+    const mergedItems: CostSheetItem[] = items.map(masterItem => ({
+        inventory_id: masterItem.id,
+        code: masterItem.code,
+        description: masterItem.description,
+        unit: masterItem.unit,
+        price: masterItem.price,
+        issued_qty: 0,
+        returned_qty: 0,
+        is_outsource: masterItem.is_outsource,
+        vendor_name: masterItem.vendor_name,
+        outsource_type: masterItem.outsource_type,
+        truck_schedule: masterItem.truck_schedule,
+        location: masterItem.location
+    }));
+
+    const newSheet: JobCostSheet = {
+        job_id: nextSheetId,
+        items: mergedItems,
+        manual_items: [],
+        status: 'Issued',
+        total_cost: 0
+    };
+
+    setAllJobSheets(prev => [...prev, newSheet]);
+    setCurrentSheet(newSheet);
+    setCostingStage('Issued');
+    setNotification({ message: `Created new Cost Sheet Set (${nextSheetId}). Fill in items and save.`, type: 'success' });
   };
 
   useEffect(() => {
@@ -961,15 +1048,26 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
 
   const selectJob = (job: Job) => {
     setSelectedJobId(job.id);
-    setJobSearchTerm(`${job.id} - ${job.shipper_name}`);
+    const displayName = job.shipper_name || job.activity_name || 'Warehouse Activity';
+    setJobSearchTerm(`${job.id} - ${displayName}`);
     setShowJobSuggestions(false);
   };
 
-  const filteredJobs = jobs.filter(j => 
-    !j.is_transporter &&
-    (j.id.toLowerCase().includes(jobSearchTerm.toLowerCase()) ||
-    j.shipper_name.toLowerCase().includes(jobSearchTerm.toLowerCase()))
-  );
+  const filteredJobs = jobs.filter(j => {
+    if (j.is_transporter) return false;
+
+    // Filter category
+    if (jobFilterCategory === 'warehouse' && !j.is_warehouse_activity) return false;
+    if (jobFilterCategory === 'schedule' && j.is_warehouse_activity) return false;
+
+    const term = jobSearchTerm.toLowerCase();
+    const matchId = j.id ? j.id.toLowerCase().includes(term) : false;
+    const matchShipper = j.shipper_name ? j.shipper_name.toLowerCase().includes(term) : false;
+    const matchActivity = j.activity_name ? j.activity_name.toLowerCase().includes(term) : false;
+    const matchDesc = j.description ? j.description.toLowerCase().includes(term) : false;
+
+    return matchId || matchShipper || matchActivity || matchDesc;
+  });
 
   const updateSheetItem = (inventoryId: number, field: 'issued_qty' | 'returned_qty', value: number) => {
     if (!currentSheet) return;
@@ -1114,9 +1212,10 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
 
         if (saveError) throw saveError;
 
-        setNotification({ message: `Sheet saved successfully! ${updatesMade ? 'Inventory stock has been updated.' : ''}`, type: 'success' });
+        setNotification({ message: `Sheet (${currentSheet.job_id}) saved successfully! ${updatesMade ? 'Inventory stock has been updated.' : ''}`, type: 'success' });
         // Update local state to reflect status change
         setCurrentSheet({ ...currentSheet, status });
+        await fetchCostSheet(selectedJobId, currentSheet.job_id);
         await fetchInventory(); // Refresh master list to show new stock levels
 
     } catch (error: any) {
@@ -1133,11 +1232,12 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
     setShowDeleteSheetConfirm(false);
 
     try {
+        const targetSheetId = currentSheet.job_id;
         // 1. Fetch Previous Sheet State from DB to check status and items
         const { data: previousSheetData, error: fetchError } = await supabase
             .from('job_cost_sheets')
             .select('items, status')
-            .eq('job_id', selectedJobId)
+            .eq('job_id', targetSheetId)
             .single();
         
         if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
@@ -1171,29 +1271,22 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                 await supabase
                     .from('inventory_consumption')
                     .delete()
-                    .eq('job_id', selectedJobId);
+                    .eq('job_id', targetSheetId);
             }
 
             // 4. Delete the Sheet
             const { error: deleteError } = await supabase
                 .from('job_cost_sheets')
                 .delete()
-                .eq('job_id', selectedJobId);
+                .eq('job_id', targetSheetId);
 
             if (deleteError) throw deleteError;
         }
 
-        setNotification({ message: "Cost sheet deleted successfully. Stock levels have been restored where applicable.", type: 'success' });
+        setNotification({ message: `Cost sheet (${targetSheetId}) deleted successfully. Stock levels have been restored where applicable.`, type: 'success' });
         
-        // Reset local state in a safe order to prevent white screen
-        // First clear the selection to trigger the placeholder view
-        setSelectedJobId('');
-        setJobSearchTerm('');
-        setCurrentSheet(null);
-        setCostingStage('Issued');
-        
-        // Then refresh the master list
         await fetchInventory();
+        await fetchCostSheet(selectedJobId);
 
     } catch (error: any) {
         console.error("Delete failed:", error);
@@ -1274,12 +1367,27 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
        doc.text(value || '—', x, y + 5);
     };
 
+    const allVehicles: string[] = job?.vehicles && job.vehicles.length > 0
+      ? job.vehicles
+      : (job?.vehicle ? job.vehicle.split(',').map(v => v.trim()).filter(Boolean) : []);
+    const buses = allVehicles.filter(v => /bus/i.test(v));
+    const trucks = allVehicles.filter(v => !/bus/i.test(v));
+    const crewAssigned = job?.writer_crew && job.writer_crew.length > 0 ? job.writer_crew.join(', ') : '-';
+    const busAssigned = buses.length > 0 ? buses.join(', ') : '-';
+    const truckAssigned = trucks.length > 0 ? trucks.join(', ') : '-';
+
     addField("Job Reference", selectedJobId, margin, yPos);
     addField("Client Name", job?.shipper_name || '', margin + 50, yPos);
     addField("Location", job?.location || '', margin + 120, yPos);
     addField("Date Generated", new Date().toLocaleDateString(), margin + 200, yPos);
     
-    yPos += 20;
+    yPos += 14;
+    addField("Team Leader", job?.team_leader || '-', margin, yPos);
+    addField("Crew Assigned", crewAssigned, margin + 50, yPos);
+    addField("Bus Assigned", busAssigned, margin + 120, yPos);
+    addField("Truck Assigned", truckAssigned, margin + 200, yPos);
+
+    yPos += 18;
 
     // --- Table ---
     // 1. Inventory Items Table
@@ -1747,10 +1855,29 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                                                 <select 
                                                     className="w-full px-2 py-1.5 bg-white border border-slate-200 rounded-lg text-[10px] font-bold focus:ring-1 focus:ring-blue-500 outline-none appearance-none" 
                                                     value={editVendorName} 
-                                                    onChange={e => setEditVendorName(e.target.value)}
+                                                    onChange={async (e) => {
+                                                        if (e.target.value === 'ADD_NEW') {
+                                                            const name = prompt("Enter new vendor name:");
+                                                            if (name && name.trim()) {
+                                                                const trimmed = name.trim();
+                                                                if (!vendors.includes(trimmed)) {
+                                                                    setVendors(prev => [...prev, trimmed]);
+                                                                }
+                                                                setEditVendorName(trimmed);
+                                                                try {
+                                                                    await supabase.from('vendors').upsert({ name: trimmed }, { onConflict: 'name' });
+                                                                } catch (err) {
+                                                                    console.error('Failed to save vendor:', err);
+                                                                }
+                                                            }
+                                                        } else {
+                                                            setEditVendorName(e.target.value);
+                                                        }
+                                                    }}
                                                 >
                                                     <option value="">Select Vendor</option>
                                                     {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                                                    <option value="ADD_NEW">+ Add New Vendor</option>
                                                 </select>
                                                 <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
                                             </div>
@@ -1962,14 +2089,39 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
       {viewMode === 'costing' && (
         <div className="space-y-6">
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative z-50">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2 ml-1">Select Active Job</label>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block ml-1">Select Active Job or Warehouse Activity</label>
+                    <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 self-start sm:self-auto">
+                        <button
+                            type="button"
+                            onClick={() => setJobFilterCategory('all')}
+                            className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${jobFilterCategory === 'all' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                            All ({jobs.filter(j => !j.is_transporter).length})
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setJobFilterCategory('schedule')}
+                            className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${jobFilterCategory === 'schedule' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                            Schedule ({jobs.filter(j => !j.is_transporter && !j.is_warehouse_activity).length})
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setJobFilterCategory('warehouse')}
+                            className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${jobFilterCategory === 'warehouse' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                            Warehouse ({jobs.filter(j => j.is_warehouse_activity).length})
+                        </button>
+                    </div>
+                </div>
                 <div className="flex flex-col lg:flex-row gap-4">
                     <div className="flex-1 relative" ref={dropdownRef}>
                         <div className="relative">
                             <input 
                                 type="text"
                                 className="w-full px-4 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm"
-                                placeholder="Job No. or Shipper Name..."
+                                placeholder="Search Job No., Shipper, or Warehouse Activity..."
                                 value={jobSearchTerm}
                                 onChange={(e) => {
                                     setJobSearchTerm(e.target.value);
@@ -1991,13 +2143,27 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                                             onClick={() => selectJob(job)}
                                             className="px-5 py-4 hover:bg-slate-50 cursor-pointer border-b border-slate-50 last:border-none group/item"
                                         >
-                                            <div className="flex justify-between items-center">
-                                                <span className="text-sm font-black text-slate-900 group-hover/item:text-blue-600 transition-colors uppercase tracking-tight">{job.shipper_name}</span>
-                                                <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100">{job.id}</span>
+                                            <div className="flex justify-between items-center gap-2">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <span className="text-sm font-black text-slate-900 group-hover/item:text-blue-600 transition-colors uppercase tracking-tight truncate">
+                                                        {job.shipper_name || job.activity_name || 'Warehouse Activity'}
+                                                    </span>
+                                                    {job.is_warehouse_activity && (
+                                                        <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-[8px] font-black uppercase rounded border border-amber-200 shrink-0">
+                                                            Warehouse Area
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100 shrink-0">{job.id}</span>
                                             </div>
+                                            {job.activity_name && job.shipper_name && (
+                                                <div className="text-[10px] font-bold text-amber-700 mt-1">
+                                                    Activity: {job.activity_name}
+                                                </div>
+                                            )}
                                             <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold mt-1 group-hover/item:text-slate-500 transition-colors">
                                                 <MapPin className="w-3 h-3" />
-                                                <span className="truncate">{job.location || 'Pending Location'}</span>
+                                                <span className="truncate">{job.location || 'Warehouse Dock / Local'}</span>
                                             </div>
                                         </div>
                                     ))
@@ -2012,30 +2178,45 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
 
                     {selectedJobId && (
                         <div className="grid grid-cols-2 sm:flex sm:flex-row gap-2">
-                            <div className="flex flex-col justify-center px-4 py-2.5 bg-slate-50 rounded-2xl border border-slate-100 min-w-0 sm:min-w-[140px]">
-                                <span className="text-[8px] text-slate-400 font-black uppercase tracking-wider mb-0.5">Requester</span>
-                                <span className="text-xs font-black text-slate-800 truncate">
-                                    {(() => {
-                                        const job = jobs.find(j => j.id === selectedJobId);
-                                        const user = users.find(u => u.employee_id === job?.requester_id);
-                                        return user ? user.name : (job?.requester_id || 'N/A');
-                                    })()}
-                                </span>
-                            </div>
-                            <div className="flex flex-col justify-center px-4 py-2.5 bg-blue-50/50 rounded-2xl border border-blue-100/50 min-w-0 sm:min-w-[140px]">
-                                <span className="text-[8px] text-blue-600/60 font-black uppercase tracking-wider mb-0.5">Shipper</span>
-                                <span className="text-xs font-black text-blue-900 truncate">{jobs.find(j => j.id === selectedJobId)?.shipper_name}</span>
-                            </div>
-                            <div className="flex flex-col justify-center px-4 py-2.5 bg-slate-50 rounded-2xl border border-slate-100 min-w-0 sm:min-w-[140px]">
-                                <span className="text-[8px] text-slate-400 font-black uppercase tracking-wider mb-0.5">Location</span>
-                                <span className="text-xs font-black text-slate-800 truncate" title={jobs.find(j => j.id === selectedJobId)?.location}>
-                                    {jobs.find(j => j.id === selectedJobId)?.location || 'N/A'}
-                                </span>
-                            </div>
-                            <div className="flex flex-col justify-center px-4 py-2.5 bg-slate-50 rounded-2xl border border-slate-100 min-w-0 sm:min-w-[100px]">
-                                <span className="text-[8px] text-slate-400 font-black uppercase tracking-wider mb-0.5">Volume</span>
-                                <span className="text-xs font-black text-slate-800">{jobs.find(j => j.id === selectedJobId)?.volume_cbm || 0} <span className="text-[10px]">m³</span></span>
-                            </div>
+                            {(() => {
+                                const job = jobs.find(j => j.id === selectedJobId);
+                                const isWarehouse = job?.is_warehouse_activity;
+                                const reqUser = users.find(u => u.employee_id === job?.requester_id);
+                                return (
+                                    <>
+                                        <div className="flex flex-col justify-center px-4 py-2.5 bg-slate-50 rounded-2xl border border-slate-100 min-w-0 sm:min-w-[130px]">
+                                            <span className="text-[8px] text-slate-400 font-black uppercase tracking-wider mb-0.5">Requester</span>
+                                            <span className="text-xs font-black text-slate-800 truncate">
+                                                {reqUser ? reqUser.name : (job?.requester_id || 'N/A')}
+                                            </span>
+                                        </div>
+                                        <div className={`flex flex-col justify-center px-4 py-2.5 rounded-2xl border min-w-0 sm:min-w-[140px] ${isWarehouse ? 'bg-amber-50/70 border-amber-200' : 'bg-blue-50/50 border-blue-100/50'}`}>
+                                            <span className={`text-[8px] font-black uppercase tracking-wider mb-0.5 ${isWarehouse ? 'text-amber-700' : 'text-blue-600/60'}`}>
+                                                {isWarehouse ? 'Warehouse Area Activity' : 'Shipper'}
+                                            </span>
+                                            <span className={`text-xs font-black truncate ${isWarehouse ? 'text-amber-950' : 'text-blue-900'}`}>
+                                                {job?.shipper_name || 'N/A'}
+                                            </span>
+                                        </div>
+                                        {job?.activity_name && (
+                                            <div className="flex flex-col justify-center px-4 py-2.5 bg-amber-50/30 rounded-2xl border border-amber-100 min-w-0 sm:min-w-[130px]">
+                                                <span className="text-[8px] text-amber-700 font-black uppercase tracking-wider mb-0.5">Activity</span>
+                                                <span className="text-xs font-black text-amber-900 truncate">{job.activity_name}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex flex-col justify-center px-4 py-2.5 bg-slate-50 rounded-2xl border border-slate-100 min-w-0 sm:min-w-[120px]">
+                                            <span className="text-[8px] text-slate-400 font-black uppercase tracking-wider mb-0.5">Location</span>
+                                            <span className="text-xs font-black text-slate-800 truncate" title={job?.location}>
+                                                {job?.location || 'Warehouse Dock'}
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-col justify-center px-4 py-2.5 bg-slate-50 rounded-2xl border border-slate-100 min-w-0 sm:min-w-[90px]">
+                                            <span className="text-[8px] text-slate-400 font-black uppercase tracking-wider mb-0.5">Volume</span>
+                                            <span className="text-xs font-black text-slate-800">{job?.volume_cbm || 0} <span className="text-[10px]">m³</span></span>
+                                        </div>
+                                    </>
+                                );
+                            })()}
                         </div>
                     )}
                 </div>
@@ -2050,6 +2231,51 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                     </div>
                 ) : currentSheet ? (
                     <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        {/* Cost Sheet Set Selector Bar */}
+                        <div className="bg-slate-900 text-white p-4 sm:p-5 px-6 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <div className="flex items-center gap-2">
+                                    <FileText className="w-4 h-4 text-blue-400" />
+                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                        Cost Sheet Sets for {selectedJobId.split('#')[0]}:
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {allJobSheets.length > 0 ? (
+                                        allJobSheets.map((s, idx) => {
+                                            const label = idx === 0 ? `Set 1 (Main)` : `Set ${idx + 1}`;
+                                            const isActive = currentSheet?.job_id === s.job_id;
+                                            return (
+                                                <button
+                                                    key={s.job_id}
+                                                    type="button"
+                                                    onClick={() => fetchCostSheet(selectedJobId, s.job_id)}
+                                                    className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all flex items-center gap-2 border ${isActive ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-400/30' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'}`}
+                                                >
+                                                    <span>{label}</span>
+                                                    <span className={`text-[8px] px-2 py-0.5 rounded-full font-black uppercase ${s.status === 'Finalized' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'}`}>
+                                                        {s.status}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })
+                                    ) : (
+                                        <span className="text-xs font-black text-slate-200 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-xl">Set 1 (Main)</span>
+                                    )}
+                                </div>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={handleCreateNewSheet}
+                                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-2 shadow-lg shadow-emerald-600/20 shrink-0 self-start sm:self-auto cursor-pointer"
+                                title="Create another set of cost sheet for this same job number"
+                            >
+                                <Plus className="w-4 h-4" />
+                                + Create Additional Cost Sheet
+                            </button>
+                        </div>
+
                         {/* Stage Navigation */}
                         <div className="flex border-b border-slate-200">
                             {!onlyFinalAssessment && (
@@ -2493,12 +2719,21 @@ export const Inventory: React.FC<InventoryProps> = ({ jobs = [], users = [], log
                       />
                       <button 
                         type="button"
-                        onClick={() => {
-                          if (newVendorName.trim()) {
-                            setVendors([...vendors, newVendorName.trim()]);
-                            setNewItem({...newItem, vendor_name: newVendorName.trim()});
+                        onClick={async () => {
+                          const trimmed = newVendorName.trim();
+                          if (trimmed) {
+                            if (!vendors.includes(trimmed)) {
+                              setVendors(prev => [...prev, trimmed]);
+                            }
+                            setNewItem(prev => ({ ...prev, vendor_name: trimmed }));
                             setNewVendorName('');
                             setShowAddVendorInput(false);
+                            
+                            try {
+                              await supabase.from('vendors').upsert({ name: trimmed }, { onConflict: 'name' });
+                            } catch (err) {
+                              console.error('Failed to save vendor to database:', err);
+                            }
                           }
                         }}
                         className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-blue-700 transition-all"
