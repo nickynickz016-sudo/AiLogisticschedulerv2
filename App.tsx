@@ -46,6 +46,12 @@ export const isOfflineError = (errMsg?: any): boolean => {
          lower.includes('cors') ||
          lower.includes('load failed') ||
          lower.includes('fetch failed') ||
+         lower.includes('timeout') ||
+         lower.includes('canceling statement') ||
+         lower.includes('statement timeout') ||
+         lower.includes('deadline exceeded') ||
+         lower.includes('57014') ||
+         lower.includes('54000') ||
          lower.includes('offline');
 };
 
@@ -737,79 +743,71 @@ const App: React.FC = () => {
 
   const fetchChecklists = useCallback(async () => {
     try {
-      const { data, error } = await supabase.from('warehouse_checklists').select('*').order('created_at', { ascending: false });
+      const { data, error } = await supabase.from('warehouse_checklists').select('*').order('created_at', { ascending: false }).limit(200);
       if (error) {
-        if (isOfflineError(error.message)) {
-          console.warn('Network offline during fetching checklists:', error.message);
-          loadOfflineChecklists();
-        } else {
-          console.error('Error fetching checklists:', error.message);
-          addNotification(`Error fetching warehouse checklists: ${error.message}`, 'error');
+        console.warn('Checklists fetch issue:', error.message);
+        try {
+          const saved = safeLocalStorage.getItem('writer_local_checklists_data');
+          if (saved) setChecklists(JSON.parse(saved));
+        } catch (e) {}
+        if (!isOfflineError(error.message)) {
+          addNotification(`Warehouse checklists: loaded from local cache`, 'info');
         }
       } else {
         setChecklists(data || []);
         safeLocalStorage.setItem('writer_local_checklists_data', JSON.stringify(data || []));
       }
       
-      const { data: patrolData, error: patrolError } = await supabase.from('night_patrolling_checklists').select('*').order('created_at', { ascending: false });
+      const { data: patrolData, error: patrolError } = await supabase.from('night_patrolling_checklists').select('*').order('created_at', { ascending: false }).limit(200);
       if (patrolError) {
-        if (isOfflineError(patrolError.message)) {
-          console.warn('Network offline during fetching patrol logs:', patrolError.message);
-        } else {
-          console.error('Error fetching patrol logs:', patrolError.message);
-          addNotification(`Error fetching patrol logs: ${patrolError.message}`, 'error');
-        }
+        console.warn('Patrol logs fetch issue:', patrolError.message);
+        try {
+          const saved = safeLocalStorage.getItem('writer_local_patrol_logs_data');
+          if (saved) setPatrolLogs(JSON.parse(saved));
+        } catch (e) {}
       } else {
         setPatrolLogs(patrolData || []);
         safeLocalStorage.setItem('writer_local_patrol_logs_data', JSON.stringify(patrolData || []));
       }
 
-      const { data: safetyData, error: safetyError } = await supabase.from('safety_monitoring_checklists').select('*').order('created_at', { ascending: false });
+      const { data: safetyData, error: safetyError } = await supabase.from('safety_monitoring_checklists').select('*').order('created_at', { ascending: false }).limit(200);
       if (safetyError) {
-        if (isOfflineError(safetyError.message)) {
-          console.warn('Network offline during fetching safety logs:', safetyError.message);
-        } else {
-          console.error('Error fetching safety logs:', safetyError.message);
-          addNotification(`Error fetching safety logs: ${safetyError.message}`, 'error');
-        }
+        console.warn('Safety logs fetch issue:', safetyError.message);
+        try {
+          const saved = safeLocalStorage.getItem('writer_local_safety_checks_data');
+          if (saved) setSafetyChecks(JSON.parse(saved));
+        } catch (e) {}
       } else {
         setSafetyChecks(safetyData || []);
         safeLocalStorage.setItem('writer_local_safety_checks_data', JSON.stringify(safetyData || []));
       }
 
-      const { data: surpriseData, error: surpriseError } = await supabase.from('surprise_visits').select('*').order('created_at', { ascending: false });
+      const { data: surpriseData, error: surpriseError } = await supabase.from('surprise_visits').select('*').order('created_at', { ascending: false }).limit(200);
       if (surpriseError) {
-        if (isOfflineError(surpriseError.message)) {
-          console.warn('Network offline during fetching surprise visits:', surpriseError.message);
-        } else {
-          console.error('Error fetching surprise visits:', surpriseError.message);
-          addNotification(`Error fetching surprise visits: ${surpriseError.message}`, 'error');
-        }
+        console.warn('Surprise visits fetch issue:', surpriseError.message);
+        try {
+          const saved = safeLocalStorage.getItem('writer_local_surprise_visits_data');
+          if (saved) setSurpriseVisits(JSON.parse(saved));
+        } catch (e) {}
       } else {
         setSurpriseVisits(surpriseData || []);
         safeLocalStorage.setItem('writer_local_surprise_visits_data', JSON.stringify(surpriseData || []));
       }
 
-      const { data: dailyData, error: dailyError } = await supabase.from('daily_monitoring_checklists').select('*').order('created_at', { ascending: false });
+      const { data: dailyData, error: dailyError } = await supabase.from('daily_monitoring_checklists').select('*').order('created_at', { ascending: false }).limit(200);
       if (dailyError) {
-        if (isOfflineError(dailyError.message)) {
-          console.warn('Network offline during fetching daily monitoring:', dailyError.message);
-        } else {
-          console.error('Error fetching daily monitoring:', dailyError.message);
-          addNotification(`Error fetching daily monitoring: ${dailyError.message}`, 'error');
-        }
+        console.warn('Daily monitoring fetch issue:', dailyError.message);
+        try {
+          const saved = safeLocalStorage.getItem('writer_local_daily_monitoring_data');
+          if (saved) setDailyMonitoring(JSON.parse(saved));
+        } catch (e) {}
       } else {
         setDailyMonitoring(dailyData || []);
         safeLocalStorage.setItem('writer_local_daily_monitoring_data', JSON.stringify(dailyData || []));
       }
     } catch (err: any) {
-      if (isOfflineError(err.message)) {
-        console.warn('Unexpected error fetching checklists:', err.message);
-        loadOfflineChecklists();
-      } else {
-        console.error('Unexpected error fetching checklists:', err);
-        addNotification(`Unexpected error: ${err.message}`, 'error');
-      }
+      console.warn('Unexpected error during fetchChecklists, loading offline caches:', err);
+      loadOfflineChecklists();
     }
   }, [addNotification, loadOfflineChecklists]);
 
@@ -1639,14 +1637,22 @@ const App: React.FC = () => {
         
         for (const rJob of related) {
           const dayNum = getJobDayNumber(rJob.id);
-          const newDayId = dayNum === 1 ? newCleanNo : `${newCleanNo}#day${dayNum}`;
+          const baseTag = dayNum === 1 ? newCleanNo : `${newCleanNo}#day${dayNum}`;
+          let newDayId = baseTag;
+          if (jobs.some(j => j.id === newDayId && j.id !== rJob.id)) {
+            let subCounter = 1;
+            while (jobs.some(j => j.id === `${baseTag}#sub${subCounter}` && j.id !== rJob.id)) {
+              subCounter++;
+            }
+            newDayId = `${baseTag}#sub${subCounter}`;
+          }
           
           // 1. Update referencing tables
           await supabase.from('job_cost_sheets').update({ job_id: newDayId }).eq('job_id', rJob.id);
           await supabase.from('inventory_consumptions').update({ job_id: newDayId }).eq('job_id', rJob.id);
           
           // 2. Update primary key in 'jobs'
-          await supabase.from('jobs').update({ id: newDayId }).eq('id', rJob.id);
+          await supabase.from('jobs').update({ id: newDayId, title: newCleanNo }).eq('id', rJob.id);
           
           if (rJob.id === targetId) {
             currentTargetId = newDayId;
@@ -1654,14 +1660,21 @@ const App: React.FC = () => {
         }
       } else {
         // Single-day job: Only update this specific job's ID
-        const newDayId = job.id;
+        let newDayId = newCleanNo;
+        if (jobs.some(j => j.id === newDayId && j.id !== targetId)) {
+          let subCounter = 1;
+          while (jobs.some(j => j.id === `${newCleanNo}#sub${subCounter}` && j.id !== targetId)) {
+            subCounter++;
+          }
+          newDayId = `${newCleanNo}#sub${subCounter}`;
+        }
         
         // 1. Update referencing tables
         await supabase.from('job_cost_sheets').update({ job_id: newDayId }).eq('job_id', targetId);
         await supabase.from('inventory_consumptions').update({ job_id: newDayId }).eq('job_id', targetId);
         
         // 2. Update primary key in 'jobs'
-        await supabase.from('jobs').update({ id: newDayId }).eq('id', targetId);
+        await supabase.from('jobs').update({ id: newDayId, title: newCleanNo }).eq('id', targetId);
         
         currentTargetId = newDayId;
       }
@@ -1672,7 +1685,7 @@ const App: React.FC = () => {
     const correctTargetDate = computedDates[targetDayNumber - 1] || job.job_date;
 
     const updateData: any = {
-        title: currentTargetId,
+        title: newCleanNo || currentTargetId,
         shipper_name: job.shipper_name,
         shipper_phone: job.shipper_phone,
         client_email: job.client_email,
@@ -1911,17 +1924,6 @@ const App: React.FC = () => {
 
     const jobsToCreate: Job[] = [];
     
-    // Find a unique baseId that is not used as a clean job number by any existing or batch jobs
-    let uniqueBaseId = cleanBaseId;
-    let counter = 1;
-    while (
-      jobs.some(j => getCleanJobNo(j.id) === uniqueBaseId) ||
-      jobsToCreate.some(j => getCleanJobNo(j.id) === uniqueBaseId)
-    ) {
-      uniqueBaseId = `${cleanBaseId}-${counter}`;
-      counter++;
-    }
-    
     for (let index = 0; index < duration; index++) {
         const currentDateStr = computedDates[index];
         const dayNum = index + 1;
@@ -1952,7 +1954,36 @@ const App: React.FC = () => {
             }
         }
 
-        const uniqueId = dayNum === 1 ? uniqueBaseId : `${uniqueBaseId}#day${dayNum}`;
+        // Generate unique primary key while preserving the user's exact job number (cleanBaseId)
+        let uniqueId: string;
+        if (duration === 1) {
+          if (!jobs.some(j => j.id === cleanBaseId) && !jobsToCreate.some(j => j.id === cleanBaseId)) {
+            uniqueId = cleanBaseId;
+          } else {
+            let subCounter = 1;
+            while (
+              jobs.some(j => j.id === `${cleanBaseId}#sub${subCounter}`) ||
+              jobsToCreate.some(j => j.id === `${cleanBaseId}#sub${subCounter}`)
+            ) {
+              subCounter++;
+            }
+            uniqueId = `${cleanBaseId}#sub${subCounter}`;
+          }
+        } else {
+          const baseDayTag = dayNum === 1 ? cleanBaseId : `${cleanBaseId}#day${dayNum}`;
+          if (!jobs.some(j => j.id === baseDayTag) && !jobsToCreate.some(j => j.id === baseDayTag)) {
+            uniqueId = baseDayTag;
+          } else {
+            let subCounter = 1;
+            while (
+              jobs.some(j => j.id === `${baseDayTag}#sub${subCounter}`) ||
+              jobsToCreate.some(j => j.id === `${baseDayTag}#sub${subCounter}`)
+            ) {
+              subCounter++;
+            }
+            uniqueId = `${baseDayTag}#sub${subCounter}`;
+          }
+        }
 
         const vehiclesArray = job.vehicles || [];
         const vehicleString = vehiclesArray.length > 0 ? vehiclesArray.join(', ') : job.vehicle;
@@ -1960,7 +1991,7 @@ const App: React.FC = () => {
         const newJobEntry: Job = {
           ...job,
           id: uniqueId,
-          title: uniqueId,
+          title: cleanBaseId,
           status: isSunday 
             ? (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD) 
             : (job.status || (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD)),
@@ -1981,15 +2012,24 @@ const App: React.FC = () => {
         jobsToCreate.push(newJobEntry);
     }
     
-    // Batch Insert
-    const { error } = await insertJobsInSupabase(jobsToCreate);
+    // Batch Insert with automatic duplicate retry
+    let { error } = await insertJobsInSupabase(jobsToCreate);
     
-    if (error) {
-      if (error.code === '23505') {
-        alert("Job number is duplicated");
-      } else {
-        alert(`Error: ${error.message}`);
+    if (error && error.code === '23505') {
+      const fallbackJobs = jobsToCreate.map((j, i) => ({
+        ...j,
+        id: `${getCleanJobNo(j.id)}#sub${Date.now()}-${i}`
+      }));
+      const retryResult = await insertJobsInSupabase(fallbackJobs);
+      error = retryResult.error;
+      if (!error) {
+        jobsToCreate.length = 0;
+        jobsToCreate.push(...fallbackJobs);
       }
+    }
+
+    if (error) {
+      alert(`Error scheduling job: ${error.message}`);
     } else {
       for (const createdJob of jobsToCreate) {
         const isWarehouse = createdJob.is_warehouse_activity;

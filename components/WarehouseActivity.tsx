@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { getUAEToday } from '../utils';
+import { getUAEToday, getCleanJobNo } from '../utils';
 import { Job, JobStatus, UserProfile, Personnel, Vehicle, UserRole, SystemSettings } from '../types';
 import { Plus, X, Box, User, Clock, AlertCircle, Info, Calendar, RefreshCw, ChevronLeft, ChevronRight, Activity, LayoutList, CalendarDays, Edit2, Truck, Users, ArrowRight, FileDown, Sliders, Calculator } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -103,7 +103,7 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
         const truckAssigned = trucks.length > 0 ? trucks.join(', ') : '-';
 
         return [
-            activity.id,
+            getCleanJobNo(activity.id),
             activity.job_date,
             activity.shipper_name,
             activity.activity_name || '-',
@@ -194,7 +194,7 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
   const openEditModal = (activity: Job) => {
     setOriginalId(activity.id);
     setNewActivity({
-        id: activity.id,
+        id: getCleanJobNo(activity.id),
         shipper_name: activity.shipper_name,
         job_date: activity.job_date,
         activity_name: activity.activity_name || '',
@@ -452,7 +452,7 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
                   <div key={activity.id} className="bg-white p-5 md:p-8 rounded-[2rem] border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-5 md:gap-6 group hover:border-blue-200 transition-all relative overflow-hidden">
                     <div className="flex-1 w-full translate-z-0">
                         <div className="flex items-center gap-3 mb-2">
-                          <span className="text-[9px] font-black text-blue-600 uppercase tracking-[0.2em] bg-blue-50 px-2 py-0.5 rounded border border-blue-100">UNIT {activity.id}</span>
+                          <span className="text-[9px] font-black text-blue-600 uppercase tracking-[0.2em] bg-blue-50 px-2 py-0.5 rounded border border-blue-100">UNIT {getCleanJobNo(activity.id)}</span>
                           {activity.status === JobStatus.PENDING_ADD && (
                              <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-2.5 py-1 rounded-full uppercase border border-amber-200 shadow-sm shadow-amber-50">Pending Add</span>
                           )}

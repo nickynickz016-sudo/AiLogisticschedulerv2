@@ -793,10 +793,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
   const isMultiDayJob = (job: Job) => {
     if (job.duration && job.duration > 1) return true;
-    const cleanNo = getCleanJobNo(job.id);
-    if (!cleanNo) return false;
-    const relatedCount = jobs.filter(j => getCleanJobNo(j.id) === cleanNo).length;
-    return relatedCount > 1;
+    if (job.id.includes('#day') || job.id.toLowerCase().includes('-d')) return true;
+    return false;
   };
 
   const getJobGroupColors = (jobId: string) => {
@@ -913,12 +911,21 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   };
 
   const getJobTimelineData = (job: Job) => {
+    if (!isMultiDayJob(job)) return null;
     const cleanNo = getCleanJobNo(job.id);
     if (!cleanNo) return null;
-    const related = jobs.filter(j => getCleanJobNo(j.id) === cleanNo);
-    // Sort related by date
-    const sorted = [...related].sort((a, b) => a.job_date.localeCompare(b.job_date));
-    const dates = sorted.map(j => ({
+    const subMatch = job.id.match(/#sub\d+/);
+    const subTag = subMatch ? subMatch[0] : '';
+    const related = jobs
+      .filter(j => {
+        if (getCleanJobNo(j.id) !== cleanNo) return false;
+        if (!isMultiDayJob(j)) return false;
+        if (subTag) return j.id.includes(subTag);
+        return !j.id.includes('#sub');
+      })
+      .sort((a, b) => a.job_date.localeCompare(b.job_date));
+
+    const dates = related.map(j => ({
       id: j.id,
       date: j.job_date,
       dayNum: getJobDayNumber(j.id),
@@ -952,15 +959,27 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     });
     setIsEditingMode(true);
 
-    const cleanNo = getCleanJobNo(job.id);
-    const related = jobs
-      .filter(j => getCleanJobNo(j.id) === cleanNo)
-      .sort((a, b) => getJobDayNumber(a.id) - getJobDayNumber(b.id));
-    
-    if (related.length > 0) {
-      const dates = related.map(r => r.job_date);
-      setDayDates(dates);
-      setNewJob(prev => ({ ...prev, id: cleanId, duration: related.length }));
+    const isMulti = isMultiDayJob(job);
+    if (isMulti) {
+      const cleanNo = getCleanJobNo(job.id);
+      const subMatch = job.id.match(/#sub\d+/);
+      const subTag = subMatch ? subMatch[0] : '';
+      const related = jobs
+        .filter(j => {
+          if (getCleanJobNo(j.id) !== cleanNo) return false;
+          if (!isMultiDayJob(j)) return false;
+          if (subTag) return j.id.includes(subTag);
+          return !j.id.includes('#sub');
+        })
+        .sort((a, b) => getJobDayNumber(a.id) - getJobDayNumber(b.id));
+      
+      if (related.length > 0) {
+        const dates = related.map(r => r.job_date);
+        setDayDates(dates);
+        setNewJob(prev => ({ ...prev, id: cleanId, duration: related.length }));
+      } else {
+        setDayDates([job.job_date]);
+      }
     } else {
       setDayDates([job.job_date]);
     }
