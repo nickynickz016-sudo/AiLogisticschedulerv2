@@ -1841,7 +1841,13 @@ const App: React.FC = () => {
       await insertJobsInSupabase(jobsToCreate);
     }
 
-    await logActivity('EDIT', 'Job Schedule', currentTargetId, `Updated job schedule #${currentTargetId} for shipper "${job.shipper_name}"`, job.shipper_name, oldJob, job);
+    const isWarehouse = job.is_warehouse_activity || oldJob?.is_warehouse_activity;
+    const entityType: EntityType = isWarehouse ? 'Warehouse Activity' : 'Job Schedule';
+    const actionDesc = isWarehouse
+      ? `Updated warehouse activity #${currentTargetId} ("${job.activity_name || job.shipper_name}") for date ${job.job_date}`
+      : `Updated job schedule #${currentTargetId} for shipper "${job.shipper_name}"`;
+
+    await logActivity('EDIT', entityType, currentTargetId, actionDesc, job.activity_name || job.shipper_name, oldJob, job);
     await fetchJobs();
   };
 
@@ -1980,7 +1986,13 @@ const App: React.FC = () => {
       }
     } else {
       for (const createdJob of jobsToCreate) {
-        await logActivity('CREATE', 'Job Schedule', createdJob.id, `Created job schedule #${createdJob.id} for shipper "${createdJob.shipper_name}" (${createdJob.job_date})`, createdJob.shipper_name, null, createdJob);
+        const isWarehouse = createdJob.is_warehouse_activity;
+        const entityType: EntityType = isWarehouse ? 'Warehouse Activity' : 'Job Schedule';
+        const actionDesc = isWarehouse
+          ? `Added warehouse activity #${createdJob.id} ("${createdJob.activity_name || createdJob.shipper_name}") for ${createdJob.job_date}`
+          : `Created/Requested job schedule #${createdJob.id} for shipper "${createdJob.shipper_name}" (${createdJob.job_date})`;
+
+        await logActivity('CREATE', entityType, createdJob.id, actionDesc, createdJob.activity_name || createdJob.shipper_name, null, createdJob);
       }
       await fetchJobs();
       if (duration > 1) {
@@ -2073,7 +2085,9 @@ const App: React.FC = () => {
       });
       if (error) alert(`Error: ${error.message}`);
       else {
-        await logActivity('DELETE', 'Job Schedule', jobId, `Requested deletion for job #${jobId} (Shipper: ${job.shipper_name}) - Pending Approval`, job.shipper_name, job);
+        const isWarehouse = job.is_warehouse_activity;
+        const entityType: EntityType = isWarehouse ? 'Warehouse Activity' : 'Job Schedule';
+        await logActivity('DELETE', entityType, jobId, `Requested deletion for ${isWarehouse ? 'warehouse activity' : 'job schedule'} #${jobId} (Title: ${job.activity_name || job.shipper_name}) - Pending Approval`, job.activity_name || job.shipper_name, job);
       }
       await fetchJobs();
     }
@@ -2091,7 +2105,9 @@ const App: React.FC = () => {
     
     // Log deletion WITH full previous snapshot BEFORE row deletion from Supabase
     if (targetJob) {
-      await logActivity('DELETE', 'Job Schedule', jobId, `Permanently deleted job schedule #${jobId} (Shipper: ${targetJob.shipper_name}, Date: ${targetJob.job_date})`, targetJob.shipper_name, targetJob);
+      const isWarehouse = targetJob.is_warehouse_activity;
+      const entityType: EntityType = isWarehouse ? 'Warehouse Activity' : 'Job Schedule';
+      await logActivity('DELETE', entityType, jobId, `Permanently deleted ${isWarehouse ? 'warehouse activity' : 'job schedule'} #${jobId} (Title: ${targetJob.activity_name || targetJob.shipper_name}, Date: ${targetJob.job_date})`, targetJob.activity_name || targetJob.shipper_name, targetJob);
     }
 
     const { error } = await supabase.from('jobs').delete().eq('id', jobId);

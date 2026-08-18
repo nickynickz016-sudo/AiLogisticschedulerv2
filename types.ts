@@ -82,6 +82,7 @@ export type EntityType =
   | 'Survey Tracker'
   | 'Fleet & Crew' 
   | 'Warehouse' 
+  | 'Warehouse Activity'
   | 'Warehouse Checklist'
   | 'Import Clearance' 
   | 'User Management' 

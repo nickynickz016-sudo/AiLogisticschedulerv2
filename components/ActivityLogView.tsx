@@ -90,6 +90,30 @@ export const ActivityLogView: React.FC<ActivityLogViewProps> = ({
 
   const isAdmin = currentUser.role === UserRole.ADMIN || String(currentUser.role).toUpperCase() === 'ADMIN';
 
+  // Merge users from allUsers + any distinct users recorded in logs
+  const userOptions = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; subtitle: string }>();
+    allUsers.forEach(u => {
+      map.set(u.id, { id: u.id, name: u.name, subtitle: u.employee_id || u.role });
+    });
+    logs.forEach(log => {
+      if (log.user_name) {
+        const alreadyExists = Array.from(map.values()).some(
+          v => v.name.toLowerCase() === log.user_name.toLowerCase() || (log.user_id && v.id === log.user_id)
+        );
+        if (!alreadyExists) {
+          const key = log.user_id || log.user_name;
+          map.set(key, {
+            id: key,
+            name: log.user_name,
+            subtitle: log.user_role || 'User'
+          });
+        }
+      }
+    });
+    return Array.from(map.values());
+  }, [allUsers, logs]);
+
   // Base logs: All users can view centralized logs across all system users
   const baseLogs = useMemo(() => {
     return logs;
@@ -99,8 +123,16 @@ export const ActivityLogView: React.FC<ActivityLogViewProps> = ({
   const filteredLogs = useMemo(() => {
     return baseLogs.filter(log => {
       // User filter (applicable for all users)
-      if (selectedUserId !== 'ALL' && log.user_id !== selectedUserId && log.user_name !== selectedUserId) {
-        return false;
+      if (selectedUserId !== 'ALL') {
+        const matchedUserObj = userOptions.find(u => u.id === selectedUserId);
+        const matchId = log.user_id === selectedUserId;
+        const matchName = log.user_name && (
+          log.user_name === selectedUserId ||
+          (matchedUserObj && log.user_name.toLowerCase() === matchedUserObj.name.toLowerCase())
+        );
+        if (!matchId && !matchName) {
+          return false;
+        }
       }
 
       // Action type filter
@@ -371,10 +403,10 @@ export const ActivityLogView: React.FC<ActivityLogViewProps> = ({
               onChange={(e) => setSelectedUserId(e.target.value)}
               className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
             >
-              <option value="ALL">All Users ({allUsers.length}) - Centralized System View</option>
-              {allUsers.map((u) => (
+              <option value="ALL">All Users ({userOptions.length}) - Centralized System View</option>
+              {userOptions.map((u) => (
                 <option key={u.id} value={u.id}>
-                  {u.name} ({u.employee_id || u.role})
+                  {u.name} ({u.subtitle})
                 </option>
               ))}
             </select>
@@ -413,13 +445,18 @@ export const ActivityLogView: React.FC<ActivityLogViewProps> = ({
             >
               <option value="ALL">All Application Modules</option>
               <option value="Job Schedule">Job Schedule</option>
+              <option value="Warehouse Activity">Warehouse Activity</option>
+              <option value="Warehouse Checklist">Warehouse Inspection / Checklist</option>
               <option value="Groupage Tracker">Groupage Tracker</option>
-              <option value="Survey">Survey Tracker</option>
+              <option value="Survey Tracker">Survey Tracker</option>
               <option value="Fleet & Crew">Fleet & Crew</option>
-              <option value="Warehouse">Warehouse Area</option>
+              <option value="Transporter">Transporter & Freight</option>
+              <option value="Digital Packing List">Digital Packing List</option>
+              <option value="Inventory">Inventory & Materials</option>
+              <option value="Vendor">Outsource Vendors</option>
               <option value="Import Clearance">Import Clearance</option>
-              <option value="Inventory">Inventory</option>
-              <option value="User Management">User Management</option>
+              <option value="User Access">User Accounts & Access</option>
+              <option value="Capacity Settings">Capacity & Alert Settings</option>
             </select>
           </div>
 
