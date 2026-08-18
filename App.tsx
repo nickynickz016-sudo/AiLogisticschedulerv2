@@ -1147,6 +1147,12 @@ const App: React.FC = () => {
     }
   }, [currentUser, fetchJobs, fetchUsers, fetchPersonnel, fetchVehicles, fetchSettings, fetchChecklists, fetchSurveys, fetchActivityLogs]);
 
+  useEffect(() => {
+    if (activeTab === 'activity-log') {
+      fetchActivityLogs();
+    }
+  }, [activeTab, fetchActivityLogs]);
+
   // Friday Auto-Backup background checker/cron-like utility for Admin
   useEffect(() => {
     if (!currentUser) return;
@@ -2990,7 +2996,13 @@ const App: React.FC = () => {
               <GroupageTracker currentUser={currentUser} onLogActivity={logActivity} />
             )}
             {activeTab === 'activity-log' && (
-              <ActivityLogView logs={activityLogs} allUsers={systemUsers} currentUser={currentUser} onRestoreItem={handleRestoreItem} />
+              <ActivityLogView 
+                logs={activityLogs} 
+                allUsers={systemUsers} 
+                currentUser={currentUser} 
+                onRestoreItem={handleRestoreItem}
+                onRefreshLogs={fetchActivityLogs}
+              />
             )}
             {activeTab === 'resources' && (
               <ResourceManager 
