@@ -71,7 +71,9 @@ export type ActionType =
   | 'REJECT' 
   | 'AUTHORIZE'
   | 'STATUS_CHANGE'
-  | 'RESTORE';
+  | 'EXPORT'
+  | 'RESTORE'
+  | (string & {});
 
 export type EntityType = 
   | 'Job Schedule' 
@@ -85,8 +87,13 @@ export type EntityType =
   | 'User Management' 
   | 'User Access'
   | 'Inventory'
+  | 'Transporter'
+  | 'Digital Packing List'
+  | 'Job Cost Sheet'
+  | 'Vendor'
   | 'Capacity Settings'
-  | 'System Settings';
+  | 'System Settings'
+  | (string & {});
 
 export interface ActivityLog {
   id: string;

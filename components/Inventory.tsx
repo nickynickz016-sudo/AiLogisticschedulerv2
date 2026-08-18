@@ -14,6 +14,7 @@ interface InventoryProps {
   isReadOnly?: boolean;
   onlyFinalAssessment?: boolean;
   initialSelectedJobId?: string;
+  onLogActivity?: (action_type: string, entity_type: string, entity_id: string, details: string, entity_title?: string, previous_data?: any, new_data?: any) => void;
 }
 
 export const Inventory: React.FC<InventoryProps> = ({ 
@@ -22,7 +23,8 @@ export const Inventory: React.FC<InventoryProps> = ({
   logo, 
   isReadOnly = false, 
   onlyFinalAssessment = false,
-  initialSelectedJobId
+  initialSelectedJobId,
+  onLogActivity
 }) => {
   const [viewMode, setViewMode] = useState<'inventory' | 'costing'>(initialSelectedJobId ? 'costing' : 'inventory');
   
@@ -940,6 +942,15 @@ export const Inventory: React.FC<InventoryProps> = ({
     if (error) {
       setNotification({ message: `Error adding item: ${error.message}`, type: 'error' });
     } else {
+      onLogActivity?.(
+        'CREATE',
+        'Inventory',
+        newItem.code || newItem.description,
+        `Added new inventory item "${newItem.description}" (${newItem.unit}, Price: ${newItem.price})`,
+        newItem.description,
+        null,
+        newItem
+      );
       setShowAddModal(false);
       setNewItem({ 
         code: '', 
@@ -975,6 +986,15 @@ export const Inventory: React.FC<InventoryProps> = ({
         setNotification({ message: `Error deleting item: ${error.message}`, type: 'error' });
       } else {
         console.log('Delete operation completed. Rows affected:', count);
+        const deletedItem = items.find(i => i.id === id);
+        onLogActivity?.(
+          'DELETE',
+          'Inventory',
+          String(id),
+          `Deleted inventory item #${id} (${deletedItem?.description || 'N/A'})`,
+          deletedItem?.description,
+          deletedItem
+        );
         setNotification({ message: 'Item deleted successfully from database', type: 'success' });
         fetchInventory();
       }

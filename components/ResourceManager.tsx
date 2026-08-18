@@ -28,11 +28,12 @@ interface ResourceManagerProps {
   onAddVehicle: (vehicle: Omit<Vehicle, 'id'>) => Promise<boolean | void> | void;
   onEditPersonnel?: (person: Personnel) => Promise<boolean | void> | void;
   onEditVehicle?: (vehicle: Vehicle) => Promise<boolean | void> | void;
+  onLogActivity?: (action_type: string, entity_type: string, entity_id: string, details: string, entity_title?: string, previous_data?: any, new_data?: any) => void;
 }
 
 export const ResourceManager: React.FC<ResourceManagerProps> = ({ 
   personnel, onUpdatePersonnelStatus, vehicles, onUpdateVehicleStatus, isAdmin, onDeletePersonnel, onDeleteVehicle,
-  onAddPersonnel, onAddVehicle, onEditPersonnel, onEditVehicle
+  onAddPersonnel, onAddVehicle, onEditPersonnel, onEditVehicle, onLogActivity
 }) => {
   const [activeResTab, setActiveResTab] = useState<'personnel' | 'fleet' | 'outsource'>('personnel');
   const [showModal, setShowModal] = useState(false);
@@ -224,6 +225,15 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
           if (error) {
             console.error('Error saving vendor to Supabase:', error);
           }
+          onLogActivity?.(
+            isEditing ? 'EDIT' : 'CREATE',
+            'Vendor',
+            vendorPayload.name,
+            `${isEditing ? 'Updated' : 'Added'} outsource vendor profile for "${vendorPayload.name}" (${vendorPayload.service_provided || 'General'})`,
+            vendorPayload.name,
+            null,
+            vendorPayload
+          );
         } catch (err) {
           console.error('Failed to sync vendor with database:', err);
         }
@@ -335,6 +345,7 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
       } else {
         await supabase.from('vendors').delete().eq('name', vendor.name);
       }
+      onLogActivity?.('DELETE', 'Vendor', vendor.name, `Deleted outsource vendor "${vendor.name}"`, vendor.name, vendor);
     } catch (err) {
       console.error('Failed to delete vendor from database:', err);
     }
@@ -345,6 +356,7 @@ export const ResourceManager: React.FC<ResourceManagerProps> = ({
     setOutsourceVendors(prev => prev.map(v => v.name === vendor.name ? updated : v));
     try {
       await supabase.from('vendors').upsert({ name: vendor.name, status }, { onConflict: 'name' });
+      onLogActivity?.('STATUS_CHANGE', 'Vendor', vendor.name, `Updated vendor status to "${status}" for "${vendor.name}"`, vendor.name, vendor, updated);
     } catch (err) {
       console.error('Failed to update vendor status:', err);
     }

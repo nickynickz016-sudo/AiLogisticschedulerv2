@@ -13,6 +13,7 @@ interface TransporterProps {
   currentUser: UserProfile;
   personnel?: Personnel[];
   vehicles?: Vehicle[];
+  onLogActivity?: (action_type: string, entity_type: string, entity_id: string, details: string, entity_title?: string, previous_data?: any, new_data?: any) => void;
 }
 
 export const Transporter: React.FC<TransporterProps> = ({
@@ -22,7 +23,8 @@ export const Transporter: React.FC<TransporterProps> = ({
   onDeleteJob,
   currentUser,
   personnel = [],
-  vehicles = []
+  vehicles = [],
+  onLogActivity
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -144,6 +146,7 @@ export const Transporter: React.FC<TransporterProps> = ({
           id: newService.id,
           title: newService.id
         } as Job, originalId);
+        onLogActivity?.('EDIT', 'Transporter', newService.id, `Updated transporter assignment #${newService.id} (${newService.vehicle}, Driver: ${newService.driver})`, newService.id, originalJob, payload);
       }
     } else {
       onAddJob({
@@ -151,6 +154,7 @@ export const Transporter: React.FC<TransporterProps> = ({
         id: newService.id,
         title: newService.id,
       } as Partial<Job>);
+      onLogActivity?.('CREATE', 'Transporter', newService.id, `Created transporter assignment #${newService.id} (${newService.vehicle}, Driver: ${newService.driver})`, newService.id, null, payload);
     }
     setShowModal(false);
     resetForm();

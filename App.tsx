@@ -2915,6 +2915,7 @@ const App: React.FC = () => {
                 preloadSurveyData={preloadPackingSurvey}
                 onClearPreloadSurveyData={() => setPreloadPackingSurvey(null)}
                 logo={settings.company_logo}
+                onLogActivity={logActivity}
               />
             )}
             {activeTab === 'warehouse-checklist' && (
@@ -2953,6 +2954,7 @@ const App: React.FC = () => {
                 isReadOnly={currentUser.role !== UserRole.ADMIN && currentUser.employee_id !== 'OPS-ADMIN-01'} // Full Admins or OPS-ADMIN-01 can edit inventory
                 onlyFinalAssessment={restrictedCostingUsers.includes(currentUser.employee_id)} // Restrict costing view for specific users
                 initialSelectedJobId={costingJobId}
+                onLogActivity={logActivity}
               />
             )}
             {activeTab === 'tracking' && <TrackingView jobs={jobs} onUpdateJob={handleUpdateJob} logo={settings.company_logo} />}
@@ -2965,6 +2967,7 @@ const App: React.FC = () => {
                 onAddJob={handleAddJob}
                 onEditJob={handleEditJob}
                 onDeleteJob={handleDeleteJob}
+                onLogActivity={logActivity}
               />
             )}
             {activeTab === 'groupage-tracker' && (
@@ -2986,6 +2989,7 @@ const App: React.FC = () => {
                 onAddVehicle={handleAddVehicle}
                 onEditPersonnel={handleEditPersonnel}
                 onEditVehicle={handleEditVehicle}
+                onLogActivity={logActivity}
               />
             )}
             {activeTab === 'capacity' && (

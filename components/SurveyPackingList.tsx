@@ -185,6 +185,7 @@ interface SurveyPackingListProps {
   preloadSurveyData?: any;
   onClearPreloadSurveyData?: () => void;
   logo?: string;
+  onLogActivity?: (action_type: string, entity_type: string, entity_id: string, details: string, entity_title?: string, previous_data?: any, new_data?: any) => void;
 }
 
 // Inline canvas component for reliable signature capture
@@ -336,7 +337,8 @@ export const SurveyPackingList: React.FC<SurveyPackingListProps> = ({
   currentUser,
   preloadSurveyData,
   onClearPreloadSurveyData,
-  logo
+  logo,
+  onLogActivity
 }) => {
   // Simulator Role State (keeps detect user default, allows override)
   const [activeRole, setActiveRole] = useState<string>(() => {
@@ -852,6 +854,17 @@ export const SurveyPackingList: React.FC<SurveyPackingListProps> = ({
       const newLogsList = [newLogObj, ...auditLogs];
       setAuditLogs(newLogsList);
       localStorage.setItem('writer_survey_packing_audit_v1', JSON.stringify(newLogsList));
+
+      // Trigger global system audit log
+      onLogActivity?.(
+        'EDIT',
+        'Digital Packing List',
+        activeRecord?.id || 'PACKING-LIST',
+        payloadLog.action,
+        activeRecord?.clientName || payloadLog.user,
+        null,
+        payloadLog
+      );
       
       // Notify inside topbar
       if (typeof window !== 'undefined' && (window as any).addNotification) {
