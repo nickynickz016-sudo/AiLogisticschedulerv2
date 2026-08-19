@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { getUAEToday, getCleanJobNo, getJobDayNumber, safeLocalStorage, safeSessionStorage } from './utils';
+import { getUAEToday, getCleanJobNo, getJobDayNumber, isMultiDayJob, safeLocalStorage, safeSessionStorage } from './utils';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { ScheduleView } from './components/ScheduleView';
@@ -1613,7 +1613,9 @@ const App: React.FC = () => {
 
     // 1. Compute dates first so they are available for target ID calculations
     let computedDates: string[] = [];
-    if (job.day_dates && job.day_dates.length === duration) {
+    if (duration === 1) {
+      computedDates = [job.job_date || getUAEToday()];
+    } else if (job.day_dates && job.day_dates.length === duration && (!job.job_date || job.day_dates[0] === job.job_date)) {
       computedDates = job.day_dates;
     } else {
       let currentDateObj = new Date(`${job.job_date || getUAEToday()}T00:00:00Z`);
@@ -1630,12 +1632,27 @@ const App: React.FC = () => {
       }
     }
 
+    const targetSubMatch = targetId.match(/#sub\d+/);
+    const targetSubTag = targetSubMatch ? targetSubMatch[0] : '';
+    const isTargetMulti = isMultiDayJob(oldJob || job) || duration > 1 || targetId.includes('#day');
+
+    let relatedJobs: Job[] = [];
+    if (isTargetMulti) {
+      relatedJobs = jobs.filter(j => {
+        if (getCleanJobNo(j.id) !== oldCleanNo) return false;
+        if (targetSubTag) {
+          return j.id.includes(targetSubTag);
+        }
+        return !j.id.includes('#sub');
+      });
+    } else if (oldJob) {
+      relatedJobs = [oldJob];
+    }
+
     if (isJobNumberEdited) {
       if (isMultiDay) {
         // Multi-day job: Edit the IDs of all related days
-        const related = jobs.filter(j => getCleanJobNo(j.id) === oldCleanNo);
-        
-        for (const rJob of related) {
+        for (const rJob of relatedJobs) {
           const dayNum = getJobDayNumber(rJob.id);
           const baseTag = dayNum === 1 ? newCleanNo : `${newCleanNo}#day${dayNum}`;
           let newDayId = baseTag;
@@ -1682,7 +1699,9 @@ const App: React.FC = () => {
 
     // Since we know the day number of the current target job, get its correct date from computedDates
     const targetDayNumber = getJobDayNumber(currentTargetId);
-    const correctTargetDate = computedDates[targetDayNumber - 1] || job.job_date;
+    const correctTargetDate = (duration > 1 && computedDates[targetDayNumber - 1]) 
+      ? computedDates[targetDayNumber - 1] 
+      : (job.job_date || computedDates[0]);
 
     const updateData: any = {
         title: newCleanNo || currentTargetId,
@@ -1697,7 +1716,7 @@ const App: React.FC = () => {
         volume_cbm: job.volume_cbm,
         job_time: job.job_time,
         job_date: correctTargetDate, 
-        duration: job.duration,
+        duration: duration,
         special_requests: job.special_requests,
         shuttle: job.shuttle,
         long_carry: job.long_carry,
@@ -1718,7 +1737,6 @@ const App: React.FC = () => {
     }
 
     const cleanNo = newCleanNo;
-    const relatedJobs = jobs.filter(j => getCleanJobNo(j.id) === oldCleanNo);
 
     const jobsToCreate: Job[] = [];
     const jobsToUpdate: Job[] = [];
@@ -1859,6 +1877,25 @@ const App: React.FC = () => {
     if (jobsToCreate.length > 0) {
       await insertJobsInSupabase(jobsToCreate);
     }
+
+    // Optimistic update of local jobs state
+    setJobs(prevJobs => {
+      let next = prevJobs.filter(j => !unmatchedJobs.some(u => u.id === j.id));
+      next = next.map(j => {
+        if (j.id === targetId || j.id === currentTargetId) {
+          return { ...j, ...updateData, id: currentTargetId };
+        }
+        const updated = jobsToUpdate.find(u => u.id === j.id);
+        if (updated) {
+          return { ...j, ...updated };
+        }
+        return j;
+      });
+      if (jobsToCreate.length > 0) {
+        next = [...next, ...jobsToCreate];
+      }
+      return next;
+    });
 
     const isWarehouse = job.is_warehouse_activity || oldJob?.is_warehouse_activity;
     const entityType: EntityType = isWarehouse ? 'Warehouse Activity' : 'Job Schedule';

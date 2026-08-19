@@ -63,6 +63,13 @@ export const getJobDayLabel = (id: string, duration?: number): string | null => 
   return null;
 };
 
+export const isMultiDayJob = (job: any): boolean => {
+  if (!job) return false;
+  if (job.duration && job.duration > 1) return true;
+  if (job.id && (job.id.includes('#day') || job.id.toLowerCase().includes('-d'))) return true;
+  return false;
+};
+
 const memoryStorage = new Map<string, string>();
 
 export const safeLocalStorage = {

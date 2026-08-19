@@ -953,9 +953,11 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     e.stopPropagation();
     setSelectedJob(job);
     const cleanId = getCleanJobNo(job.id);
+    const dur = job.duration || 1;
     setNewJob({
       ...job,
-      id: cleanId
+      id: cleanId,
+      duration: dur
     });
     setIsEditingMode(true);
 
@@ -976,7 +978,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
       if (related.length > 0) {
         const dates = related.map(r => r.job_date);
         setDayDates(dates);
-        setNewJob(prev => ({ ...prev, id: cleanId, duration: related.length }));
+        setNewJob(prev => ({ ...prev, id: cleanId, duration: related.length, job_date: dates[0] || job.job_date }));
       } else {
         setDayDates([job.job_date]);
       }
@@ -985,6 +987,59 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     }
 
     setShowModal(true);
+  };
+
+  const handleStartDateChange = (newDate: string) => {
+    setNewJob(prev => ({ ...prev, job_date: newDate }));
+    if (!newDate) return;
+    const currentDuration = newJob.duration || 1;
+    if (currentDuration <= 1) {
+      setDayDates([newDate]);
+    } else {
+      const oldStart = dayDates[0] || newJob.job_date;
+      if (oldStart && oldStart !== newDate) {
+        const oldDateObj = new Date(`${oldStart}T00:00:00Z`);
+        const newDateObj = new Date(`${newDate}T00:00:00Z`);
+        const diffMs = newDateObj.getTime() - oldDateObj.getTime();
+        const updatedDates = dayDates.map((d, idx) => {
+          if (idx === 0) return newDate;
+          if (!d) return newDate;
+          const subDateObj = new Date(`${d}T00:00:00Z`);
+          return new Date(subDateObj.getTime() + diffMs).toISOString().split('T')[0];
+        });
+        while (updatedDates.length < currentDuration) {
+          let lastDate = new Date(`${updatedDates[updatedDates.length - 1] || newDate}T00:00:00Z`);
+          lastDate.setUTCDate(lastDate.getUTCDate() + 1);
+          updatedDates.push(lastDate.toISOString().split('T')[0]);
+        }
+        setDayDates(updatedDates.slice(0, currentDuration));
+      } else {
+        let dt = new Date(`${newDate}T00:00:00Z`);
+        const dates: string[] = [];
+        for (let i = 0; i < currentDuration; i++) {
+          dates.push(dt.toISOString().split('T')[0]);
+          dt.setUTCDate(dt.getUTCDate() + 1);
+        }
+        setDayDates(dates);
+      }
+    }
+  };
+
+  const handleDurationChange = (newDuration: number) => {
+    const dur = Math.max(1, Math.min(30, newDuration));
+    setNewJob(prev => ({ ...prev, duration: dur }));
+    const startDate = newJob.job_date || getUAEToday();
+    const currentDates = [...dayDates];
+    if (currentDates.length === 0 || !currentDates[0]) {
+      currentDates[0] = startDate;
+    }
+    while (currentDates.length < dur) {
+      const lastDateStr = currentDates[currentDates.length - 1] || startDate;
+      const nextDate = new Date(`${lastDateStr}T00:00:00Z`);
+      nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+      currentDates.push(nextDate.toISOString().split('T')[0]);
+    }
+    setDayDates(currentDates.slice(0, dur));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -1021,10 +1076,26 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         }
     }
 
-    if (isEditingMode) {
-        onEditJob({ ...newJob, day_dates: dayDates } as Job, selectedJob?.id);
+    const finalDuration = newJob.duration || 1;
+    let finalDayDates = [...dayDates];
+    if (finalDuration === 1) {
+      finalDayDates = [newJob.job_date];
     } else {
-        onAddJob({ ...newJob, title: newJob.id, day_dates: dayDates });
+      if (finalDayDates.length !== finalDuration || finalDayDates[0] !== newJob.job_date) {
+        finalDayDates[0] = newJob.job_date;
+        while (finalDayDates.length < finalDuration) {
+          const prev = new Date(`${finalDayDates[finalDayDates.length - 1] || newJob.job_date}T00:00:00Z`);
+          prev.setUTCDate(prev.getUTCDate() + 1);
+          finalDayDates.push(prev.toISOString().split('T')[0]);
+        }
+        finalDayDates = finalDayDates.slice(0, finalDuration);
+      }
+    }
+
+    if (isEditingMode) {
+        onEditJob({ ...newJob, day_dates: finalDayDates } as Job, selectedJob?.id);
+    } else {
+        onAddJob({ ...newJob, title: newJob.id, day_dates: finalDayDates });
     }
     handleCloseModal();
   };
@@ -2249,7 +2320,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Start Date *</label>
-                    <input required type="date" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.job_date} onChange={e => setNewJob({...newJob, job_date: e.target.value})} />
+                    <input required type="date" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.job_date} onChange={e => handleStartDateChange(e.target.value)} />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
@@ -2261,7 +2332,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                         max="30"
                         className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" 
                         value={newJob.duration || 1} 
-                        onChange={e => setNewJob({...newJob, duration: parseInt(e.target.value) || 1})} 
+                        onChange={e => handleDurationChange(parseInt(e.target.value) || 1)} 
                       />
                     </div>
                     <div className="space-y-1.5">
