@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, Edit2, Save, X, Plus, Package, AlertTriangle, Loader2, Database, FileInput, ClipboardList, ChevronRight, Calculator, Truck, User, MapPin, RefreshCw, Trash2, Printer, ChevronDown, FileText, FileDown, Calendar, Info, CheckCircle2, BarChart2 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { InventoryItem, Job, JobCostSheet, CostSheetItem, UserProfile, InventoryConsumption, InventoryPriceHistory } from '../types';
+import { formatJobNoForExcel, getCleanJobNo } from '../utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -84,6 +85,8 @@ export const Inventory: React.FC<InventoryProps> = ({
   // Report State
   const [reportStartDate, setReportStartDate] = useState<string>(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
   const [reportEndDate, setReportEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [costingStartDate, setCostingStartDate] = useState<string>(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]);
+  const [costingEndDate, setCostingEndDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [isExporting, setIsExporting] = useState(false);
 
   // Price History State
@@ -126,6 +129,60 @@ export const Inventory: React.FC<InventoryProps> = ({
     }
   }, [initialSelectedJobId, jobs]);
 
+  // Smart Multi-Tier Job Resolution Helper
+  const findJobForSheet = (sheetJobId: string, candidateJobs: Job[] = []): Job | undefined => {
+    if (!sheetJobId) return undefined;
+    const raw = sheetJobId.trim();
+    
+    // 1. Direct ID match
+    let found = candidateJobs.find(j => j.id === raw);
+    if (found) return found;
+
+    // 2. Base ID match (before '#' e.g. #sub or #day)
+    const baseSheetId = raw.split('#')[0].trim();
+    found = candidateJobs.find(j => j.id === baseSheetId || (j.id && j.id.split('#')[0].trim() === baseSheetId));
+    if (found) return found;
+
+    // 3. Clean Job No (strips day suffixes like -D1, -Day 1, #day1)
+    const cleanSheetNo = getCleanJobNo(raw);
+    found = candidateJobs.find(j => getCleanJobNo(j.id) === cleanSheetNo);
+    if (found) return found;
+
+    // 4. Formatted Job No (strips AE-, day suffixes)
+    const fmtSheetNo = formatJobNoForExcel(raw);
+    if (fmtSheetNo) {
+      found = candidateJobs.find(j => formatJobNoForExcel(j.id) === fmtSheetNo);
+      if (found) return found;
+    }
+
+    // 5. Case-insensitive & normalized match
+    const lowerFmt = (fmtSheetNo || '').toLowerCase();
+    const lowerClean = cleanSheetNo.toLowerCase();
+    found = candidateJobs.find(j => 
+      (j.id && j.id.toLowerCase() === raw.toLowerCase()) ||
+      (formatJobNoForExcel(j.id).toLowerCase() === lowerFmt) ||
+      (getCleanJobNo(j.id).toLowerCase() === lowerClean)
+    );
+
+    return found;
+  };
+
+  const getShipperDisplayName = (job?: any, sheet?: any): string => {
+    if (job) {
+      const candidate = job.shipper_name || job.activity_name || job.client_name || job.client || job.consignee || job.customer_name || job.name || job.shipper;
+      if (candidate && typeof candidate === 'string' && candidate.trim() !== '' && candidate.trim().toUpperCase() !== 'N/A') {
+        return candidate.trim();
+      }
+    }
+    if (sheet) {
+      const sheetCandidate = sheet.shipper_name || sheet.client_name || sheet.consignee || sheet.customer_name || sheet.activity_name;
+      if (sheetCandidate && typeof sheetCandidate === 'string' && sheetCandidate.trim() !== '' && sheetCandidate.trim().toUpperCase() !== 'N/A') {
+        return sheetCandidate.trim();
+      }
+    }
+    return 'N/A';
+  };
+
   const fetchSummary = async () => {
     setIsSaving(true);
     try {
@@ -134,10 +191,37 @@ export const Inventory: React.FC<InventoryProps> = ({
         .select('*');
       
       if (error) throw error;
+
+      // Query database jobs and import clearance to build complete lookup list
+      const [{ data: dbJobs }, { data: importClearanceSheets }] = await Promise.all([
+        supabase.from('jobs').select('*'),
+        supabase.from('import_clearance_cost_sheets').select('*')
+      ]);
+
+      const allKnownJobs: Job[] = [...(jobs || [])];
+      if (dbJobs && dbJobs.length > 0) {
+        dbJobs.forEach((dj: any) => {
+          if (!allKnownJobs.some(j => j.id === dj.id)) {
+            allKnownJobs.push(dj);
+          }
+        });
+      }
       
       const summary = (data || []).map(sheet => {
-        const job = jobs.find(j => j.id === sheet.job_id);
-        const displayName = job?.shipper_name || job?.activity_name || 'N/A';
+        const job = findJobForSheet(sheet.job_id, allKnownJobs);
+        let displayName = getShipperDisplayName(job, sheet);
+        
+        if (displayName === 'N/A' && importClearanceSheets) {
+          const matchingImport = importClearanceSheets.find((ic: any) => 
+            ic.job_id === sheet.job_id || 
+            getCleanJobNo(ic.job_id || '') === getCleanJobNo(sheet.job_id) || 
+            formatJobNoForExcel(ic.job_id || '') === formatJobNoForExcel(sheet.job_id)
+          );
+          if (matchingImport?.consignee || matchingImport?.shipper_name) {
+            displayName = (matchingImport.consignee || matchingImport.shipper_name).trim();
+          }
+        }
+
         const categoryName = job?.is_warehouse_activity ? 'Warehouse Area' : (sheet.job_category || '-');
         return {
           jobId: sheet.job_id,
@@ -717,7 +801,8 @@ export const Inventory: React.FC<InventoryProps> = ({
     }
 
     const job = jobs.find(j => j.id === currentSheet.job_id);
-    const jobNo = job?.id || currentSheet.job_id;
+    const rawJobNo = job?.id || currentSheet.job_id;
+    const cleanJobNo = formatJobNoForExcel(rawJobNo);
 
     const reportData = currentSheet.items
       .filter(item => Number(item.issued_qty || 0) > 0) // Only include items with activity
@@ -725,6 +810,7 @@ export const Inventory: React.FC<InventoryProps> = ({
         const consumed = Math.max(0, Number(item.issued_qty || 0) - Number(item.returned_qty || 0));
         const rate = Number(item.price || 0);
         return {
+          'Job No.': cleanJobNo,
           'Packing Date': currentSheet.packing_date || '-',
           'Category': currentSheet.job_category || '-',
           'CBM': currentSheet.cbm || 0,
@@ -737,6 +823,7 @@ export const Inventory: React.FC<InventoryProps> = ({
       });
 
     const manualReportData = (currentSheet.manual_items || []).map(mItem => ({
+      'Job No.': cleanJobNo,
       'Packing Date': currentSheet.packing_date || '-',
       'Category': currentSheet.job_category || '-',
       'CBM': currentSheet.cbm || 0,
@@ -760,6 +847,7 @@ export const Inventory: React.FC<InventoryProps> = ({
 
     // Set column widths
     const wscols = [
+      { wch: 15 }, // Job No.
       { wch: 15 }, // Packing Date
       { wch: 15 }, // Category
       { wch: 10 }, // CBM
@@ -776,7 +864,7 @@ export const Inventory: React.FC<InventoryProps> = ({
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.setAttribute('download', `Job_Costing_${jobNo}.xlsx`);
+    link.setAttribute('download', `Job_Costing_${cleanJobNo || 'Export'}.xlsx`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -786,30 +874,60 @@ export const Inventory: React.FC<InventoryProps> = ({
   const handleExportAllJobCosting = async () => {
     setIsExporting(true);
     try {
-      const { data: sheets, error: sError } = await supabase
-        .from('job_cost_sheets')
-        .select('*');
+      const [{ data: sheets, error: sError }, { data: dbJobs }, { data: importClearanceSheets }, { data: allPriceHistory }] = await Promise.all([
+        supabase.from('job_cost_sheets').select('*'),
+        supabase.from('jobs').select('*'),
+        supabase.from('import_clearance_cost_sheets').select('*'),
+        supabase.from('inventory_price_history').select('*').order('effective_date', { ascending: false })
+      ]);
 
       if (sError) throw sError;
-
-      const { data: allPriceHistory } = await supabase
-        .from('inventory_price_history')
-        .select('*')
-        .order('effective_date', { ascending: false });
 
       if (!sheets || sheets.length === 0) {
         setNotification({ message: "No job cost sheets found.", type: 'error' });
         return;
       }
 
+      // Combine in-memory jobs prop with Supabase jobs database table
+      const allKnownJobs: Job[] = [...(jobs || [])];
+      if (dbJobs && dbJobs.length > 0) {
+        dbJobs.forEach((dj: any) => {
+          if (!allKnownJobs.some(j => j.id === dj.id)) {
+            allKnownJobs.push(dj);
+          }
+        });
+      }
+
       const reportData: any[] = [];
 
       sheets.forEach((sheet: JobCostSheet) => {
-        const job = jobs.find(j => j.id === sheet.job_id);
-        const jobNo = job?.id || sheet.job_id;
-        const clientName = job?.shipper_name || 'N/A';
+        const job = findJobForSheet(sheet.job_id, allKnownJobs);
+        const rawJobNo = job?.id || sheet.job_id;
+        const cleanJobNo = formatJobNoForExcel(rawJobNo);
+        
+        let clientName = getShipperDisplayName(job, sheet);
+        if (clientName === 'N/A' && importClearanceSheets) {
+          const matchingImport = importClearanceSheets.find((ic: any) => 
+            ic.job_id === sheet.job_id || 
+            getCleanJobNo(ic.job_id || '') === getCleanJobNo(sheet.job_id) || 
+            formatJobNoForExcel(ic.job_id || '') === cleanJobNo
+          );
+          if (matchingImport?.consignee || matchingImport?.shipper_name) {
+            clientName = (matchingImport.consignee || matchingImport.shipper_name).trim();
+          }
+        }
+        
+        // Date of this job sheet
+        const sheetDate = sheet.packing_date || job?.job_date || '';
 
-        sheet.items.forEach((item: CostSheetItem) => {
+        // Apply date range filter (if sheet has date)
+        if (sheetDate) {
+          if (costingStartDate && sheetDate < costingStartDate) return;
+          if (costingEndDate && sheetDate > costingEndDate) return;
+        }
+
+        // Standard Inventory Items
+        (sheet.items || []).forEach((item: CostSheetItem) => {
           const consumed = Math.max(0, Number(item.issued_qty || 0) - Number(item.returned_qty || 0));
           if (consumed > 0) {
             const itemPrices = (allPriceHistory || []).filter(ph => Number(ph.inventory_id) === Number(item.inventory_id));
@@ -818,8 +936,12 @@ export const Inventory: React.FC<InventoryProps> = ({
             const changeDates = itemPrices.map(ph => ph.effective_date).join(', ');
 
             reportData.push({
-              'Job No.': jobNo,
+              'Job No.': cleanJobNo,
+              'Packing Date': sheetDate || '-',
+              'Date Range': `${costingStartDate} to ${costingEndDate}`,
               'Client Name': clientName,
+              'Category': sheet.job_category || (job?.is_warehouse_activity ? 'Warehouse' : job?.main_category) || '-',
+              'CBM': sheet.cbm || job?.volume_cbm || 0,
               'Item Code': item.code || '-',
               'Product Description': item.description,
               'Qty Consumed': consumed,
@@ -831,19 +953,58 @@ export const Inventory: React.FC<InventoryProps> = ({
             });
           }
         });
+
+        // Manual Items
+        (sheet.manual_items || []).forEach((mItem: any) => {
+          const cost = Number(mItem.cost || 0);
+          if (cost > 0 || (mItem.description && mItem.description.trim() !== '')) {
+            reportData.push({
+              'Job No.': cleanJobNo,
+              'Packing Date': sheetDate || '-',
+              'Date Range': `${costingStartDate} to ${costingEndDate}`,
+              'Client Name': clientName,
+              'Category': sheet.job_category || (job?.is_warehouse_activity ? 'Warehouse' : job?.main_category) || '-',
+              'CBM': sheet.cbm || job?.volume_cbm || 0,
+              'Item Code': 'MANUAL',
+              'Product Description': mItem.description || 'Manual Item',
+              'Qty Consumed': 1,
+              'Rate': cost,
+              'Qty Consumed X rate': cost.toFixed(2),
+              'Previous Price': '-',
+              'Current Update Price': cost,
+              'Dates when it change': 'Manual Item'
+            });
+          }
+        });
       });
 
       if (reportData.length === 0) {
-        setNotification({ message: "No material consumption found across all jobs.", type: 'error' });
+        setNotification({ 
+          message: `No material consumption found between ${costingStartDate} and ${costingEndDate}.`, 
+          type: 'error' 
+        });
         return;
       }
 
       const worksheet = XLSX.utils.json_to_sheet(reportData);
       const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Overall Job Costing");
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Materials Used");
 
       const wscols = [
-        { wch: 15 }, { wch: 25 }, { wch: 15 }, { wch: 40 }, { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 30 }
+        { wch: 15 }, // Job No.
+        { wch: 15 }, // Packing Date
+        { wch: 25 }, // Date Range
+        { wch: 25 }, // Client Name
+        { wch: 15 }, // Category
+        { wch: 10 }, // CBM
+        { wch: 15 }, // Item Code
+        { wch: 40 }, // Product Description
+        { wch: 15 }, // Qty Consumed
+        { wch: 12 }, // Rate
+        { wch: 20 }, // Qty Consumed X rate
+        { wch: 15 }, // Previous Price
+        { wch: 18 }, // Current Update Price
+        { wch: 25 }  // Dates when it change
       ];
       worksheet['!cols'] = wscols;
 
@@ -852,7 +1013,7 @@ export const Inventory: React.FC<InventoryProps> = ({
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `Overall_Job_Costing_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+      link.setAttribute('download', `Job_Costing_Materials_Used_${costingStartDate}_to_${costingEndDate}.xlsx`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -1694,23 +1855,45 @@ export const Inventory: React.FC<InventoryProps> = ({
             )}
 
             {viewMode === 'costing' && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleExportAllJobCosting}
-                  disabled={isExporting}
-                  className="flex items-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-emerald-700 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all disabled:opacity-50 shadow-md border border-emerald-500/20"
-                >
-                  {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileDown className="w-3.5 h-3.5" />}
-                  Export All
-                </button>
-                <button
-                  onClick={fetchSummary}
-                  disabled={isSaving}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 transition-all shadow-md border border-blue-500/20"
-                >
-                  {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <BarChart2 className="w-3.5 h-3.5" />}
-                  Summary
-                </button>
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm w-full lg:w-auto">
+                <div className="flex items-center gap-2 px-3 sm:border-r border-slate-100 py-1 sm:py-0">
+                  <Calendar className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest hidden sm:inline">From</span>
+                  <input 
+                    type="date" 
+                    value={costingStartDate}
+                    onChange={(e) => setCostingStartDate(e.target.value)}
+                    className="text-[10px] font-black text-slate-700 outline-none bg-transparent cursor-pointer"
+                    title="From Date for Materials Used"
+                  />
+                  <span className="text-slate-300 text-[10px] font-bold">to</span>
+                  <input 
+                    type="date" 
+                    value={costingEndDate}
+                    onChange={(e) => setCostingEndDate(e.target.value)}
+                    className="text-[10px] font-black text-slate-700 outline-none bg-transparent cursor-pointer"
+                    title="To Date for Materials Used"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleExportAllJobCosting}
+                    disabled={isExporting}
+                    title={`Export all materials used from ${costingStartDate} to ${costingEndDate}`}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-700 transition-all disabled:opacity-50 active:scale-95 shadow-lg shadow-emerald-100"
+                  >
+                    {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <FileDown className="w-3 h-3" />}
+                    Export All
+                  </button>
+                  <button
+                    onClick={fetchSummary}
+                    disabled={isSaving}
+                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-700 transition-all active:scale-95 shadow-lg shadow-blue-100"
+                  >
+                    {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <BarChart2 className="w-3 h-3" />}
+                    Summary
+                  </button>
+                </div>
               </div>
             )}
 

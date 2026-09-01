@@ -52,10 +52,11 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({
   const [isDeclining, setIsDeclining] = useState(false);
   const sigPad = React.useRef<any>(null);
 
-  const [allocation, setAllocation] = useState<{ team_leader: string, vehicles: string[], writer_crew: string[] }>({
+  const [allocation, setAllocation] = useState<{ team_leader: string, vehicles: string[], writer_crew: string[], truck_qty: number }>({
     team_leader: '',
     vehicles: [],
-    writer_crew: []
+    writer_crew: [],
+    truck_qty: 1
   });
 
   // UI States for Expansion and Search
@@ -96,6 +97,13 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({
       setAllocatingJobId(job.id);
       setExpandedSection(null);
       setSearchTerm('');
+      const initialTrucks = (job.vehicles || []).filter(v => !/bus/i.test(v)).length;
+      setAllocation({
+        team_leader: job.team_leader || '',
+        vehicles: job.vehicles || [],
+        writer_crew: job.writer_crew || [],
+        truck_qty: job.truck_qty !== undefined ? job.truck_qty : Math.max(1, initialTrucks || 1)
+      });
     }
   };
 
@@ -106,7 +114,7 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({
     }
     onApproval(allocatingJobId!, true, skipAllocation ? undefined : allocation);
     setAllocatingJobId(null);
-    setAllocation({ team_leader: '', vehicles: [], writer_crew: [] });
+    setAllocation({ team_leader: '', vehicles: [], writer_crew: [], truck_qty: 1 });
   };
 
   const handleWarehouseAuth = (approved: boolean) => {
@@ -159,11 +167,13 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({
   const toggleVehicle = (name: string) => {
     setAllocation(prev => {
       const exists = prev.vehicles.includes(name);
-      if (exists) {
-        return { ...prev, vehicles: prev.vehicles.filter(v => v !== name) };
-      } else {
-        return { ...prev, vehicles: [...prev.vehicles, name] };
-      }
+      const updatedVehicles = exists ? prev.vehicles.filter(v => v !== name) : [...prev.vehicles, name];
+      const truckCount = updatedVehicles.filter(v => !/bus/i.test(v)).length;
+      return { 
+        ...prev, 
+        vehicles: updatedVehicles,
+        truck_qty: truckCount > 0 ? truckCount : (prev.truck_qty || 1)
+      };
     });
   };
 
@@ -480,7 +490,29 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({
                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                           <Truck className="w-4 h-4 text-slate-400" /> Dispatch Vehicles
                         </label>
-                        <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar p-1">
+                        <div className="flex items-center gap-2 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200 ml-auto">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Truck Qty:</span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setAllocation(prev => ({ ...prev, truck_qty: Math.max(1, (prev.truck_qty || 1) - 1) }))}
+                              className="w-5 h-5 flex items-center justify-center rounded-md bg-white border border-slate-200 text-slate-600 font-black text-xs hover:bg-slate-100 transition-all"
+                            >
+                              -
+                            </button>
+                            <span className="w-5 text-center text-xs font-black text-blue-600">
+                              {allocation.truck_qty || 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setAllocation(prev => ({ ...prev, truck_qty: (prev.truck_qty || 1) + 1 }))}
+                              className="w-5 h-5 flex items-center justify-center rounded-md bg-white border border-slate-200 text-slate-600 font-black text-xs hover:bg-slate-100 transition-all"
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar p-1">
                           {allVehicles.map(v => (
                             <button
                               key={v.id}

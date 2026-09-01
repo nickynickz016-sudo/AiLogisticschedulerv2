@@ -283,6 +283,7 @@ export interface Job {
   writer_crew?: string[];
   vehicle?: string; // Legacy field for single vehicle/backward compat
   vehicles?: string[]; // Updated to support multiple vehicles
+  truck_qty?: number; // Quantity of trucks assigned/required
 
   // Fields for Import Clearance
   bol_number?: string;
@@ -364,6 +365,70 @@ export interface ManualCostItem {
   description: string;
   cost: number;
 }
+
+export interface ImportCostItem {
+  id: string;
+  sl_no: number;
+  description: string;
+  cost_dhs: number;
+  cost_fils: number;
+  cost_amount: number;
+  invoice_dhs: number;
+  invoice_fils: number;
+  invoice_amount: number;
+  is_custom?: boolean;
+}
+
+export interface ImportClearanceCostSheet {
+  id: string;
+  job_id: string;
+  job_no: string;
+  date: string;
+  consignee: string;
+  bl_no: string;
+  awb: string;
+  cont_no: string;
+  volume_weight: string;
+  items: ImportCostItem[];
+  transport_amount: number;
+  total_cost: number;
+  net_cost: number;
+  total_invoice: number;
+  signature_name?: string;
+  signature_date?: string;
+  signature_image?: string;
+  status: 'Draft' | 'Saved' | 'Finalized';
+  created_at: number;
+  updated_at: number;
+  created_by?: string;
+  last_edited_by?: string;
+}
+
+export const DEFAULT_IMPORT_CLEARANCE_ITEMS: { sl_no: number; description: string }[] = [
+  { sl_no: 1, description: 'DO FEE' },
+  { sl_no: 2, description: 'PHC' },
+  { sl_no: 3, description: 'LCL / DTHC AND OTHER CHARGES' },
+  { sl_no: 4, description: 'PORT HANDLING' },
+  { sl_no: 5, description: 'STORAGE' },
+  { sl_no: 6, description: 'LINE DEMURRAGE' },
+  { sl_no: 7, description: 'BILL OF ENTRY' },
+  { sl_no: 8, description: 'DUTY' },
+  { sl_no: 9, description: 'CUSTOMS INSPECTION BOOKIN FEE' },
+  { sl_no: 10, description: 'VAT' },
+  { sl_no: 11, description: 'TRANSPORTATION' },
+  { sl_no: 12, description: 'MECRC / CONTAINER WASHING' },
+  { sl_no: 13, description: 'CUSTOMS INSPECTION FEE' },
+  { sl_no: 14, description: 'LABOUR FEE' },
+  { sl_no: 15, description: 'MOFA DOCUMENTATION FEE' },
+  { sl_no: 16, description: 'CUSTOMS CLEARANCE PRO FEE' },
+  { sl_no: 17, description: 'DO DOCUMENTATION FEE' },
+  { sl_no: 18, description: 'CUSTOMS DOCUMENTATION' },
+  { sl_no: 19, description: 'MOFA FEE' },
+  { sl_no: 20, description: 'TOKEN' },
+  { sl_no: 21, description: 'WAREHOUSE HANDLING +OTHER CHARGES' },
+  { sl_no: 22, description: '(Fork Lift)' },
+  { sl_no: 23, description: 'TRAILER DETENSION FEE' },
+];
 
 export interface JobCostSheet {
   job_id: string;

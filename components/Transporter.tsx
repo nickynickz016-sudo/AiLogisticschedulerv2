@@ -243,11 +243,21 @@ export const Transporter: React.FC<TransporterProps> = ({
              Screenshot
            </button>
            <div className="relative">
+              <div className="flex items-center gap-3 cursor-pointer bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 hover:bg-slate-100 transition-colors shadow-sm">
+                  <div className="flex flex-col text-left">
+                      <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest leading-none">
+                          {new Date(`${selectedDate}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })}
+                      </span>
+                      <span className="text-xs font-black text-slate-700 uppercase tracking-tight mt-0.5">
+                          {new Date(`${selectedDate}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
+                      </span>
+                  </div>
+              </div>
               <input 
                 type="date" 
                 value={selectedDate} 
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
+                className="absolute left-0 top-0 w-full h-full opacity-0 cursor-pointer"
               />
            </div>
            <button 

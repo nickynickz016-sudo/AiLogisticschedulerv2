@@ -40,6 +40,20 @@ export const getCleanJobNo = (id: string): string => {
   return clean;
 };
 
+export const formatJobNoForExcel = (id: string): string => {
+  if (!id) return '';
+  // First strip multi-day, sub-job, hash suffixes
+  let clean = getCleanJobNo(id);
+  // Strip leading AE- prefix (case-insensitive, with hyphen, underscore or space)
+  clean = clean.replace(/^AE[-_ ]?/i, '');
+  // Also strip any remaining day/sub suffixes if present (e.g., -D1, -Day 2, #...)
+  clean = clean.replace(/[-_]D\d+(-\d+)?$/i, '')
+               .replace(/[-_]Day\s*\d+(-\d+)?$/i, '')
+               .replace(/#.*$/, '')
+               .trim();
+  return clean;
+};
+
 export const getJobDayNumber = (id: string): number => {
   if (!id) return 1;
   const hashMatch = id.match(/#day(\d+)/i);

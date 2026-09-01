@@ -139,7 +139,8 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({ job, onClose, us
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 pt-8 border-t border-slate-100">Allocation Details</h4>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
               <DetailItem icon={User} label="Team Leader" value={job.team_leader} />
-              <DetailItem icon={Truck} label="Vehicles" value={job.vehicles?.join(', ')} />
+              <DetailItem icon={Truck} label="Truck Quantity" value={job.truck_qty ? `${job.truck_qty} ${job.truck_qty === 1 ? 'Truck' : 'Trucks'}` : undefined} />
+              <DetailItem icon={Truck} label="Vehicles / Fleet" value={job.vehicles?.join(', ')} />
               <DetailItem icon={Users} label="Assigned Crew" value={job.writer_crew?.join(', ')} />
             </div>
           </section>

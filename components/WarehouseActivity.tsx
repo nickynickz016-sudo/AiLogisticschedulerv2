@@ -347,9 +347,16 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
             <div className="flex items-center gap-2">
                 <button onClick={handlePrevDate} className="p-3 bg-slate-50 border border-slate-200 rounded-xl hover:bg-slate-100 transition-all text-slate-500 shadow-sm"><ChevronLeft className="w-5 h-4" /></button>
                 <div className="relative flex-1">
-                    <div className="flex items-center justify-between w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-[11px] font-black text-slate-700 cursor-pointer hover:bg-slate-100 transition-all shadow-sm uppercase tracking-tight">
-                        <span>{new Date(selectedDate).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'})}</span>
-                        <Calendar className="w-4 h-4 text-blue-600" />
+                    <div className="flex items-center justify-between w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 cursor-pointer hover:bg-slate-100 transition-all shadow-sm">
+                        <div className="flex flex-col text-left">
+                            <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest leading-none">
+                                {new Date(`${selectedDate}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })}
+                            </span>
+                            <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight mt-0.5">
+                                {new Date(`${selectedDate}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}
+                            </span>
+                        </div>
+                        <Calendar className="w-4 h-4 text-blue-600 shrink-0" />
                     </div>
                     <input 
                         type="date" 

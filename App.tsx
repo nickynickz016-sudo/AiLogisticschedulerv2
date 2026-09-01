@@ -1451,13 +1451,13 @@ const App: React.FC = () => {
   const updateJobInSupabase = async (jobId: string, payload: any) => {
     const { day_dates, ...dbPayload } = payload;
     let { error } = await supabase.from('jobs').update(dbPayload).eq('id', jobId);
-    if (error && (error.message.includes("is_confirmed") || error.message.includes("column"))) {
-      const { is_confirmed, ...strippedPayload } = dbPayload;
+    if (error && (error.message.includes("truck_qty") || error.message.includes("is_confirmed") || error.message.includes("column"))) {
+      const { truck_qty, is_confirmed, ...strippedPayload } = dbPayload;
       let { error: retryError } = await supabase.from('jobs').update(strippedPayload).eq('id', jobId);
       error = retryError;
     }
     if (error && error.message.includes("last_edited_at")) {
-      const { last_edited_by, last_edited_at, is_confirmed, ...fallbackPayload } = dbPayload;
+      const { last_edited_by, last_edited_at, is_confirmed, truck_qty, ...fallbackPayload } = dbPayload;
       const { error: retryError } = await supabase.from('jobs').update(fallbackPayload).eq('id', jobId);
       error = retryError;
     }
@@ -1467,13 +1467,13 @@ const App: React.FC = () => {
   const insertJobsInSupabase = async (jobsToInsert: Job[]) => {
     const dbJobsToInsert = jobsToInsert.map(({ day_dates, ...j }: any) => j);
     let { error } = await supabase.from('jobs').insert(dbJobsToInsert);
-    if (error && (error.message.includes("is_confirmed") || error.message.includes("column"))) {
-      const strippedJobs = dbJobsToInsert.map(({ is_confirmed, ...j }: any) => j);
+    if (error && (error.message.includes("truck_qty") || error.message.includes("is_confirmed") || error.message.includes("column"))) {
+      const strippedJobs = dbJobsToInsert.map(({ truck_qty, is_confirmed, ...j }: any) => j);
       let { error: retryError } = await supabase.from('jobs').insert(strippedJobs);
       error = retryError;
     }
     if (error && error.message.includes("last_edited_at")) {
-      const fallbackJobs = dbJobsToInsert.map(({ last_edited_by, last_edited_at, is_confirmed, ...j }: any) => j);
+      const fallbackJobs = dbJobsToInsert.map(({ last_edited_by, last_edited_at, is_confirmed, truck_qty, ...j }: any) => j);
       const { error: retryError } = await supabase.from('jobs').insert(fallbackJobs);
       error = retryError;
     }
@@ -1865,6 +1865,7 @@ const App: React.FC = () => {
           writer_crew: updateJob.writer_crew,
           vehicles: updateJob.vehicles,
           vehicle: updateJob.vehicle,
+          truck_qty: updateJob.truck_qty !== undefined ? updateJob.truck_qty : 1,
           activity_name: updateJob.activity_name,
           status: updateJob.status,
           last_edited_by: updateJob.last_edited_by,
@@ -2042,6 +2043,7 @@ const App: React.FC = () => {
           is_locked: false,
           vehicles: vehiclesArray,
           vehicle: vehicleString,
+          truck_qty: job.truck_qty !== undefined ? job.truck_qty : (vehiclesArray.filter(v => !/bus/i.test(v)).length || 1),
           duration: duration, 
           sunday_handling: job.sunday_handling
         } as Job;
@@ -2085,12 +2087,13 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateJobAllocation = async (jobId: string, allocation: { team_leader: string, vehicles: string[], writer_crew: string[] }) => {
+  const handleUpdateJobAllocation = async (jobId: string, allocation: { team_leader: string, vehicles: string[], writer_crew: string[], truck_qty?: number }) => {
     const job = jobs.find(j => j.id === jobId);
     const payload = {
       ...allocation,
       vehicles: allocation.vehicles, // PERSIST ARRAY
       vehicle: allocation.vehicles.join(', '), // PERSIST LEGACY STRING
+      truck_qty: allocation.truck_qty !== undefined ? allocation.truck_qty : (job?.truck_qty ?? (allocation.vehicles.filter(v => !/bus/i.test(v)).length || 1)),
       last_edited_by: currentUser?.name || 'Unknown',
       last_edited_at: Date.now()
     };
@@ -2098,7 +2101,7 @@ const App: React.FC = () => {
     const { error } = await updateJobInSupabase(jobId, payload);
     if (error) alert(`Error: ${error.message}`);
     else {
-      await logActivity('ALLOCATE', 'Job Schedule', jobId, `Updated team allocation for job #${jobId}: TL=${allocation.team_leader || 'None'}, Vehicles=${allocation.vehicles.join(', ') || 'None'}, Crew=${allocation.writer_crew.join(', ') || 'None'}`, job?.shipper_name, job, payload);
+      await logActivity('ALLOCATE', 'Job Schedule', jobId, `Updated team allocation for job #${jobId}: TL=${allocation.team_leader || 'None'}, Vehicles=${allocation.vehicles.join(', ') || 'None'} (Truck Qty: ${payload.truck_qty}), Crew=${allocation.writer_crew.join(', ') || 'None'}`, job?.shipper_name, job, payload);
       await fetchJobs();
     }
   };
@@ -2205,7 +2208,7 @@ const App: React.FC = () => {
     await fetchJobs();
   };
 
-  const handleApproval = async (jobId: string, approved: boolean, allocation?: { team_leader: string, vehicles: string[], writer_crew: string[] }) => {
+  const handleApproval = async (jobId: string, approved: boolean, allocation?: { team_leader: string, vehicles: string[], writer_crew: string[], truck_qty?: number }) => {
     const job = jobs.find(j => j.id === jobId);
     if (!job) return;
 
@@ -2222,7 +2225,8 @@ const App: React.FC = () => {
           ...payload,
           ...allocation,
           vehicles: allocation.vehicles, // PERSIST ARRAY
-          vehicle: allocation.vehicles.join(', ') // PERSIST LEGACY STRING
+          vehicle: allocation.vehicles.join(', '), // PERSIST LEGACY STRING
+          truck_qty: allocation.truck_qty !== undefined ? allocation.truck_qty : (job?.truck_qty ?? (allocation.vehicles.filter(v => !/bus/i.test(v)).length || 1))
         };
       }
 
@@ -2971,6 +2975,7 @@ const App: React.FC = () => {
                 onDeleteJob={handleDeleteJob}
                 currentUser={currentUser}
                 onUpdateCustomsStatus={handleUpdateCustomsStatus}
+                logo={settings.company_logo}
               />
             )}
             {activeTab === 'approvals' && (

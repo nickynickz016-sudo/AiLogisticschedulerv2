@@ -12,7 +12,7 @@ interface ScheduleViewProps {
   onAddJob: (job: Partial<Job>) => void;
   onEditJob: (job: Job, oldId?: string) => void;
   onDeleteJob: (jobId: string) => void;
-  onUpdateAllocation: (jobId: string, allocation: { team_leader: string, vehicles: string[], writer_crew: string[] }) => void;
+  onUpdateAllocation: (jobId: string, allocation: { team_leader: string, vehicles: string[], writer_crew: string[], truck_qty?: number }) => void;
   onToggleLock: (jobId: string) => void;
   onUpdateJobConfirmation?: (jobId: string, isConfirmed: boolean) => void;
   currentUser: UserProfile;
@@ -96,10 +96,11 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
   const selectedDate = getLocalDateString(currentDate);
 
-  const [editAllocation, setEditAllocation] = useState<{ team_leader: string, vehicles: string[], writer_crew: string[] }>({
+  const [editAllocation, setEditAllocation] = useState<{ team_leader: string, vehicles: string[], writer_crew: string[], truck_qty: number }>({
     team_leader: '',
     vehicles: [],
-    writer_crew: []
+    writer_crew: [],
+    truck_qty: 1
   });
 
   const today = getLocalDateString();
@@ -119,6 +120,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     sub_category: 'Export',
     shuttle: 'No',
     long_carry: 'No',
+    truck_qty: 1,
     special_requests: { 
       handyman: false, manpower: false, overtime: false,
       documents: false, packingList: false, crateCertificate: false, walkThrough: false 
@@ -311,6 +313,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
         'Vendor Name': vendorDisplay,
         'Assigned Crew Leader': job.team_leader || '-',
         'Team Leader': job.team_leader || '-',
+        'Truck Qty': job.truck_qty || (trucks.length || 1),
         'Truck': truckAssigned,
         'Crew Bus': busAssigned,
         'Truck Assigned': truckAssigned,
@@ -1104,10 +1107,12 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     e.stopPropagation();
     if (!canManageSchedule) return;
     setShowAllocationModal(job);
+    const initialTrucks = (job.vehicles || []).filter(v => !/bus/i.test(v)).length;
     setEditAllocation({ 
       team_leader: job.team_leader || '', 
       vehicles: job.vehicles || [],
-      writer_crew: job.writer_crew || []
+      writer_crew: job.writer_crew || [],
+      truck_qty: job.truck_qty !== undefined && job.truck_qty !== null ? job.truck_qty : Math.max(1, initialTrucks || 1)
     });
     setExpandedSection(null);
     setSearchTerm('');
@@ -1145,11 +1150,13 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   const toggleVehicle = (name: string) => {
     setEditAllocation(prev => {
       const exists = prev.vehicles.includes(name);
-      if (exists) {
-        return { ...prev, vehicles: prev.vehicles.filter(v => v !== name) };
-      } else {
-        return { ...prev, vehicles: [...prev.vehicles, name] };
-      }
+      const updatedVehicles = exists ? prev.vehicles.filter(v => v !== name) : [...prev.vehicles, name];
+      const truckCount = updatedVehicles.filter(v => !/bus/i.test(v)).length;
+      return { 
+        ...prev, 
+        vehicles: updatedVehicles,
+        truck_qty: truckCount > 0 ? truckCount : (prev.truck_qty || 1)
+      };
     });
   };
 
@@ -1260,6 +1267,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                 : '';
                 
             const isToday = day.isCurrentMonth && dayDateStr === localTodayStr;
+            const dayOfWeekName = day.date ? day.date.toLocaleDateString('en-US', { weekday: 'short' }) : '';
 
             return (
               <div
@@ -1273,12 +1281,19 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                 }`}
                 onClick={() => day.isCurrentMonth && handleDayClick(day.day)}
               >
-                <span className={`text-sm font-bold ${
-                  isToday ? 'bg-blue-600 text-white rounded-full w-7 h-7 flex items-center justify-center' : 
-                  day.isCurrentMonth ? 'text-slate-800' : 'text-slate-400'
-                }`}>
-                  {day.day}
-                </span>
+                <div className="flex items-center justify-between w-full">
+                  <span className={`text-sm font-bold ${
+                    isToday ? 'bg-blue-600 text-white rounded-full w-7 h-7 flex items-center justify-center shadow-sm' : 
+                    day.isCurrentMonth ? 'text-slate-800' : 'text-slate-400'
+                  }`}>
+                    {day.day}
+                  </span>
+                  {day.isCurrentMonth && dayOfWeekName && (
+                    <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 group-hover:text-blue-600">
+                      {dayOfWeekName}
+                    </span>
+                  )}
+                </div>
                 {day.isCurrentMonth && (
                   <div className="mt-1 space-y-1 overflow-y-auto custom-scrollbar flex-1 hidden md:block">
                     {jobsForThisDay.map(job => {
@@ -1372,12 +1387,17 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                         </h3>
                     </div>
                   ) : (
-                    <div className="relative w-full sm:w-auto min-w-[200px]">
-                        <div className="flex items-center gap-3 cursor-pointer bg-slate-50 border border-slate-200 rounded-xl px-5 py-2.5 hover:bg-slate-100 transition-colors w-full sm:w-auto">
-                            <CalendarIcon className="w-4 h-4 text-blue-600" />
-                            <span className="text-xs font-black text-slate-700 uppercase tracking-tight">
-                                {currentDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
-                            </span>
+                    <div className="relative w-full sm:w-auto min-w-[220px]">
+                        <div className="flex items-center gap-3 cursor-pointer bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 hover:bg-slate-100 transition-colors w-full sm:w-auto shadow-sm">
+                            <CalendarIcon className="w-4 h-4 text-blue-600 shrink-0" />
+                            <div className="flex flex-col text-left">
+                                <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest leading-none">
+                                    {currentDate.toLocaleDateString('en-US', { weekday: 'long' })}
+                                </span>
+                                <span className="text-xs font-black text-slate-700 uppercase tracking-tight mt-0.5">
+                                    {currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </span>
+                            </div>
                         </div>
                         <input 
                             id="schedule-date-picker"
@@ -1442,7 +1462,13 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
           <div className="max-h-[70vh] overflow-y-auto custom-scrollbar">
              <div className="grid grid-cols-[80px_1fr] md:grid-cols-[120px_1fr] border-b bg-slate-50 text-slate-400 sticky top-0 z-10">
                 <div className="p-4 text-[10px] font-bold uppercase tracking-widest text-center">Timing</div>
-                <div className="p-4 text-[10px] font-bold uppercase tracking-widest px-8">Dispatch Operations</div>
+                <div className="p-4 text-[10px] font-bold uppercase tracking-widest px-8 flex items-center justify-between">
+                   <span>Dispatch Operations</span>
+                   <span className="text-xs font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-lg border border-blue-100 flex items-center gap-1.5 shadow-sm">
+                      <span className="font-extrabold text-blue-800">{currentDate.toLocaleDateString('en-US', { weekday: 'long' })},</span>
+                      <span>{currentDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                   </span>
+                </div>
              </div>
              {HOURS.map((hour) => {
                const hourJobs = filteredJobs.filter(j => j.job_time === hour);
@@ -1585,6 +1611,21 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                         </span>
                                       )}
                                     </div>
+                                 </div>
+                                 <div className="flex flex-col gap-1 pt-2 border-t border-slate-100">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                                        <Truck className="w-3 h-3" /> Fleet
+                                      </span>
+                                      {job.truck_qty !== undefined && job.truck_qty > 0 && (
+                                        <span className="text-[9px] font-black bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-200">
+                                          {job.truck_qty} {job.truck_qty === 1 ? 'Truck' : 'Trucks'}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] text-slate-600 font-bold truncate">
+                                      {job.vehicles && job.vehicles.length > 0 ? job.vehicles.join(', ') : 'No vehicle assigned'}
+                                    </span>
                                  </div>
                               </div>
 
@@ -1791,9 +1832,16 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                   )}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1.5 border-t border-slate-50 pt-1 mt-1">
-                                <Truck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                <span className="text-[10px] text-slate-500 font-bold">{job.vehicles?.join(', ') || 'No vehicle'}</span>
+                              <div className="flex items-center justify-between gap-1.5 border-t border-slate-50 pt-1 mt-1">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <Truck className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span className="text-[10px] text-slate-500 font-bold truncate">{job.vehicles?.join(', ') || 'No vehicle'}</span>
+                                </div>
+                                {job.truck_qty !== undefined && job.truck_qty > 0 && (
+                                  <span className="text-[9px] font-black bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-200 shrink-0">
+                                    {job.truck_qty} {job.truck_qty === 1 ? 'Truck' : 'Trucks'}
+                                  </span>
+                                )}
                               </div>
                            </div>
                          </td>
@@ -2206,9 +2254,34 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                  {/* Fleet Section (Hidden when expanded) */}
                  {!expandedSection && (
                      <div className="space-y-3">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                             <Truck className="w-4 h-4 text-slate-400" /> Fleet Assignment
-                        </label>
+                          </label>
+                          <div className="flex items-center gap-2 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200">
+                           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Truck Qty:</span>
+                           <div className="flex items-center gap-1.5">
+                             <button
+                               type="button"
+                               onClick={() => setEditAllocation(prev => ({ ...prev, truck_qty: Math.max(1, (prev.truck_qty || 1) - 1) }))}
+                               className="w-5 h-5 flex items-center justify-center rounded-md bg-white border border-slate-200 text-slate-600 font-black text-xs hover:bg-slate-100 transition-all"
+                             >
+                               -
+                             </button>
+                             <span className="w-5 text-center text-xs font-black text-blue-600">
+                               {editAllocation.truck_qty || 1}
+                             </span>
+                             <button
+                               type="button"
+                               onClick={() => setEditAllocation(prev => ({ ...prev, truck_qty: (prev.truck_qty || 1) + 1 }))}
+                               className="w-5 h-5 flex items-center justify-center rounded-md bg-white border border-slate-200 text-slate-600 font-black text-xs hover:bg-slate-100 transition-all"
+                             >
+                               +
+                             </button>
+                           </div>
+                         </div>
+                      </div>
+
                         <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto custom-scrollbar p-1">
                           {vehicles.map(v => (
                             <button
@@ -2319,7 +2392,14 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                     <input required type="text" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.shipper_name} onChange={e => setNewJob({...newJob, shipper_name: e.target.value})} />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Start Date *</label>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 flex items-center justify-between">
+                      <span>Start Date *</span>
+                      {newJob.job_date && (
+                        <span className="text-blue-600 font-extrabold text-[9px] bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
+                          {new Date(`${newJob.job_date}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' })}
+                        </span>
+                      )}
+                    </label>
                     <input required type="date" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.job_date} onChange={e => handleStartDateChange(e.target.value)} />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -2359,7 +2439,14 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                           return (
                             <div key={index} className="space-y-1.5 bg-white p-3 rounded-xl border border-slate-200">
                               <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center justify-between">
-                                <span>Day {dayNum} Date</span>
+                                <span>
+                                  Day {dayNum} Date
+                                  {dayDates[index] && (
+                                    <span className="text-blue-600 font-extrabold ml-1.5 normal-case">
+                                      ({new Date(`${dayDates[index]}T00:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })})
+                                    </span>
+                                  )}
+                                </span>
                                 <span className="bg-blue-100 text-blue-700 font-extrabold px-1.5 py-0.5 rounded text-[8px]">Tag</span>
                               </label>
                               <input 
