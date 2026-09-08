@@ -63,3 +63,40 @@ export type Database = {
 
 // Use <any> generic to bypass strict type inference that is causing 'never' type errors
 export const supabase = createClient<any>(supabaseUrl, supabaseAnonKey);
+
+/**
+ * Fetches all jobs from Supabase across all pages (bypassing the default 1000-row PostgREST limit).
+ * This ensures historical jobs (e.g. earlier months like May, April, etc.) are never truncated or omitted.
+ */
+export async function fetchAllJobsFromDb(): Promise<{ data: Job[] | null; error: any }> {
+  const PAGE_SIZE = 1000;
+  const allJobs: Job[] = [];
+  let from = 0;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await supabase
+      .from('jobs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) {
+      // If we got partial data from previous pages, return what we have along with the error
+      return { data: allJobs.length > 0 ? allJobs : null, error };
+    }
+
+    if (data && data.length > 0) {
+      allJobs.push(...data);
+      if (data.length < PAGE_SIZE) {
+        hasMore = false;
+      } else {
+        from += PAGE_SIZE;
+      }
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return { data: allJobs, error: null };
+}

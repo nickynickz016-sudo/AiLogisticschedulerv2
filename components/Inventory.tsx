@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Edit2, Save, X, Plus, Package, AlertTriangle, Loader2, Database, FileInput, ClipboardList, ChevronRight, Calculator, Truck, User, MapPin, RefreshCw, Trash2, Printer, ChevronDown, FileText, FileDown, Calendar, Info, CheckCircle2, BarChart2 } from 'lucide-react';
-import { supabase } from '../supabaseClient';
+import { supabase, fetchAllJobsFromDb } from '../supabaseClient';
 import { InventoryItem, Job, JobCostSheet, CostSheetItem, UserProfile, InventoryConsumption, InventoryPriceHistory } from '../types';
 import { formatJobNoForExcel, getCleanJobNo } from '../utils';
 import jsPDF from 'jspdf';
@@ -194,7 +194,7 @@ export const Inventory: React.FC<InventoryProps> = ({
 
       // Query database jobs and import clearance to build complete lookup list
       const [{ data: dbJobs }, { data: importClearanceSheets }] = await Promise.all([
-        supabase.from('jobs').select('*'),
+        fetchAllJobsFromDb(),
         supabase.from('import_clearance_cost_sheets').select('*')
       ]);
 
@@ -876,7 +876,7 @@ export const Inventory: React.FC<InventoryProps> = ({
     try {
       const [{ data: sheets, error: sError }, { data: dbJobs }, { data: importClearanceSheets }, { data: allPriceHistory }] = await Promise.all([
         supabase.from('job_cost_sheets').select('*'),
-        supabase.from('jobs').select('*'),
+        fetchAllJobsFromDb(),
         supabase.from('import_clearance_cost_sheets').select('*'),
         supabase.from('inventory_price_history').select('*').order('effective_date', { ascending: false })
       ]);

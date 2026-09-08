@@ -28,7 +28,7 @@ import { SundayJobModal } from './components/SundayJobModal';
 import { ProfileUpdateModal } from './components/ProfileUpdateModal';
 import { UserRole, Job, JobStatus, UserProfile, Personnel, Vehicle, SystemSettings, CustomsStatus, Survey, WarehouseChecklist, NightPatrollingChecklist, SafetyMonitoringChecklist, SurpriseVisitChecklist, DailyMonitoringChecklist, ActivityLog, ActionType, EntityType } from './types';
 import { Bell, Search, Menu, LogOut, X, CheckCircle2, XCircle, AlertTriangle, Info, Lock, Unlock } from 'lucide-react';
-import { supabase } from './supabaseClient';
+import { supabase, fetchAllJobsFromDb } from './supabaseClient';
 import { USERS, MockUser } from './mockData';
 import * as XLSX from 'xlsx';
 
@@ -516,7 +516,7 @@ const App: React.FC = () => {
   // Data Fetching Functions
   const fetchJobs = useCallback(async () => {
     try {
-      const { data, error } = await supabase.from('jobs').select('*').order('created_at', { ascending: false });
+      const { data, error } = await fetchAllJobsFromDb();
       if (error) {
         if (isOfflineError(error.message)) {
           console.warn('Network offline during fetching jobs:', error.message);
@@ -549,7 +549,7 @@ const App: React.FC = () => {
                   }
                   
                   // Re-fetch to ensure database state is properly synced
-                  const { data: refetched } = await supabase.from('jobs').select('*').order('created_at', { ascending: false });
+                  const { data: refetched } = await fetchAllJobsFromDb();
                   if (refetched && refetched.length > 0) {
                     fetchedData = refetched;
                   }
@@ -1175,7 +1175,7 @@ const App: React.FC = () => {
         
         try {
           // Explicitly fetch all jobs from Supabase to guarantee fresh data
-          const { data, error } = await supabase.from('jobs').select('*').order('created_at', { ascending: false });
+          const { data, error } = await fetchAllJobsFromDb();
           if (error) throw error;
 
           const fetchedJobs = data || [];

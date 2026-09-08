@@ -189,19 +189,62 @@ export const ImportCostSheetModal: React.FC<ImportCostSheetModalProps> = ({
   }, [job]);
 
   // Recalculate totals whenever items or transport amount change
-  const handleItemChange = (index: number, field: 'cost_amount' | 'invoice_amount' | 'description', value: any) => {
+  const handleItemChange = (
+    index: number, 
+    field: 'cost_amount' | 'cost_dhs' | 'cost_fils' | 'invoice_amount' | 'invoice_dhs' | 'invoice_fils' | 'description', 
+    value: any
+  ) => {
     setSheet(prev => {
       const updatedItems = [...prev.items];
       const targetItem = { ...updatedItems[index] };
 
-      if (field === 'cost_amount') {
+      if (field === 'cost_dhs') {
+        const val = parseFloat(value);
+        if (isNaN(val) || val < 0) {
+          targetItem.cost_dhs = 0;
+          targetItem.cost_amount = parseFloat(((targetItem.cost_fils || 0) / 100).toFixed(2));
+        } else if (Number.isInteger(val)) {
+          targetItem.cost_dhs = val;
+          targetItem.cost_amount = parseFloat((val + (targetItem.cost_fils || 0) / 100).toFixed(2));
+        } else {
+          // If decimal pasted/typed into DHS, split it automatically
+          targetItem.cost_amount = parseFloat(val.toFixed(2));
+          targetItem.cost_dhs = Math.floor(val);
+          targetItem.cost_fils = Math.round((val % 1) * 100);
+        }
+      } else if (field === 'cost_fils') {
+        const raw = String(value).replace(/[^0-9]/g, '');
+        const val = parseInt(raw, 10);
+        const filsVal = isNaN(val) ? 0 : Math.min(99, Math.max(0, val));
+        targetItem.cost_fils = filsVal;
+        targetItem.cost_amount = parseFloat(((targetItem.cost_dhs || 0) + filsVal / 100).toFixed(2));
+      } else if (field === 'cost_amount') {
         const numVal = Math.max(0, parseFloat(value) || 0);
-        targetItem.cost_amount = numVal;
+        targetItem.cost_amount = parseFloat(numVal.toFixed(2));
         targetItem.cost_dhs = Math.floor(numVal);
         targetItem.cost_fils = Math.round((numVal % 1) * 100);
+      } else if (field === 'invoice_dhs') {
+        const val = parseFloat(value);
+        if (isNaN(val) || val < 0) {
+          targetItem.invoice_dhs = 0;
+          targetItem.invoice_amount = parseFloat(((targetItem.invoice_fils || 0) / 100).toFixed(2));
+        } else if (Number.isInteger(val)) {
+          targetItem.invoice_dhs = val;
+          targetItem.invoice_amount = parseFloat((val + (targetItem.invoice_fils || 0) / 100).toFixed(2));
+        } else {
+          targetItem.invoice_amount = parseFloat(val.toFixed(2));
+          targetItem.invoice_dhs = Math.floor(val);
+          targetItem.invoice_fils = Math.round((val % 1) * 100);
+        }
+      } else if (field === 'invoice_fils') {
+        const raw = String(value).replace(/[^0-9]/g, '');
+        const val = parseInt(raw, 10);
+        const filsVal = isNaN(val) ? 0 : Math.min(99, Math.max(0, val));
+        targetItem.invoice_fils = filsVal;
+        targetItem.invoice_amount = parseFloat(((targetItem.invoice_dhs || 0) + filsVal / 100).toFixed(2));
       } else if (field === 'invoice_amount') {
         const numVal = Math.max(0, parseFloat(value) || 0);
-        targetItem.invoice_amount = numVal;
+        targetItem.invoice_amount = parseFloat(numVal.toFixed(2));
         targetItem.invoice_dhs = Math.floor(numVal);
         targetItem.invoice_fils = Math.round((numVal % 1) * 100);
       } else if (field === 'description') {
@@ -666,29 +709,31 @@ export const ImportCostSheetModal: React.FC<ImportCostSheetModalProps> = ({
               <table className="w-full text-left border-collapse min-w-[760px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[10px] font-black uppercase tracking-wider">
-                    <th className="py-3 px-4 w-16 text-center border-r border-slate-200">Sl No.</th>
-                    <th className="py-3 px-6 border-r border-slate-200">Description of Charges</th>
-                    <th className="py-2 px-4 w-48 text-center border-r border-slate-200 bg-indigo-50/40" colSpan={2}>
-                      <div className="text-[10px] font-black text-indigo-900 uppercase">Cost Amount (AED)</div>
-                      <div className="grid grid-cols-2 gap-2 mt-1 text-[9px] font-bold text-indigo-600">
-                        <span>DHS</span>
-                        <span>Fils</span>
-                      </div>
+                    <th className="py-3 px-3 w-14 text-center border-r border-slate-200">Sl No.</th>
+                    <th className="py-3 px-5 border-r border-slate-200">Description of Charges</th>
+                    <th className="py-2 px-2 w-32 text-center border-r border-slate-200 bg-indigo-50/60">
+                      <div className="text-[10px] font-black text-indigo-900 uppercase">Cost DHS</div>
+                      <div className="text-[9px] font-bold text-indigo-600">Dirhams</div>
                     </th>
-                    <th className="py-2 px-4 w-44 text-center border-r border-slate-200 bg-slate-50/60" colSpan={2}>
-                      <div className="text-[10px] font-black text-slate-700 uppercase">Invoice Amount (AED)</div>
-                      <div className="grid grid-cols-2 gap-2 mt-1 text-[9px] font-bold text-slate-500">
-                        <span>DHS</span>
-                        <span>Fils</span>
-                      </div>
+                    <th className="py-2 px-2 w-20 text-center border-r border-slate-200 bg-indigo-50/80">
+                      <div className="text-[10px] font-black text-indigo-900 uppercase">Fils</div>
+                      <div className="text-[9px] font-bold text-indigo-600">00-99</div>
                     </th>
-                    <th className="py-3 px-3 w-12 text-center">Action</th>
+                    <th className="py-2 px-2 w-28 text-center border-r border-slate-200 bg-slate-50/80">
+                      <div className="text-[10px] font-black text-slate-700 uppercase">Inv DHS</div>
+                      <div className="text-[9px] font-bold text-slate-500">Dirhams</div>
+                    </th>
+                    <th className="py-2 px-2 w-20 text-center border-r border-slate-200 bg-slate-100">
+                      <div className="text-[10px] font-black text-slate-700 uppercase">Inv Fils</div>
+                      <div className="text-[9px] font-bold text-slate-500">00-99</div>
+                    </th>
+                    <th className="py-3 px-2 w-12 text-center">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {sheet.items.map((item, idx) => {
                     const isTransportItem = item.sl_no === 11;
-                    const hasCost = (item.cost_amount || 0) > 0;
+                    const hasCost = (item.cost_amount || 0) > 0 || (item.cost_dhs || 0) > 0 || (item.cost_fils || 0) > 0;
 
                     return (
                       <tr 
@@ -698,12 +743,12 @@ export const ImportCostSheetModal: React.FC<ImportCostSheetModalProps> = ({
                         }`}
                       >
                         {/* Sl No */}
-                        <td className="py-2.5 px-4 text-center font-bold text-slate-500 border-r border-slate-100">
+                        <td className="py-2.5 px-3 text-center font-bold text-slate-500 border-r border-slate-100">
                           {item.sl_no}
                         </td>
 
                         {/* Description */}
-                        <td className="py-2.5 px-6 font-bold text-slate-800 border-r border-slate-100">
+                        <td className="py-2.5 px-5 font-bold text-slate-800 border-r border-slate-100">
                           {item.is_custom ? (
                             <input 
                               type="text" 
@@ -723,48 +768,66 @@ export const ImportCostSheetModal: React.FC<ImportCostSheetModalProps> = ({
                           )}
                         </td>
 
-                        {/* Cost DHS & Fils / Direct Input */}
-                        <td className="py-1.5 px-3 border-r border-slate-100 bg-indigo-50/20" colSpan={2}>
-                          <div className="flex items-center gap-1.5">
-                            <div className="relative flex-1">
-                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400">AED</span>
-                              <input 
-                                type="number" 
-                                step="0.01" 
-                                min="0" 
-                                placeholder="0.00"
-                                value={item.cost_amount === 0 ? '' : item.cost_amount} 
-                                onChange={e => handleItemChange(idx, 'cost_amount', e.target.value)}
-                                className={`w-full pl-9 pr-3 py-1.5 bg-white border rounded-lg text-xs font-black text-right outline-none transition-all ${
-                                  hasCost 
-                                    ? 'border-indigo-300 text-indigo-950 font-mono shadow-xs ring-1 ring-indigo-200' 
-                                    : 'border-slate-200 text-slate-600 focus:border-indigo-400'
-                                }`}
-                              />
-                            </div>
-                            <div className="text-[10px] font-mono text-slate-400 font-bold w-12 text-right">
-                              {item.cost_dhs || 0}.<span className="text-[9px]">{String(item.cost_fils || 0).padStart(2, '0')}</span>
-                            </div>
-                          </div>
+                        {/* Cost DHS */}
+                        <td className="py-1.5 px-2 border-r border-slate-100 bg-indigo-50/20">
+                          <input 
+                            type="number" 
+                            step="any" 
+                            min="0" 
+                            placeholder="0"
+                            value={item.cost_dhs === 0 && (item.cost_fils || 0) === 0 ? '' : (item.cost_dhs || 0)} 
+                            onChange={e => handleItemChange(idx, 'cost_dhs', e.target.value)}
+                            className={`w-full px-2.5 py-1.5 bg-white border rounded-lg text-xs font-black text-right outline-none transition-all ${
+                              hasCost 
+                                ? 'border-indigo-300 text-indigo-950 font-mono shadow-xs ring-1 ring-indigo-200' 
+                                : 'border-slate-200 text-slate-600 focus:border-indigo-400'
+                            }`}
+                          />
                         </td>
 
-                        {/* Invoice DHS & Fils */}
-                        <td className="py-1.5 px-3 border-r border-slate-100" colSpan={2}>
-                          <div className="relative">
-                            <input 
-                              type="number" 
-                              step="0.01" 
-                              min="0" 
-                              placeholder="0.00"
-                              value={item.invoice_amount === 0 ? '' : item.invoice_amount} 
-                              onChange={e => handleItemChange(idx, 'invoice_amount', e.target.value)}
-                              className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-right text-slate-700 outline-none focus:border-blue-400"
-                            />
-                          </div>
+                        {/* Cost Fils */}
+                        <td className="py-1.5 px-2 border-r border-slate-100 bg-indigo-50/30">
+                          <input 
+                            type="text" 
+                            maxLength={2} 
+                            placeholder="00"
+                            value={item.cost_fils === 0 && (item.cost_dhs || 0) === 0 ? '' : String(item.cost_fils || 0).padStart(2, '0')} 
+                            onChange={e => handleItemChange(idx, 'cost_fils', e.target.value)}
+                            className={`w-full px-1.5 py-1.5 bg-white border rounded-lg text-xs font-bold text-center outline-none transition-all ${
+                              hasCost 
+                                ? 'border-indigo-300 text-indigo-900 font-mono ring-1 ring-indigo-200' 
+                                : 'border-slate-200 text-slate-500 focus:border-indigo-400'
+                            }`}
+                          />
+                        </td>
+
+                        {/* Invoice DHS */}
+                        <td className="py-1.5 px-2 border-r border-slate-100 bg-slate-50/30">
+                          <input 
+                            type="number" 
+                            step="any" 
+                            min="0" 
+                            placeholder="0"
+                            value={item.invoice_dhs === 0 && (item.invoice_fils || 0) === 0 ? '' : (item.invoice_dhs || 0)} 
+                            onChange={e => handleItemChange(idx, 'invoice_dhs', e.target.value)}
+                            className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-right text-slate-700 outline-none focus:border-blue-400 font-mono"
+                          />
+                        </td>
+
+                        {/* Invoice Fils */}
+                        <td className="py-1.5 px-2 border-r border-slate-100 bg-slate-50/40">
+                          <input 
+                            type="text" 
+                            maxLength={2} 
+                            placeholder="00"
+                            value={item.invoice_fils === 0 && (item.invoice_dhs || 0) === 0 ? '' : String(item.invoice_fils || 0).padStart(2, '0')} 
+                            onChange={e => handleItemChange(idx, 'invoice_fils', e.target.value)}
+                            className="w-full px-1.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-bold text-center text-slate-600 outline-none focus:border-blue-400 font-mono"
+                          />
                         </td>
 
                         {/* Actions */}
-                        <td className="py-2.5 px-3 text-center">
+                        <td className="py-2.5 px-2 text-center">
                           {item.is_custom ? (
                             <button 
                               type="button" 
@@ -782,6 +845,26 @@ export const ImportCostSheetModal: React.FC<ImportCostSheetModalProps> = ({
                     );
                   })}
                 </tbody>
+                <tfoot>
+                  <tr className="bg-slate-100 border-t-2 border-slate-300 text-xs font-black">
+                    <td colSpan={2} className="py-3 px-5 text-center text-slate-800 uppercase tracking-widest border-r border-slate-300">
+                      TOTAL
+                    </td>
+                    <td className="py-2.5 px-2.5 text-right font-mono font-black text-indigo-950 bg-amber-100/80 border-r border-amber-200">
+                      {Math.floor(sheet.total_cost || 0).toLocaleString('en-US')}
+                    </td>
+                    <td className="py-2.5 px-2 text-center font-mono font-black text-indigo-950 bg-amber-100/80 border-r border-slate-300">
+                      {String(Math.round(((sheet.total_cost || 0) % 1) * 100)).padStart(2, '0')}
+                    </td>
+                    <td className="py-2.5 px-2.5 text-right font-mono font-bold text-slate-700 border-r border-slate-200">
+                      {sheet.total_invoice ? Math.floor(sheet.total_invoice).toLocaleString('en-US') : '0'}
+                    </td>
+                    <td className="py-2.5 px-2 text-center font-mono font-bold text-slate-700 border-r border-slate-300">
+                      {sheet.total_invoice ? String(Math.round((sheet.total_invoice % 1) * 100)).padStart(2, '0') : '00'}
+                    </td>
+                    <td className="py-2.5 px-2"></td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
 
