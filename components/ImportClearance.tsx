@@ -204,13 +204,33 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({
   const canUpdateStatus = currentUser.role === UserRole.ADMIN || currentUser.permissions.importClearance;
 
   // Direct 1-click Quick Download of PDF from card
-  const handleQuickDownloadPdf = (activity: Job, e: React.MouseEvent) => {
+  const handleQuickDownloadPdf = async (activity: Job, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
       let sheetData: ImportClearanceCostSheet | null = null;
       const cached = localStorage.getItem(`import_cost_sheet_${activity.id}`);
       if (cached) {
-        sheetData = JSON.parse(cached);
+        try {
+          sheetData = JSON.parse(cached);
+        } catch (err) {
+          console.warn('Cache parse error', err);
+        }
+      }
+
+      if (!sheetData) {
+        try {
+          const { data: dbData } = await supabase
+            .from('import_clearance_cost_sheets' as any)
+            .select('*')
+            .eq('job_id', activity.id)
+            .maybeSingle();
+
+          if (dbData) {
+            sheetData = dbData as ImportClearanceCostSheet;
+          }
+        } catch (err) {
+          console.warn('Notice querying import_clearance_cost_sheets for quick download:', err);
+        }
       }
 
       if (!sheetData) {

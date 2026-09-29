@@ -138,9 +138,31 @@ export const ImportCostSheetModal: React.FC<ImportCostSheetModalProps> = ({
         const mergedItems: ImportCostItem[] = DEFAULT_IMPORT_CLEARANCE_ITEMS.map((def, idx) => {
           const existing = existingItemsMap.get(def.sl_no);
           if (existing) {
+            const rawCost = typeof existing.cost_amount === 'number' ? existing.cost_amount : 0;
+            const costDhs = typeof existing.cost_dhs === 'number' 
+              ? existing.cost_dhs 
+              : Math.floor(rawCost);
+            const costFils = typeof existing.cost_fils === 'number' 
+              ? existing.cost_fils 
+              : Math.round((rawCost % 1) * 100);
+
+            const rawInv = typeof existing.invoice_amount === 'number' ? existing.invoice_amount : 0;
+            const invDhs = typeof existing.invoice_dhs === 'number' 
+              ? existing.invoice_dhs 
+              : Math.floor(rawInv);
+            const invFils = typeof existing.invoice_fils === 'number' 
+              ? existing.invoice_fils 
+              : Math.round((rawInv % 1) * 100);
+
             return {
               ...existing,
               description: existing.description || def.description,
+              cost_dhs: costDhs,
+              cost_fils: costFils,
+              cost_amount: rawCost || parseFloat((costDhs + costFils / 100).toFixed(2)),
+              invoice_dhs: invDhs,
+              invoice_fils: invFils,
+              invoice_amount: rawInv || parseFloat((invDhs + invFils / 100).toFixed(2)),
             };
           }
           return {
@@ -157,7 +179,25 @@ export const ImportCostSheetModal: React.FC<ImportCostSheetModalProps> = ({
         });
 
         // Add any custom items that were appended (sl_no > 23)
-        const customItems = (loadedData.items || []).filter(i => i.sl_no > 23 || i.is_custom);
+        const customItems = (loadedData.items || []).filter(i => i.sl_no > 23 || i.is_custom).map(item => {
+          const rawCost = typeof item.cost_amount === 'number' ? item.cost_amount : 0;
+          const costDhs = typeof item.cost_dhs === 'number' ? item.cost_dhs : Math.floor(rawCost);
+          const costFils = typeof item.cost_fils === 'number' ? item.cost_fils : Math.round((rawCost % 1) * 100);
+
+          const rawInv = typeof item.invoice_amount === 'number' ? item.invoice_amount : 0;
+          const invDhs = typeof item.invoice_dhs === 'number' ? item.invoice_dhs : Math.floor(rawInv);
+          const invFils = typeof item.invoice_fils === 'number' ? item.invoice_fils : Math.round((rawInv % 1) * 100);
+
+          return {
+            ...item,
+            cost_dhs: costDhs,
+            cost_fils: costFils,
+            cost_amount: rawCost || parseFloat((costDhs + costFils / 100).toFixed(2)),
+            invoice_dhs: invDhs,
+            invoice_fils: invFils,
+            invoice_amount: rawInv || parseFloat((invDhs + invFils / 100).toFixed(2)),
+          };
+        });
 
         setSheet({
           ...loadedData,

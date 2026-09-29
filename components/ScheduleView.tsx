@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { getUAEToday, getCleanJobNo, getJobDayNumber, getJobDayLabel as getJobDayLabelFromUtils, safeLocalStorage } from '../utils';
-import { Job, JobStatus, LoadingType, UserProfile, Personnel, Vehicle, UserRole, ShipmentDetailsType } from '../types';
-import { Plus, Search, Package, Clock, User, X, Calendar as CalendarIcon, CheckCircle2, Check, Truck, Settings2, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Phone, Mail, Briefcase, FileText, AlertCircle, MapPin, RefreshCw, Edit2, Maximize2, Minimize2, Copy, Download, Building2, Filter } from 'lucide-react';
+import { getUAEToday, getCleanJobNo, getJobDayNumber, getJobDayLabel as getJobDayLabelFromUtils, safeLocalStorage, downloadExcelWorkbook } from '../utils';
+import { Job, JobStatus, LoadingType, UserProfile, Personnel, Vehicle, UserRole, ShipmentDetailsType, BranchCode, BRANCHES } from '../types';
+import { Plus, Search, Package, Clock, User, X, Calendar as CalendarIcon, CheckCircle2, Check, Truck, Settings2, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Phone, Mail, Briefcase, FileText, AlertCircle, MapPin, RefreshCw, Edit2, Maximize2, Minimize2, Copy, Download, Building2, Filter, Loader2, Globe } from 'lucide-react';
 import { JobDetailModal } from './JobDetailModal';
 import * as XLSX from 'xlsx';
 import { supabase } from '../supabaseClient';
@@ -19,6 +19,7 @@ interface ScheduleViewProps {
   personnel: Personnel[];
   vehicles: Vehicle[];
   users: UserProfile[];
+  activeBranch?: BranchCode;
 }
 
 // Generate hours with 30-minute intervals (48 slots)
@@ -52,7 +53,7 @@ const getLocalDateString = (date: Date = new Date()) => {
 };
 
 export const ScheduleView: React.FC<ScheduleViewProps> = ({ 
-  jobs, onAddJob, onEditJob, onDeleteJob, onUpdateAllocation, onToggleLock, onUpdateJobConfirmation, currentUser, personnel, vehicles, users 
+  jobs, onAddJob, onEditJob, onDeleteJob, onUpdateAllocation, onToggleLock, onUpdateJobConfirmation, currentUser, personnel, vehicles, users, activeBranch = 'UAE' 
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [isModalExpanded, setIsModalExpanded] = useState(false);
@@ -105,10 +106,14 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
   const today = getLocalDateString();
   
+  const defaultJobPrefix = activeBranch === 'KSA' ? 'KSA-' : activeBranch === 'QATAR' ? 'QA-' : 'AE-';
+  const defaultPhonePrefix = activeBranch === 'KSA' ? '+966 ' : activeBranch === 'QATAR' ? '+974 ' : '+971 ';
+
   const initialNewJobState: Partial<Job> = {
-    id: 'AE-', 
+    id: defaultJobPrefix, 
+    branch: activeBranch,
     shipper_name: '',
-    shipper_phone: '+971 ',
+    shipper_phone: defaultPhonePrefix,
     client_email: '',
     location: '',
     shipment_details: 'Local Move',
@@ -145,6 +150,25 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   const [exportFilterType, setExportFilterType] = useState<'ALL' | 'OUTSOURCE_ONLY' | 'IN_HOUSE_ONLY' | 'SPECIFIC_VENDOR'>('ALL');
   const [exportSelectedVendor, setExportSelectedVendor] = useState<string>('ALL');
   const [availableVendors, setAvailableVendors] = useState<string[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const [exportSuccess, setExportSuccess] = useState<string | null>(null);
+
+  // Smart opener that sets date range matching the currently viewed month/period
+  const handleOpenExportModal = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const startOfMonth = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+    const endDay = new Date(year, month + 1, 0).getDate();
+    const endOfMonth = `${year}-${String(month + 1).padStart(2, '0')}-${String(endDay).padStart(2, '0')}`;
+
+    setExportStartDate(startOfMonth);
+    setExportEndDate(endOfMonth);
+    setExportError(null);
+    setExportSuccess(null);
+    setIsExporting(false);
+    setShowExportModal(true);
+  };
 
   // Collect unique vendors list whenever export modal is opened
   useEffect(() => {
@@ -154,12 +178,12 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
       const vendorSet = new Set<string>();
 
       // Collect from personnel
-      personnel.forEach(p => {
+      (personnel || []).forEach(p => {
         if (p.vendor_name && p.vendor_name.trim()) vendorSet.add(p.vendor_name.trim());
       });
 
       // Collect from vehicles
-      vehicles.forEach(v => {
+      (vehicles || []).forEach(v => {
         if (v.vendor_name && v.vendor_name.trim()) vendorSet.add(v.vendor_name.trim());
       });
 
@@ -185,10 +209,12 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   const getJobResourceVendorInfo = (job: Job) => {
     const vendorSet = new Set<string>();
     let isOutsourced = false;
+    const safePersonnel = personnel || [];
+    const safeVehicles = vehicles || [];
 
     // Check Team Leader
     if (job.team_leader && job.team_leader !== '-') {
-      const p = personnel.find(item => item.name.toLowerCase() === job.team_leader?.trim().toLowerCase());
+      const p = safePersonnel.find(item => item.name?.toLowerCase() === job.team_leader?.trim().toLowerCase());
       if (p?.is_outsource || p?.vendor_name) {
         isOutsourced = true;
         if (p.vendor_name?.trim()) vendorSet.add(p.vendor_name.trim());
@@ -199,7 +225,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     // Check Writer Crew
     if (job.writer_crew && Array.isArray(job.writer_crew)) {
       job.writer_crew.forEach(member => {
-        const p = personnel.find(item => item.name.toLowerCase() === member.trim().toLowerCase());
+        if (!member) return;
+        const p = safePersonnel.find(item => item.name?.toLowerCase() === member.trim().toLowerCase());
         if (p?.is_outsource || p?.vendor_name) {
           isOutsourced = true;
           if (p.vendor_name?.trim()) vendorSet.add(p.vendor_name.trim());
@@ -214,7 +241,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
       : (job.vehicle ? job.vehicle.split(',').map(v => v.trim()).filter(Boolean) : []);
 
     allVehicles.forEach(veh => {
-      const vObj = vehicles.find(v => v.name.toLowerCase() === veh.toLowerCase() || v.plate.toLowerCase() === veh.toLowerCase());
+      if (!veh) return;
+      const vObj = safeVehicles.find(v => v.name?.toLowerCase() === veh.toLowerCase() || v.plate?.toLowerCase() === veh.toLowerCase());
       if (vObj?.is_outsource || vObj?.vendor_name) {
         isOutsourced = true;
         if (vObj.vendor_name?.trim()) vendorSet.add(vObj.vendor_name.trim());
@@ -258,251 +286,271 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   });
 
   const handleExportExcel = () => {
-    const jobsToExport = matchingExportJobs;
+    try {
+      setIsExporting(true);
+      setExportError(null);
+      setExportSuccess(null);
 
-    if (jobsToExport.length === 0) {
-      alert('No jobs found for the selected filter criteria and date range.');
-      return;
-    }
+      const jobsToExport = matchingExportJobs;
 
-    // Map to required format
-    const data = jobsToExport.map(job => {
-      const requester = users.find(u => u.employee_id === job.requester_id);
-      const { isOutsourced, vendorDisplay } = getJobResourceVendorInfo(job);
-      
-      const allVehicles: string[] = job.vehicles && job.vehicles.length > 0
-        ? job.vehicles
-        : (job.vehicle ? job.vehicle.split(',').map(v => v.trim()).filter(Boolean) : []);
-      
-      const buses = allVehicles.filter(v => /bus/i.test(v));
-      const trucks = allVehicles.filter(v => !/bus/i.test(v));
-
-      const crewAssigned = job.writer_crew && job.writer_crew.length > 0
-        ? job.writer_crew.join(', ')
-        : '-';
-      const crewTabbed = job.writer_crew && job.writer_crew.length > 0
-        ? job.writer_crew.join('\t')
-        : '-';
-      const busAssigned = buses.length > 0 ? buses.join(', ') : '-';
-      const truckAssigned = trucks.length > 0 ? trucks.join(', ') : '-';
-
-      // Get crew-specific outsource company info
-      const crewVendorSet = new Set<string>();
-      if (job.team_leader && job.team_leader !== '-') {
-        const p = personnel.find(item => item.name.toLowerCase() === job.team_leader?.trim().toLowerCase());
-        if (p?.vendor_name?.trim()) crewVendorSet.add(p.vendor_name.trim());
-        else if (p?.is_outsource) crewVendorSet.add('Outsourced');
+      if (jobsToExport.length === 0) {
+        setExportError('No jobs found for the selected filter criteria and date range.');
+        setIsExporting(false);
+        return;
       }
-      if (job.writer_crew && Array.isArray(job.writer_crew)) {
-        job.writer_crew.forEach(member => {
-          const p = personnel.find(item => item.name.toLowerCase() === member.trim().toLowerCase());
+
+      const safeUsers = users || [];
+      const safePersonnel = personnel || [];
+
+      // Map to required format
+      const data = jobsToExport.map(job => {
+        const requester = safeUsers.find(u => u.employee_id === job.requester_id);
+        const { isOutsourced, vendorDisplay } = getJobResourceVendorInfo(job);
+        
+        const allVehicles: string[] = job.vehicles && job.vehicles.length > 0
+          ? job.vehicles
+          : (job.vehicle ? job.vehicle.split(',').map(v => v.trim()).filter(Boolean) : []);
+        
+        const buses = allVehicles.filter(v => /bus/i.test(v));
+        const trucks = allVehicles.filter(v => !/bus/i.test(v));
+
+        const crewAssigned = job.writer_crew && job.writer_crew.length > 0
+          ? job.writer_crew.join(', ')
+          : '-';
+        const crewTabbed = job.writer_crew && job.writer_crew.length > 0
+          ? job.writer_crew.join('\t')
+          : '-';
+        const busAssigned = buses.length > 0 ? buses.join(', ') : '-';
+        const truckAssigned = trucks.length > 0 ? trucks.join(', ') : '-';
+
+        // Get crew-specific outsource company info
+        const crewVendorSet = new Set<string>();
+        if (job.team_leader && job.team_leader !== '-') {
+          const p = safePersonnel.find(item => item.name?.toLowerCase() === job.team_leader?.trim().toLowerCase());
           if (p?.vendor_name?.trim()) crewVendorSet.add(p.vendor_name.trim());
           else if (p?.is_outsource) crewVendorSet.add('Outsourced');
-        });
-      }
-      const crewOutsourceCompany = crewVendorSet.size > 0 ? Array.from(crewVendorSet).join(', ') : 'In-House';
-
-      return {
-        'Job no.': job.id,
-        'Date': job.job_date,
-        'Shipper Name': job.shipper_name,
-        'Location': job.location || '',
-        'Requestor': requester ? requester.name : job.requester_id,
-        'Resource Source': isOutsourced ? 'Outsourced' : 'In-House',
-        'Outsource Company': vendorDisplay,
-        'Vendor Name': vendorDisplay,
-        'Assigned Crew Leader': job.team_leader || '-',
-        'Team Leader': job.team_leader || '-',
-        'Truck Qty': job.truck_qty || (trucks.length || 1),
-        'Truck': truckAssigned,
-        'Crew Bus': busAssigned,
-        'Truck Assigned': truckAssigned,
-        'Bus Assigned': busAssigned,
-        'Crew Count': job.writer_crew ? job.writer_crew.length : 0,
-        'Outsource Company (Crew)': crewOutsourceCompany,
-        'Crew': crewAssigned,
-        'Crew Assigned': crewAssigned,
-        'Crew Assigned (Tabbed)': crewTabbed,
-        'Crew Member 1': job.writer_crew?.[0] || '-',
-        'Crew Member 2': job.writer_crew?.[1] || '-',
-        'Crew Member 3': job.writer_crew?.[2] || '-',
-        'Crew Member 4': job.writer_crew?.[3] || '-',
-        'Crew Member 5': job.writer_crew?.[4] || '-',
-        'Crew Member 6': job.writer_crew?.[5] || '-',
-        'Crew Member 7': job.writer_crew?.[6] || '-',
-        'Crew Member 8': job.writer_crew?.[7] || '-',
-        'Crew Member 9': job.writer_crew?.[8] || '-',
-        'Crew Member 10': job.writer_crew?.[9] || '-',
-        'CBM': job.volume_cbm || 0,
-        'Shipment Details': job.shipment_details || '',
-        'Loading Type': job.loading_type
-      };
-    });
-
-    // Create worksheet
-    const ws = XLSX.utils.json_to_sheet(data);
-    
-    // Auto-size columns
-    const colWidths = [
-      { wch: 15 }, // Job no.
-      { wch: 12 }, // Date
-      { wch: 25 }, // Shipper Name
-      { wch: 30 }, // Location
-      { wch: 20 }, // Requestor
-      { wch: 16 }, // Resource Source
-      { wch: 22 }, // Outsource Company
-      { wch: 22 }, // Vendor Name
-      { wch: 20 }, // Assigned Crew Leader
-      { wch: 20 }, // Team Leader
-      { wch: 20 }, // Truck
-      { wch: 20 }, // Crew Bus
-      { wch: 20 }, // Truck Assigned
-      { wch: 20 }, // Bus Assigned
-      { wch: 12 }, // Crew Count
-      { wch: 25 }, // Outsource Company (Crew)
-      { wch: 25 }, // Crew
-      { wch: 25 }, // Crew Assigned
-      { wch: 30 }, // Crew Assigned (Tabbed)
-      { wch: 18 }, // Crew 1..10
-      { wch: 18 },
-      { wch: 18 },
-      { wch: 18 },
-      { wch: 18 },
-      { wch: 18 },
-      { wch: 18 },
-      { wch: 18 },
-      { wch: 18 },
-      { wch: 18 },
-      { wch: 10 }, // CBM
-      { wch: 20 }, // Shipment Details
-      { wch: 20 }  // Loading Type
-    ];
-    ws['!cols'] = colWidths;
-
-    // Create workbook
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Job Schedule');
-
-    // Generate Crew Count Summary Sheet
-    const crewCounts: Record<string, { count: number, vendor: string }> = {};
-    const tabularCrewRows: any[] = [];
-
-    jobsToExport.forEach(job => {
-      const allVehicles: string[] = job.vehicles && job.vehicles.length > 0
-        ? job.vehicles
-        : (job.vehicle ? job.vehicle.split(',').map(v => v.trim()).filter(Boolean) : []);
-      const buses = allVehicles.filter(v => /bus/i.test(v));
-      const trucks = allVehicles.filter(v => !/bus/i.test(v));
-      const busAssigned = buses.length > 0 ? buses.join(', ') : '-';
-      const truckAssigned = trucks.length > 0 ? trucks.join(', ') : '-';
-
-      // Leader entry
-      if (job.team_leader && job.team_leader.trim() && job.team_leader !== '-') {
-        const leaderName = job.team_leader.trim();
-        const leaderPerson = personnel.find(p => p.name.toLowerCase() === leaderName.toLowerCase());
-        const leaderVendor = leaderPerson?.vendor_name?.trim() || (leaderPerson?.is_outsource ? 'Outsourced' : 'In-House');
-
-        const isMatchVendor = exportSelectedVendor === 'ALL' ||
-          leaderVendor.toLowerCase() === exportSelectedVendor.toLowerCase();
-
-        if (isMatchVendor) {
-          if (!crewCounts[leaderName]) crewCounts[leaderName] = { count: 0, vendor: leaderVendor };
-          crewCounts[leaderName].count += 1;
-
-          tabularCrewRows.push({
-            'Job no.': job.id,
-            'Date': job.job_date,
-            'Shipper Name': job.shipper_name,
-            'Outsource Company': leaderVendor,
-            'Crew Member': leaderName,
-            'Role': 'Team Leader',
-            'Assigned Crew Leader': job.team_leader,
-            'Source': leaderPerson?.is_outsource ? 'Outsourced' : 'In-House',
-            'Truck': truckAssigned,
-            'Crew Bus': busAssigned
+        }
+        if (job.writer_crew && Array.isArray(job.writer_crew)) {
+          job.writer_crew.forEach(member => {
+            if (!member) return;
+            const p = safePersonnel.find(item => item.name?.toLowerCase() === member.trim().toLowerCase());
+            if (p?.vendor_name?.trim()) crewVendorSet.add(p.vendor_name.trim());
+            else if (p?.is_outsource) crewVendorSet.add('Outsourced');
           });
         }
-      }
+        const crewOutsourceCompany = crewVendorSet.size > 0 ? Array.from(crewVendorSet).join(', ') : 'In-House';
 
-      // Crew entries
-      if (job.writer_crew && Array.isArray(job.writer_crew)) {
-        job.writer_crew.forEach(member => {
-          const name = member.trim();
-          if (name) {
-            const crewPerson = personnel.find(p => p.name.toLowerCase() === name.toLowerCase());
-            const crewVendor = crewPerson?.vendor_name?.trim() || (crewPerson?.is_outsource ? 'Outsourced' : 'In-House');
+        return {
+          'Job no.': job.id,
+          'Date': job.job_date,
+          'Shipper Name': job.shipper_name,
+          'Location': job.location || '',
+          'Requestor': requester ? requester.name : (job.requester_id || '-'),
+          'Resource Source': isOutsourced ? 'Outsourced' : 'In-House',
+          'Outsource Company': vendorDisplay,
+          'Vendor Name': vendorDisplay,
+          'Assigned Crew Leader': job.team_leader || '-',
+          'Team Leader': job.team_leader || '-',
+          'Truck Qty': job.truck_qty || (trucks.length || 1),
+          'Truck': truckAssigned,
+          'Crew Bus': busAssigned,
+          'Truck Assigned': truckAssigned,
+          'Bus Assigned': busAssigned,
+          'Crew Count': job.writer_crew ? job.writer_crew.length : 0,
+          'Outsource Company (Crew)': crewOutsourceCompany,
+          'Crew': crewAssigned,
+          'Crew Assigned': crewAssigned,
+          'Crew Assigned (Tabbed)': crewTabbed,
+          'Crew Member 1': job.writer_crew?.[0] || '-',
+          'Crew Member 2': job.writer_crew?.[1] || '-',
+          'Crew Member 3': job.writer_crew?.[2] || '-',
+          'Crew Member 4': job.writer_crew?.[3] || '-',
+          'Crew Member 5': job.writer_crew?.[4] || '-',
+          'Crew Member 6': job.writer_crew?.[5] || '-',
+          'Crew Member 7': job.writer_crew?.[6] || '-',
+          'Crew Member 8': job.writer_crew?.[7] || '-',
+          'Crew Member 9': job.writer_crew?.[8] || '-',
+          'Crew Member 10': job.writer_crew?.[9] || '-',
+          'CBM': job.volume_cbm || 0,
+          'Shipment Details': job.shipment_details || '',
+          'Loading Type': job.loading_type || ''
+        };
+      });
 
-            const isMatchVendor = exportSelectedVendor === 'ALL' ||
-              crewVendor.toLowerCase() === exportSelectedVendor.toLowerCase();
-
-            if (isMatchVendor) {
-              if (!crewCounts[name]) crewCounts[name] = { count: 0, vendor: crewVendor };
-              crewCounts[name].count += 1;
-
-              tabularCrewRows.push({
-                'Job no.': job.id,
-                'Date': job.job_date,
-                'Shipper Name': job.shipper_name,
-                'Outsource Company': crewVendor,
-                'Crew Member': name,
-                'Role': 'Crew Member',
-                'Assigned Crew Leader': job.team_leader || '-',
-                'Source': crewPerson?.is_outsource ? 'Outsourced' : 'In-House',
-                'Truck': truckAssigned,
-                'Crew Bus': busAssigned
-              });
-            }
-          }
-        });
-      }
-    });
-
-    const crewSummaryData = Object.entries(crewCounts)
-      .map(([crewName, data]) => ({
-        'Crew Member Name': crewName,
-        'Outsource Company': data.vendor,
-        'Total Jobs Assigned': data.count
-      }))
-      .sort((a, b) => b['Total Jobs Assigned'] - a['Total Jobs Assigned']);
-
-    if (crewSummaryData.length > 0) {
-      const crewWs = XLSX.utils.json_to_sheet(crewSummaryData);
-      crewWs['!cols'] = [{ wch: 30 }, { wch: 25 }, { wch: 20 }];
-      XLSX.utils.book_append_sheet(wb, crewWs, 'Crew Count Summary');
-    }
-
-    if (tabularCrewRows.length > 0) {
-      const tabCrewWs = XLSX.utils.json_to_sheet(tabularCrewRows);
-      tabCrewWs['!cols'] = [
-        { wch: 15 }, // Job no.
+      // Create worksheet
+      const ws = XLSX.utils.json_to_sheet(data);
+      
+      // Auto-size columns
+      const colWidths = [
+        { wch: 18 }, // Job no.
         { wch: 12 }, // Date
         { wch: 25 }, // Shipper Name
-        { wch: 25 }, // Outsource Company
-        { wch: 25 }, // Crew Member
-        { wch: 15 }, // Role
+        { wch: 30 }, // Location
+        { wch: 20 }, // Requestor
+        { wch: 16 }, // Resource Source
+        { wch: 22 }, // Outsource Company
+        { wch: 22 }, // Vendor Name
         { wch: 20 }, // Assigned Crew Leader
-        { wch: 15 }, // Source
+        { wch: 20 }, // Team Leader
         { wch: 20 }, // Truck
-        { wch: 20 }  // Crew Bus
+        { wch: 20 }, // Crew Bus
+        { wch: 20 }, // Truck Assigned
+        { wch: 20 }, // Bus Assigned
+        { wch: 12 }, // Crew Count
+        { wch: 25 }, // Outsource Company (Crew)
+        { wch: 25 }, // Crew
+        { wch: 25 }, // Crew Assigned
+        { wch: 30 }, // Crew Assigned (Tabbed)
+        { wch: 18 }, // Crew 1..10
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 10 }, // CBM
+        { wch: 20 }, // Shipment Details
+        { wch: 20 }  // Loading Type
       ];
-      XLSX.utils.book_append_sheet(wb, tabCrewWs, 'Tabular Crew List');
+      ws['!cols'] = colWidths;
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Job Schedule');
+
+      // Generate Crew Count Summary Sheet
+      const crewCounts: Record<string, { count: number, vendor: string }> = {};
+      const tabularCrewRows: any[] = [];
+
+      jobsToExport.forEach(job => {
+        const allVehicles: string[] = job.vehicles && job.vehicles.length > 0
+          ? job.vehicles
+          : (job.vehicle ? job.vehicle.split(',').map(v => v.trim()).filter(Boolean) : []);
+        const buses = allVehicles.filter(v => /bus/i.test(v));
+        const trucks = allVehicles.filter(v => !/bus/i.test(v));
+        const busAssigned = buses.length > 0 ? buses.join(', ') : '-';
+        const truckAssigned = trucks.length > 0 ? trucks.join(', ') : '-';
+
+        // Leader entry
+        if (job.team_leader && job.team_leader.trim() && job.team_leader !== '-') {
+          const leaderName = job.team_leader.trim();
+          const leaderPerson = safePersonnel.find(p => p.name?.toLowerCase() === leaderName.toLowerCase());
+          const leaderVendor = leaderPerson?.vendor_name?.trim() || (leaderPerson?.is_outsource ? 'Outsourced' : 'In-House');
+
+          const isMatchVendor = exportSelectedVendor === 'ALL' ||
+            leaderVendor.toLowerCase() === exportSelectedVendor.toLowerCase();
+
+          if (isMatchVendor) {
+            if (!crewCounts[leaderName]) crewCounts[leaderName] = { count: 0, vendor: leaderVendor };
+            crewCounts[leaderName].count += 1;
+
+            tabularCrewRows.push({
+              'Job no.': job.id,
+              'Date': job.job_date,
+              'Shipper Name': job.shipper_name,
+              'Outsource Company': leaderVendor,
+              'Crew Member': leaderName,
+              'Role': 'Team Leader',
+              'Assigned Crew Leader': job.team_leader,
+              'Source': leaderPerson?.is_outsource ? 'Outsourced' : 'In-House',
+              'Truck': truckAssigned,
+              'Crew Bus': busAssigned
+            });
+          }
+        }
+
+        // Crew entries
+        if (job.writer_crew && Array.isArray(job.writer_crew)) {
+          job.writer_crew.forEach(member => {
+            if (!member) return;
+            const name = member.trim();
+            if (name) {
+              const crewPerson = safePersonnel.find(p => p.name?.toLowerCase() === name.toLowerCase());
+              const crewVendor = crewPerson?.vendor_name?.trim() || (crewPerson?.is_outsource ? 'Outsourced' : 'In-House');
+
+              const isMatchVendor = exportSelectedVendor === 'ALL' ||
+                crewVendor.toLowerCase() === exportSelectedVendor.toLowerCase();
+
+              if (isMatchVendor) {
+                if (!crewCounts[name]) crewCounts[name] = { count: 0, vendor: crewVendor };
+                crewCounts[name].count += 1;
+
+                tabularCrewRows.push({
+                  'Job no.': job.id,
+                  'Date': job.job_date,
+                  'Shipper Name': job.shipper_name,
+                  'Outsource Company': crewVendor,
+                  'Crew Member': name,
+                  'Role': 'Crew Member',
+                  'Assigned Crew Leader': job.team_leader || '-',
+                  'Source': crewPerson?.is_outsource ? 'Outsourced' : 'In-House',
+                  'Truck': truckAssigned,
+                  'Crew Bus': busAssigned
+                });
+              }
+            }
+          });
+        }
+      });
+
+      const crewSummaryData = Object.entries(crewCounts)
+        .map(([crewName, data]) => ({
+          'Crew Member Name': crewName,
+          'Outsource Company': data.vendor,
+          'Total Jobs Assigned': data.count
+        }))
+        .sort((a, b) => b['Total Jobs Assigned'] - a['Total Jobs Assigned']);
+
+      if (crewSummaryData.length > 0) {
+        const crewWs = XLSX.utils.json_to_sheet(crewSummaryData);
+        crewWs['!cols'] = [{ wch: 30 }, { wch: 25 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, crewWs, 'Crew Count Summary');
+      }
+
+      if (tabularCrewRows.length > 0) {
+        const tabCrewWs = XLSX.utils.json_to_sheet(tabularCrewRows);
+        tabCrewWs['!cols'] = [
+          { wch: 18 }, // Job no.
+          { wch: 12 }, // Date
+          { wch: 25 }, // Shipper Name
+          { wch: 25 }, // Outsource Company
+          { wch: 25 }, // Crew Member
+          { wch: 15 }, // Role
+          { wch: 20 }, // Assigned Crew Leader
+          { wch: 15 }, // Source
+          { wch: 20 }, // Truck
+          { wch: 20 }  // Crew Bus
+        ];
+        XLSX.utils.book_append_sheet(wb, tabCrewWs, 'Tabular Crew List');
+      }
+
+      // Generate file name
+      const filterTag = exportFilterType === 'OUTSOURCE_ONLY' 
+        ? `_Outsourced${exportSelectedVendor !== 'ALL' ? '_' + exportSelectedVendor.replace(/\s+/g, '_') : ''}` 
+        : exportFilterType === 'IN_HOUSE_ONLY' 
+          ? '_InHouse' 
+          : exportFilterType === 'SPECIFIC_VENDOR' && exportSelectedVendor !== 'ALL'
+            ? `_${exportSelectedVendor.replace(/\s+/g, '_')}`
+            : '';
+
+      const fileName = `Job_Schedule_Report_${exportStartDate}_to_${exportEndDate}${filterTag}.xlsx`;
+
+      // Download file using reliable universal download helper
+      downloadExcelWorkbook(wb, fileName);
+      setExportSuccess(`Excel report downloaded successfully (${jobsToExport.length} jobs)!`);
+
+      setTimeout(() => {
+        setIsExporting(false);
+        setShowExportModal(false);
+      }, 1000);
+    } catch (err: any) {
+      console.error('Failed to export Excel report:', err);
+      setExportError(err?.message || 'An error occurred while generating the Excel report.');
+      setIsExporting(false);
     }
-
-    // Generate file name
-    const filterTag = exportFilterType === 'OUTSOURCE_ONLY' 
-      ? `_Outsourced${exportSelectedVendor !== 'ALL' ? '_' + exportSelectedVendor.replace(/\s+/g, '_') : ''}` 
-      : exportFilterType === 'IN_HOUSE_ONLY' 
-        ? '_InHouse' 
-        : exportFilterType === 'SPECIFIC_VENDOR' && exportSelectedVendor !== 'ALL'
-          ? `_${exportSelectedVendor.replace(/\s+/g, '_')}`
-          : '';
-
-    const fileName = `Job_Schedule_Report_${exportStartDate}_to_${exportEndDate}${filterTag}.xlsx`;
-
-    // Download file
-    XLSX.writeFile(wb, fileName);
-    
-    setShowExportModal(false);
   };
 
   const handleCopyJob = (e: React.MouseEvent, job: Job) => {
@@ -1431,7 +1479,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
             </div>
           )}
           <button 
-            onClick={() => setShowExportModal(true)}
+            onClick={handleOpenExportModal}
             className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-600 px-5 py-3 rounded-xl hover:bg-slate-50 transition-all font-black uppercase text-[9px] tracking-widest shadow-sm whitespace-nowrap"
           >
             <Download className="w-3.5 h-3.5 text-blue-600" />
@@ -2042,21 +2090,41 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                        {matchingExportJobs.length} job(s)
                     </span>
                  </div>
+
+                 {exportError && (
+                    <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 font-semibold animate-in fade-in">
+                       {exportError}
+                    </div>
+                 )}
+
+                 {exportSuccess && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-700 font-semibold animate-in fade-in">
+                       {exportSuccess}
+                    </div>
+                 )}
               </div>
 
               <div className="flex gap-3 pt-2">
                  <button 
                     onClick={() => setShowExportModal(false)}
-                    className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-slate-200 transition-colors"
+                    disabled={isExporting}
+                    className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-slate-200 transition-colors disabled:opacity-50"
                  >
                     Cancel
                  </button>
                  <button 
                     onClick={handleExportExcel}
-                    disabled={matchingExportJobs.length === 0}
-                    className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-lg ${matchingExportJobs.length > 0 ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'}`}
+                    disabled={matchingExportJobs.length === 0 || isExporting}
+                    className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-lg flex items-center justify-center gap-2 ${matchingExportJobs.length > 0 && !isExporting ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'}`}
                  >
-                    Download Excel
+                    {isExporting ? (
+                       <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Generating...</span>
+                       </>
+                    ) : (
+                       <span>Download Excel</span>
+                    )}
                  </button>
               </div>
            </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserProfile, UserRole } from '../types';
+import { UserProfile, UserRole, BranchCode, BRANCHES } from '../types';
 import { supabase } from '../supabaseClient';
 import { safeLocalStorage } from '../utils';
 import { 
@@ -14,6 +14,7 @@ const localStorage = safeLocalStorage;
 
 interface GroupageTrackerProps {
   currentUser: UserProfile;
+  activeBranch?: BranchCode;
   onLogActivity?: (
     action_type: any,
     entity_type: any,
@@ -44,6 +45,7 @@ export interface ShipperEntry {
 
 export interface ContainerBooking {
   id: string;
+  branch?: BranchCode;
   container_type: string;
   capacity_cbm: number;
   destination_country: string;
@@ -56,7 +58,7 @@ export interface ContainerBooking {
   estimated_departure_date?: string;
 }
 
-export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser, onLogActivity }) => {
+export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser, activeBranch = 'UAE', onLogActivity }) => {
   const [shipperEntries, setShipperEntries] = useState<ShipperEntry[]>([]);
   const [containerBookings, setContainerBookings] = useState<ContainerBooking[]>([]);
   const [loading, setLoading] = useState(false);
@@ -129,17 +131,41 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser, o
     setDbErrorMsg(null);
     try {
       if (dbMode === 'supabase') {
-        // Fetch Shippers
-        const { data: shipperData, error: shipperError } = await supabase
+        // Fetch Shippers with strict branch isolation
+        let sQuery = supabase
           .from('groupage_shipper_entries')
           .select('*')
           .order('created_at', { ascending: false });
+        if (activeBranch) {
+          sQuery = sQuery.eq('branch', activeBranch);
+        }
+        let { data: shipperData, error: shipperError } = await sQuery;
 
-        // Fetch Container Bookings
-        const { data: bookingData, error: bookingError } = await supabase
+        // Fetch Container Bookings with strict branch isolation
+        let bQuery = supabase
           .from('groupage_container_bookings')
           .select('*')
           .order('created_at', { ascending: false });
+        if (activeBranch) {
+          bQuery = bQuery.eq('branch', activeBranch);
+        }
+        let { data: bookingData, error: bookingError } = await bQuery;
+
+        // Pre-migration fallback: if branch column doesn't exist yet, query all and filter in memory
+        if (shipperError && (shipperError.message?.includes('branch') || shipperError.code === '42703')) {
+          const fb = await supabase.from('groupage_shipper_entries').select('*').order('created_at', { ascending: false });
+          if (fb.data) {
+            shipperData = fb.data.filter((s: any) => (s.branch || 'UAE') === activeBranch);
+            shipperError = null;
+          }
+        }
+        if (bookingError && (bookingError.message?.includes('branch') || bookingError.code === '42703')) {
+          const fb = await supabase.from('groupage_container_bookings').select('*').order('created_at', { ascending: false });
+          if (fb.data) {
+            bookingData = fb.data.filter((b: any) => (b.branch || 'UAE') === activeBranch);
+            bookingError = null;
+          }
+        }
 
         if (shipperError || bookingError) {
           const errMsg = shipperError?.message || bookingError?.message || 'Relation does not exist';
@@ -168,13 +194,14 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser, o
             }
             return {
               ...item,
+              branch: item.branch || activeBranch,
               job_no,
               packing_date,
               quote_amount: quote_amount !== undefined && quote_amount !== null ? Number(quote_amount) : null
             };
           });
           setShipperEntries(enrichedShippers);
-          setContainerBookings(bookingData || []);
+          setContainerBookings((bookingData || []).map((b: any) => ({ ...b, branch: b.branch || activeBranch })));
         }
       } else {
         loadSandboxData();
@@ -283,6 +310,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser, o
 
     const itemData = {
       id: editingEntryId || `SHI-${Date.now()}`,
+      branch: activeBranch || 'UAE',
       shipper_name: shipperForm.shipper_name,
       volume_cbm: volumeNum,
       destination_address: shipperForm.destination_address,
@@ -536,6 +564,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser, o
     const bookingId = `BK-${Date.now().toString().slice(-6)}`;
     const newBooking: ContainerBooking = {
       id: bookingId,
+      branch: activeBranch || 'UAE',
       container_type: containerType,
       capacity_cbm: currentCapacityLimit,
       destination_country: destinationCountry,

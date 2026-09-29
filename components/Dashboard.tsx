@@ -1,9 +1,9 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { getUAEToday } from '../utils';
-import { Job, JobStatus, SystemSettings, JobCostSheet, CustomsStatus } from '../types';
+import { Job, JobStatus, SystemSettings, JobCostSheet, CustomsStatus, BranchCode, BRANCHES } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, Download, Loader2, Activity, Calendar, X, Filter, CalendarRange, ListFilter, Camera, DollarSign, FileText, PieChart as PieIcon } from 'lucide-react';
+import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, Download, Loader2, Activity, Calendar, X, Filter, CalendarRange, ListFilter, Camera, DollarSign, FileText, PieChart as PieIcon, Globe } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
@@ -20,9 +20,10 @@ interface DashboardProps {
   settings: SystemSettings;
   onSetLimit: (date: string, limit: number) => void;
   isAdmin: boolean;
+  activeBranch?: BranchCode;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin, activeBranch = 'UAE' }) => {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [showDownloadOptions, setShowDownloadOptions] = useState(false);
   const [isScreenshotting, setIsScreenshotting] = useState(false);
@@ -341,7 +342,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
         });
       }
 
-      doc.save(`operations_report_${today}.pdf`);
+      doc.save(`operations_report_${activeBranch}_${today}.pdf`);
     } catch (error) {
       console.error("Failed to generate PDF:", error);
       alert("There was an error generating the PDF report.");
@@ -455,7 +456,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
          doc.text("No records found for the selected period.", 14, 40);
     }
 
-    doc.save(`activities_summary_${new Date().toISOString().split('T')[0]}.pdf`);
+    doc.save(`activities_summary_${activeBranch}_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   const handleScreenshot = async () => {
@@ -470,7 +471,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
         });
         
         const link = document.createElement('a');
-        link.download = `activities_summary_${new Date().toISOString().split('T')[0]}.png`;
+        link.download = `activities_summary_${activeBranch}_${new Date().toISOString().split('T')[0]}.png`;
         link.href = canvas.toDataURL('image/png');
         link.click();
     } catch (e) {
@@ -486,12 +487,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin })
     <div className="space-y-10 animate-in fade-in duration-700">
       <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-8">
         <div>
-          <h2 className="text-3xl md:text-4xl font-black text-slate-800 tracking-tight">Terminal Hub</h2>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h2 className="text-3xl md:text-4xl font-black text-slate-800 tracking-tight">Terminal Hub</h2>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider bg-blue-100 text-blue-900 border border-blue-200">
+              <span className="text-base">{BRANCHES[activeBranch]?.flag}</span>
+              Branch: {BRANCHES[activeBranch]?.name} ({activeBranch})
+            </span>
+          </div>
           <p className="text-slate-500 font-medium text-lg mt-2 flex flex-wrap items-center gap-2">
-            Real-time throughput index
-            <span className="inline-flex items-center gap-1 text-emerald-600 text-xs font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+            Operations throughput & performance analytics for {BRANCHES[activeBranch]?.name}
+            <span className="inline-flex items-center gap-1 text-emerald-600 text-xs font-bold bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
               <ArrowUpRight className="w-3 h-3" />
-              +12% vs LY
+              Currency: {BRANCHES[activeBranch]?.currency}
             </span>
           </p>
         </div>

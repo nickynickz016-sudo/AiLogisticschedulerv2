@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { getUAEToday, getCleanJobNo, getJobDayNumber, isMultiDayJob, safeLocalStorage, safeSessionStorage } from './utils';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
@@ -26,8 +26,10 @@ import { WarehouseChecklist as WarehouseChecklistComponent } from './components/
 import { ActivityLogView } from './components/ActivityLogView';
 import { SundayJobModal } from './components/SundayJobModal';
 import { ProfileUpdateModal } from './components/ProfileUpdateModal';
-import { UserRole, Job, JobStatus, UserProfile, Personnel, Vehicle, SystemSettings, CustomsStatus, Survey, WarehouseChecklist, NightPatrollingChecklist, SafetyMonitoringChecklist, SurpriseVisitChecklist, DailyMonitoringChecklist, ActivityLog, ActionType, EntityType } from './types';
-import { Bell, Search, Menu, LogOut, X, CheckCircle2, XCircle, AlertTriangle, Info, Lock, Unlock } from 'lucide-react';
+import { Quotations } from './components/Quotations';
+import { BranchSelectionModal } from './components/BranchSelectionModal';
+import { UserRole, Job, JobStatus, UserProfile, Personnel, Vehicle, SystemSettings, CustomsStatus, Survey, WarehouseChecklist, NightPatrollingChecklist, SafetyMonitoringChecklist, SurpriseVisitChecklist, DailyMonitoringChecklist, ActivityLog, ActionType, EntityType, BranchCode, Branch, BRANCHES } from './types';
+import { Bell, Search, Menu, LogOut, X, CheckCircle2, XCircle, AlertTriangle, Info, Lock, Unlock, Building2, ChevronDown, Globe } from 'lucide-react';
 import { supabase, fetchAllJobsFromDb } from './supabaseClient';
 import { USERS, MockUser } from './mockData';
 import * as XLSX from 'xlsx';
@@ -56,21 +58,29 @@ export const isOfflineError = (errMsg?: any): boolean => {
 };
 
 const defaultPersonnel: Personnel[] = [
-  { id: 'p1', employee_id: 'EMP-001', name: 'Alun John', type: 'Team Leader', status: 'Available', emirates_id: '784-1985-1234567-1' },
-  { id: 'p2', employee_id: 'EMP-002', name: 'Sujith Kumar', type: 'Driver', status: 'Available', emirates_id: '784-1990-2345678-2', license_number: 'LIC-55442' },
-  { id: 'p3', employee_id: 'EMP-003', name: 'Nikhil Das', type: 'Writer Crew', status: 'Available', emirates_id: '784-1992-3456789-3' },
-  { id: 'p4', employee_id: 'EMP-004', name: 'Karthik Raja', type: 'Writer Crew', status: 'Available', emirates_id: '784-1988-4567890-4' }
+  { id: 'p1', branch: 'UAE', employee_id: 'EMP-001', name: 'Alun John', type: 'Team Leader', status: 'Available', emirates_id: '784-1985-1234567-1' },
+  { id: 'p2', branch: 'UAE', employee_id: 'EMP-002', name: 'Sujith Kumar', type: 'Driver', status: 'Available', emirates_id: '784-1990-2345678-2', license_number: 'LIC-55442' },
+  { id: 'p3', branch: 'UAE', employee_id: 'EMP-003', name: 'Nikhil Das', type: 'Writer Crew', status: 'Available', emirates_id: '784-1992-3456789-3' },
+  { id: 'p4', branch: 'UAE', employee_id: 'EMP-004', name: 'Karthik Raja', type: 'Writer Crew', status: 'Available', emirates_id: '784-1988-4567890-4' },
+  { id: 'p5', branch: 'KSA', employee_id: 'KSA-001', name: 'Tariq Mansoor', type: 'Team Leader', status: 'Available', emirates_id: '1098765432' },
+  { id: 'p6', branch: 'KSA', employee_id: 'KSA-002', name: 'Sultan Al-Harbi', type: 'Driver', status: 'Available', emirates_id: '1087654321', license_number: 'KSA-LIC-9901' },
+  { id: 'p7', branch: 'QATAR', employee_id: 'QAT-001', name: 'Mansoor Al-Hajri', type: 'Team Leader', status: 'Available', emirates_id: '28400012345' },
+  { id: 'p8', branch: 'QATAR', employee_id: 'QAT-002', name: 'Kamal Al-Ansari', type: 'Driver', status: 'Available', emirates_id: '28600054321', license_number: 'QAT-LIC-4412' }
 ];
 
 const defaultVehicles: Vehicle[] = [
-  { id: 'v1', name: '3-Ton pickup (M-1)', plate: 'A-12345', status: 'Available' },
-  { id: 'v2', name: '5-Ton pickup (M-2)', plate: 'B-67890', status: 'Available' },
-  { id: 'v3', name: 'Box Trailer (M-3)', plate: 'C-54321', status: 'Available' }
+  { id: 'v1', branch: 'UAE', name: '3-Ton pickup (M-1)', plate: 'A-12345', status: 'Available' },
+  { id: 'v2', branch: 'UAE', name: '5-Ton pickup (M-2)', plate: 'B-67890', status: 'Available' },
+  { id: 'v3', branch: 'UAE', name: 'Box Trailer (M-3)', plate: 'C-54321', status: 'Available' },
+  { id: 'v4', branch: 'KSA', name: '3-Ton closed truck (K-1)', plate: 'KSA-8821', status: 'Available' },
+  { id: 'v5', branch: 'KSA', name: '7-Ton heavy truck (K-2)', plate: 'KSA-4412', status: 'Available' },
+  { id: 'v6', branch: 'QATAR', name: '4-Ton box truck (Q-1)', plate: 'QA-1192', status: 'Available' }
 ];
 
 const defaultJobs: Job[] = [
   {
     id: 'WR-100245',
+    branch: 'UAE',
     title: 'Move across Dubai Marina',
     shipper_name: 'John Doe',
     shipper_phone: '+971501234567',
@@ -89,6 +99,7 @@ const defaultJobs: Job[] = [
   },
   {
     id: 'WR-100246',
+    branch: 'UAE',
     title: 'Relocation to Abu Dhabi',
     shipper_name: 'Sarah Smith',
     shipper_phone: '+971509876543',
@@ -104,12 +115,51 @@ const defaultJobs: Job[] = [
     assigned_to: 'EMP-002',
     vehicles: ['v2'],
     is_confirmed: false
+  },
+  {
+    id: 'KSA-200101',
+    branch: 'KSA',
+    title: 'Executive Villa Move - Riyadh',
+    shipper_name: 'Fahad Al-Otaibi',
+    shipper_phone: '+966501234567',
+    client_email: 'fahad@example.sa',
+    location: 'Al Nakheel District, Riyadh',
+    priority: 'High' as any,
+    loading_type: 'House Move' as any,
+    volume_cbm: 32,
+    job_date: new Date().toISOString().split('T')[0],
+    status: 'Active' as any,
+    created_at: Date.now() - 36000000,
+    requester_id: 'user1',
+    assigned_to: 'KSA-001',
+    vehicles: ['v4'],
+    is_confirmed: true
+  },
+  {
+    id: 'QAT-300101',
+    branch: 'QATAR',
+    title: 'Diplomatic Relocation - Doha',
+    shipper_name: 'Rashid Al-Kuwari',
+    shipper_phone: '+97455123456',
+    client_email: 'rashid@example.qa',
+    location: 'Porto Arabia, The Pearl, Doha',
+    priority: 'Medium' as any,
+    loading_type: 'Apartment Move' as any,
+    volume_cbm: 20,
+    job_date: new Date().toISOString().split('T')[0],
+    status: 'Active' as any,
+    created_at: Date.now() - 25000000,
+    requester_id: 'user1',
+    assigned_to: 'QAT-001',
+    vehicles: ['v6'],
+    is_confirmed: true
   }
 ];
 
 const defaultSurveys: Survey[] = [
   {
     id: 'SRV-101',
+    branch: 'UAE',
     surveyor_name: 'Alun John',
     survey_type: 'Physical',
     enquiry_number: 'ENQ-2026-001',
@@ -122,6 +172,38 @@ const defaultSurveys: Survey[] = [
     status: 'Booked' as any,
     created_by_id: 'unknown',
     created_at: Date.now() - 172800000
+  },
+  {
+    id: 'SRV-KSA-201',
+    branch: 'KSA',
+    surveyor_name: 'Tariq Mansoor',
+    survey_type: 'Physical',
+    enquiry_number: 'ENQ-KSA-001',
+    shipper_name: 'Majed Al-Ghamdi',
+    survey_date: new Date().toISOString().split('T')[0],
+    start_time: '02:00 PM',
+    end_time: '03:00 PM',
+    location: 'Al Olaya, Riyadh',
+    mode: 'Domestic',
+    status: 'Booked' as any,
+    created_by_id: 'unknown',
+    created_at: Date.now() - 86400000
+  },
+  {
+    id: 'SRV-QAT-301',
+    branch: 'QATAR',
+    surveyor_name: 'Mansoor Al-Hajri',
+    survey_type: 'Physical',
+    enquiry_number: 'ENQ-QAT-001',
+    shipper_name: 'Hamad Al-Thani',
+    survey_date: new Date().toISOString().split('T')[0],
+    start_time: '11:00 AM',
+    end_time: '12:00 PM',
+    location: 'West Bay, Doha',
+    mode: 'International',
+    status: 'Booked' as any,
+    created_by_id: 'unknown',
+    created_at: Date.now() - 86400000
   }
 ];
 
@@ -151,16 +233,41 @@ const App: React.FC = () => {
       return null;
     }
   });
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'approvals' | 'survey-tracker' | 'survey-packing' | 'warehouse-checklist' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'groupage-tracker' | 'activity-log' | 'ai' | 'warehouse' | 'import-clearance' | 'resources' | 'capacity' | 'users'>(() => {
+  const [activeBranch, setActiveBranch] = useState<BranchCode | null>(() => {
+    try {
+      const saved = safeSessionStorage.getItem('writer_active_branch');
+      if (saved === 'UAE' || saved === 'KSA' || saved === 'QATAR') {
+        return saved as BranchCode;
+      }
+    } catch (e) {}
+    return null;
+  });
+  const [isBranchModalOpen, setIsBranchModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'schedule' | 'approvals' | 'survey-tracker' | 'survey-packing' | 'warehouse-checklist' | 'writer-docs' | 'inventory' | 'tracking' | 'transporter' | 'groupage-tracker' | 'activity-log' | 'ai' | 'warehouse' | 'import-clearance' | 'quotations' | 'resources' | 'capacity' | 'users'>(() => {
     const saved = safeLocalStorage.getItem('writer_active_tab');
     return (saved as any) || 'dashboard';
   });
   const [isNavigationLocked, setIsNavigationLocked] = useState(false);
   const [preloadPackingSurvey, setPreloadPackingSurvey] = useState<any>(null);
   const [costingJobId, setCostingJobId] = useState<string | undefined>(undefined);
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const [isGlobalSearchFocused, setIsGlobalSearchFocused] = useState(false);
   
   // Local state for app data, fetched from Supabase
   const [jobs, setJobs] = useState<Job[]>([]);
+
+  // Requirement 14: Global search strictly isolated to active branch jobs
+  const matchingSearchJobs = useMemo(() => {
+    if (!globalSearchQuery.trim()) return [];
+    const q = globalSearchQuery.toLowerCase().trim();
+    return jobs.filter(j => 
+      (j.id && j.id.toLowerCase().includes(q)) ||
+      (j.shipper_name && j.shipper_name.toLowerCase().includes(q)) ||
+      (j.location && j.location.toLowerCase().includes(q)) ||
+      (j.team_leader && j.team_leader.toLowerCase().includes(q)) ||
+      (j.description && j.description.toLowerCase().includes(q))
+    ).slice(0, 8);
+  }, [globalSearchQuery, jobs]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [surveys, setSurveys] = useState<Survey[]>([]);
   const [checklists, setChecklists] = useState<WarehouseChecklist[]>([]);
@@ -426,21 +533,29 @@ const App: React.FC = () => {
   // --- Robust Offline Cache & Falback Data System ---
 
   const loadOfflineJobs = useCallback(() => {
-    const saved = safeLocalStorage.getItem('writer_local_jobs_data');
+    const currentBranch = activeBranch || 'UAE';
+    const cacheKey = `writer_local_jobs_data_${currentBranch}`;
+    const saved = safeLocalStorage.getItem(cacheKey);
     if (saved) {
       try {
-        setJobs(JSON.parse(saved));
-        return;
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setJobs(parsed);
+          return;
+        }
       } catch (e) {
         console.error("Failed to parse cached jobs", e);
       }
     }
-    setJobs(defaultJobs);
-    safeLocalStorage.setItem('writer_local_jobs_data', JSON.stringify(defaultJobs));
-  }, []);
+    const branchJobs = defaultJobs.filter(j => (j.branch || 'UAE') === currentBranch);
+    setJobs(branchJobs);
+    safeLocalStorage.setItem(cacheKey, JSON.stringify(branchJobs));
+  }, [activeBranch]);
 
   const loadOfflinePersonnel = useCallback(() => {
-    const saved = safeLocalStorage.getItem('writer_local_personnel_data');
+    const currentBranch = activeBranch || 'UAE';
+    const cacheKey = `writer_local_personnel_data_${currentBranch}`;
+    const saved = safeLocalStorage.getItem(cacheKey);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -456,67 +571,68 @@ const App: React.FC = () => {
         return;
       } catch (e) {}
     }
-    const cleanedDefault = defaultPersonnel.map((p: any) => ({
-      ...p,
-      name: typeof p.name === 'string' ? p.name.trim() : p.name,
-      type: typeof p.type === 'string' ? p.type.trim() : p.type,
-      status: typeof p.status === 'string' ? p.status.trim() : p.status,
-      employee_id: typeof p.employee_id === 'string' ? p.employee_id.trim() : p.employee_id,
-      emirates_id: typeof p.emirates_id === 'string' ? p.emirates_id.trim() : p.emirates_id,
-    }));
-    setPersonnel(cleanedDefault);
-    safeLocalStorage.setItem('writer_local_personnel_data', JSON.stringify(cleanedDefault));
-  }, []);
+    const branchPersonnel = defaultPersonnel.filter(p => (p.branch || 'UAE') === currentBranch);
+    setPersonnel(branchPersonnel);
+    safeLocalStorage.setItem(cacheKey, JSON.stringify(branchPersonnel));
+  }, [activeBranch]);
 
   const loadOfflineVehicles = useCallback(() => {
-    const saved = safeLocalStorage.getItem('writer_local_vehicles_data');
+    const currentBranch = activeBranch || 'UAE';
+    const cacheKey = `writer_local_vehicles_data_${currentBranch}`;
+    const saved = safeLocalStorage.getItem(cacheKey);
     if (saved) {
       try {
         setVehicles(JSON.parse(saved));
         return;
       } catch (e) {}
     }
-    setVehicles(defaultVehicles);
-    safeLocalStorage.setItem('writer_local_vehicles_data', JSON.stringify(defaultVehicles));
-  }, []);
+    const branchVehicles = defaultVehicles.filter(v => (v.branch || 'UAE') === currentBranch);
+    setVehicles(branchVehicles);
+    safeLocalStorage.setItem(cacheKey, JSON.stringify(branchVehicles));
+  }, [activeBranch]);
 
   const loadOfflineSurveys = useCallback(() => {
-    const saved = safeLocalStorage.getItem('writer_local_surveys_data');
+    const currentBranch = activeBranch || 'UAE';
+    const cacheKey = `writer_local_surveys_data_${currentBranch}`;
+    const saved = safeLocalStorage.getItem(cacheKey);
     if (saved) {
       try {
         setSurveys(JSON.parse(saved));
         return;
       } catch (e) {}
     }
-    setSurveys(defaultSurveys);
-    safeLocalStorage.setItem('writer_local_surveys_data', JSON.stringify(defaultSurveys));
-  }, []);
+    const branchSurveys = defaultSurveys.filter(s => (s.branch || 'UAE') === currentBranch);
+    setSurveys(branchSurveys);
+    safeLocalStorage.setItem(cacheKey, JSON.stringify(branchSurveys));
+  }, [activeBranch]);
 
   const loadOfflineChecklists = useCallback(() => {
+    const currentBranch = activeBranch || 'UAE';
     try {
-      const savedChecklists = safeLocalStorage.getItem('writer_local_checklists_data');
+      const savedChecklists = safeLocalStorage.getItem(`writer_local_checklists_data_${currentBranch}`);
       if (savedChecklists) setChecklists(JSON.parse(savedChecklists));
       
-      const savedPatrol = safeLocalStorage.getItem('writer_local_patrol_logs_data');
+      const savedPatrol = safeLocalStorage.getItem(`writer_local_patrol_logs_data_${currentBranch}`);
       if (savedPatrol) setPatrolLogs(JSON.parse(savedPatrol));
       
-      const savedSafety = safeLocalStorage.getItem('writer_local_safety_checks_data');
+      const savedSafety = safeLocalStorage.getItem(`writer_local_safety_checks_data_${currentBranch}`);
       if (savedSafety) setSafetyChecks(JSON.parse(savedSafety));
       
-      const savedSurprise = safeLocalStorage.getItem('writer_local_surprise_visits_data');
+      const savedSurprise = safeLocalStorage.getItem(`writer_local_surprise_visits_data_${currentBranch}`);
       if (savedSurprise) setSurpriseVisits(JSON.parse(savedSurprise));
       
-      const savedDaily = safeLocalStorage.getItem('writer_local_daily_monitoring_data');
+      const savedDaily = safeLocalStorage.getItem(`writer_local_daily_monitoring_data_${currentBranch}`);
       if (savedDaily) setDailyMonitoring(JSON.parse(savedDaily));
     } catch (e) {
       console.error("Failed to load offline checklists", e);
     }
-  }, []);
+  }, [activeBranch]);
 
   // Data Fetching Functions
   const fetchJobs = useCallback(async () => {
+    const currentBranch = activeBranch || 'UAE';
     try {
-      const { data, error } = await fetchAllJobsFromDb();
+      const { data, error } = await fetchAllJobsFromDb(currentBranch);
       if (error) {
         if (isOfflineError(error.message)) {
           console.warn('Network offline during fetching jobs:', error.message);
@@ -524,50 +640,21 @@ const App: React.FC = () => {
         } else {
           console.error('Error fetching jobs:', error.message);
           addNotification(`Error fetching jobs: ${error.message}`, 'error');
+          loadOfflineJobs();
         }
       } else {
-        // Normalize data: Ensure 'vehicles' array exists. 
-        // If 'vehicles' is null but 'vehicle' exists (legacy), convert 'vehicle' string to array.
         let fetchedData = data || [];
-        
-        // If Supabase returned empty data but we have cached offline jobs,
-        // auto-upload them to Supabase so they are not deleted or lost!
-        if (fetchedData.length === 0) {
-          const savedStr = safeLocalStorage.getItem('writer_local_jobs_data');
-          if (savedStr) {
-            try {
-              const cachedJobs = JSON.parse(savedStr);
-              if (Array.isArray(cachedJobs) && cachedJobs.length > 0) {
-                // Filter out standard default template jobs to only upload real user records, or upload all if needed
-                const hasRealJobs = cachedJobs.some(j => j.id !== 'WR-100245' && j.id !== 'WR-100246');
-                if (hasRealJobs) {
-                  console.log("Empty Supabase detected. Auto-migrating local jobs to Supabase:", cachedJobs);
-                  let { error: insertErr } = await supabase.from('jobs').insert(cachedJobs);
-                  if (insertErr && (insertErr.message.includes("is_confirmed") || insertErr.message.includes("column"))) {
-                    const stripped = cachedJobs.map(({ is_confirmed, ...j }: any) => j);
-                    await supabase.from('jobs').insert(stripped);
-                  }
-                  
-                  // Re-fetch to ensure database state is properly synced
-                  const { data: refetched } = await fetchAllJobsFromDb();
-                  if (refetched && refetched.length > 0) {
-                    fetchedData = refetched;
-                  }
-                }
-              }
-            } catch (e) {
-              console.error('Failed to auto-migrate local jobs to Supabase:', e);
-            }
-          }
-        }
+        // Enforce strict branch isolation at boundary
+        const branchJobs = fetchedData.filter((j: any) => (j.branch || 'UAE') === currentBranch);
 
-        const normalizedData = fetchedData.map((j: any) => {
+        const normalizedData = branchJobs.map((j: any) => {
           const cachedConfirmation = safeLocalStorage.getItem(`job_confirmed_${j.id}`);
           const is_confirmed = (j.is_confirmed !== undefined && j.is_confirmed !== null) 
             ? !!j.is_confirmed 
             : (cachedConfirmation === 'true' ? true : false);
           return {
             ...j,
+            branch: j.branch || currentBranch,
             is_confirmed,
             vehicles: j.vehicles || (j.vehicle ? j.vehicle.split(',').map((s: string) => s.trim()) : [])
           };
@@ -575,14 +662,15 @@ const App: React.FC = () => {
 
         // Archive deleted jobs by comparing old cache with new data
         try {
-          const oldCacheStr = safeLocalStorage.getItem('writer_local_jobs_data');
+          const cacheKey = `writer_local_jobs_data_${currentBranch}`;
+          const oldCacheStr = safeLocalStorage.getItem(cacheKey);
           if (oldCacheStr) {
             const oldJobs = JSON.parse(oldCacheStr);
             if (Array.isArray(oldJobs) && oldJobs.length > 0) {
               const newIds = new Set(normalizedData.map(j => j.id));
               const deletedJobs = oldJobs.filter(j => j && j.id && !newIds.has(j.id));
               if (deletedJobs.length > 0) {
-                const savedArchive = safeLocalStorage.getItem('writer_deleted_jobs_archive');
+                const savedArchive = safeLocalStorage.getItem(`writer_deleted_jobs_archive_${currentBranch}`);
                 let archive: any[] = [];
                 if (savedArchive) {
                   try {
@@ -600,13 +688,11 @@ const App: React.FC = () => {
                   }
                 });
                 
-                // Keep the last 100 items to avoid taking up too much space
                 if (archive.length > 100) {
                   archive = archive.slice(-100);
                 }
                 
-                safeLocalStorage.setItem('writer_deleted_jobs_archive', JSON.stringify(archive));
-                console.log(`Archived ${deletedJobs.length} deleted jobs into recovery backup`);
+                safeLocalStorage.setItem(`writer_deleted_jobs_archive_${currentBranch}`, JSON.stringify(archive));
               }
             }
           }
@@ -615,7 +701,7 @@ const App: React.FC = () => {
         }
 
         setJobs(normalizedData);
-        safeLocalStorage.setItem('writer_local_jobs_data', JSON.stringify(normalizedData));
+        safeLocalStorage.setItem(`writer_local_jobs_data_${currentBranch}`, JSON.stringify(normalizedData));
       }
     } catch (err: any) {
       if (isOfflineError(err.message)) {
@@ -624,9 +710,10 @@ const App: React.FC = () => {
       } else {
         console.error('Unexpected error fetching jobs:', err);
         addNotification(`Unexpected error fetching jobs: ${err.message}`, 'error');
+        loadOfflineJobs();
       }
     }
-  }, [addNotification, loadOfflineJobs]);
+  }, [activeBranch, addNotification, loadOfflineJobs]);
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -648,8 +735,20 @@ const App: React.FC = () => {
   }, [allCredentials, fetchUsers]);
 
   const fetchPersonnel = useCallback(async () => {
+    const currentBranch = activeBranch || 'UAE';
     try {
-        const { data, error } = await supabase.from('personnel').select('*');
+        let query = supabase.from('personnel').select('*');
+        query = query.eq('branch', currentBranch);
+        let { data, error } = await query;
+
+        if (error && (error.message?.includes('branch') || error.code === '42703')) {
+          const fallback = await supabase.from('personnel').select('*');
+          if (fallback.data) {
+            data = fallback.data.filter((p: any) => (p.branch || 'UAE') === currentBranch);
+            error = null;
+          }
+        }
+
         if (error) {
           if (isOfflineError(error.message)) {
             console.warn('Network offline during fetching personnel:', error.message);
@@ -657,10 +756,12 @@ const App: React.FC = () => {
           } else {
             console.error('Error fetching personnel:', error.message);
             addNotification(`Error fetching personnel: ${error.message}`, 'error');
+            loadOfflinePersonnel();
           }
         } else {
           const cleaned = (data || []).map((p: any) => ({
             ...p,
+            branch: p.branch || currentBranch,
             name: typeof p.name === 'string' ? p.name.trim() : p.name,
             type: typeof p.type === 'string' ? p.type.trim() : p.type,
             status: typeof p.status === 'string' ? p.status.trim() : p.status,
@@ -668,7 +769,7 @@ const App: React.FC = () => {
             emirates_id: typeof p.emirates_id === 'string' ? p.emirates_id.trim() : p.emirates_id,
           }));
           setPersonnel(cleaned);
-          safeLocalStorage.setItem('writer_local_personnel_data', JSON.stringify(cleaned));
+          safeLocalStorage.setItem(`writer_local_personnel_data_${currentBranch}`, JSON.stringify(cleaned));
         }
     } catch (err: any) {
         if (isOfflineError(err.message)) {
@@ -676,14 +777,26 @@ const App: React.FC = () => {
           loadOfflinePersonnel();
         } else {
           console.error('Unexpected error fetching personnel:', err);
-          addNotification(`Unexpected error fetching personnel: ${err.message}`, 'error');
+          loadOfflinePersonnel();
         }
     }
-  }, [addNotification, loadOfflinePersonnel]);
+  }, [activeBranch, addNotification, loadOfflinePersonnel]);
 
   const fetchVehicles = useCallback(async () => {
+    const currentBranch = activeBranch || 'UAE';
     try {
-        const { data, error } = await supabase.from('vehicles').select('*');
+        let query = supabase.from('vehicles').select('*');
+        query = query.eq('branch', currentBranch);
+        let { data, error } = await query;
+
+        if (error && (error.message?.includes('branch') || error.code === '42703')) {
+          const fallback = await supabase.from('vehicles').select('*');
+          if (fallback.data) {
+            data = fallback.data.filter((v: any) => (v.branch || 'UAE') === currentBranch);
+            error = null;
+          }
+        }
+
         if (error) {
           if (isOfflineError(error.message)) {
             console.warn('Network offline during fetching vehicles:', error.message);
@@ -691,10 +804,12 @@ const App: React.FC = () => {
           } else {
             console.error('Error fetching vehicles:', error.message);
             addNotification(`Error fetching vehicles: ${error.message}`, 'error');
+            loadOfflineVehicles();
           }
         } else {
-          setVehicles(data || []);
-          safeLocalStorage.setItem('writer_local_vehicles_data', JSON.stringify(data || []));
+          const normalized = (data || []).map((v: any) => ({ ...v, branch: v.branch || currentBranch }));
+          setVehicles(normalized);
+          safeLocalStorage.setItem(`writer_local_vehicles_data_${currentBranch}`, JSON.stringify(normalized));
         }
     } catch (err: any) {
         if (isOfflineError(err.message)) {
@@ -702,21 +817,33 @@ const App: React.FC = () => {
           loadOfflineVehicles();
         } else {
           console.error('Unexpected error fetching vehicles:', err);
-          addNotification(`Unexpected error fetching vehicles: ${err.message}`, 'error');
+          loadOfflineVehicles();
         }
     }
-  }, [addNotification, loadOfflineVehicles]);
+  }, [activeBranch, addNotification, loadOfflineVehicles]);
 
   const fetchSurveys = useCallback(async () => {
+    const currentBranch = activeBranch || 'UAE';
     try {
-      const { data, error } = await supabase.from('surveys').select('*').order('created_at', { ascending: false });
+      let query = supabase.from('surveys').select('*').order('created_at', { ascending: false });
+      query = query.eq('branch', currentBranch);
+      let { data, error } = await query;
+
+      if (error && (error.message?.includes('branch') || error.code === '42703')) {
+        const fallback = await supabase.from('surveys').select('*').order('created_at', { ascending: false });
+        if (fallback.data) {
+          data = fallback.data.filter((s: any) => (s.branch || 'UAE') === currentBranch);
+          error = null;
+        }
+      }
+
       if (error) {
         if (isOfflineError(error.message)) {
           console.warn('Network offline during fetching surveys:', error.message);
           loadOfflineSurveys();
         } else {
           console.error('Error fetching surveys:', error.message);
-          addNotification(`Error fetching surveys: ${error.message}`, 'error');
+          loadOfflineSurveys();
         }
       } else {
         const normalizedData = (data || []).map((s: any) => {
@@ -724,11 +851,12 @@ const App: React.FC = () => {
           const lost_reason = cachedLostReason || s.lost_reason || '';
           return {
             ...s,
+            branch: s.branch || currentBranch,
             lost_reason
           };
         });
         setSurveys(normalizedData);
-        safeLocalStorage.setItem('writer_local_surveys_data', JSON.stringify(normalizedData));
+        safeLocalStorage.setItem(`writer_local_surveys_data_${currentBranch}`, JSON.stringify(normalizedData));
       }
     } catch (err: any) {
       if (isOfflineError(err.message)) {
@@ -736,105 +864,137 @@ const App: React.FC = () => {
         loadOfflineSurveys();
       } else {
         console.error('Unexpected error fetching surveys:', err);
-        addNotification(`Unexpected error fetching surveys: ${err.message}`, 'error');
+        loadOfflineSurveys();
       }
     }
-  }, [addNotification, loadOfflineSurveys]);
+  }, [activeBranch, addNotification, loadOfflineSurveys]);
 
   const fetchChecklists = useCallback(async () => {
+    const currentBranch = activeBranch || 'UAE';
     try {
-      const { data, error } = await supabase.from('warehouse_checklists').select('*').order('created_at', { ascending: false }).limit(200);
+      let cQuery = supabase.from('warehouse_checklists').select('*').order('created_at', { ascending: false }).limit(200);
+      cQuery = cQuery.eq('branch', currentBranch);
+      let { data, error } = await cQuery;
+
+      if (error && (error.message?.includes('branch') || error.code === '42703')) {
+        const fallback = await supabase.from('warehouse_checklists').select('*').order('created_at', { ascending: false }).limit(200);
+        if (fallback.data) {
+          data = fallback.data.filter((c: any) => (c.branch || 'UAE') === currentBranch);
+          error = null;
+        }
+      }
+
       if (error) {
-        console.warn('Checklists fetch issue:', error.message);
         try {
-          const saved = safeLocalStorage.getItem('writer_local_checklists_data');
+          const saved = safeLocalStorage.getItem(`writer_local_checklists_data_${currentBranch}`);
           if (saved) setChecklists(JSON.parse(saved));
         } catch (e) {}
-        if (!isOfflineError(error.message)) {
-          addNotification(`Warehouse checklists: loaded from local cache`, 'info');
-        }
       } else {
         setChecklists(data || []);
-        safeLocalStorage.setItem('writer_local_checklists_data', JSON.stringify(data || []));
+        safeLocalStorage.setItem(`writer_local_checklists_data_${currentBranch}`, JSON.stringify(data || []));
       }
       
-      const { data: patrolData, error: patrolError } = await supabase.from('night_patrolling_checklists').select('*').order('created_at', { ascending: false }).limit(200);
-      if (patrolError) {
-        console.warn('Patrol logs fetch issue:', patrolError.message);
-        try {
-          const saved = safeLocalStorage.getItem('writer_local_patrol_logs_data');
-          if (saved) setPatrolLogs(JSON.parse(saved));
-        } catch (e) {}
-      } else {
-        setPatrolLogs(patrolData || []);
-        safeLocalStorage.setItem('writer_local_patrol_logs_data', JSON.stringify(patrolData || []));
+      let pQuery = supabase.from('night_patrolling_checklists').select('*').order('created_at', { ascending: false }).limit(200);
+      pQuery = pQuery.eq('branch', currentBranch);
+      let { data: patrolData, error: patrolError } = await pQuery;
+      if (patrolError && (patrolError.message?.includes('branch') || patrolError.code === '42703')) {
+        const fb = await supabase.from('night_patrolling_checklists').select('*').order('created_at', { ascending: false }).limit(200);
+        if (fb.data) {
+          patrolData = fb.data.filter((p: any) => (p.branch || 'UAE') === currentBranch);
+          patrolError = null;
+        }
+      }
+      if (!patrolError && patrolData) {
+        setPatrolLogs(patrolData);
+        safeLocalStorage.setItem(`writer_local_patrol_logs_data_${currentBranch}`, JSON.stringify(patrolData));
       }
 
-      const { data: safetyData, error: safetyError } = await supabase.from('safety_monitoring_checklists').select('*').order('created_at', { ascending: false }).limit(200);
-      if (safetyError) {
-        console.warn('Safety logs fetch issue:', safetyError.message);
-        try {
-          const saved = safeLocalStorage.getItem('writer_local_safety_checks_data');
-          if (saved) setSafetyChecks(JSON.parse(saved));
-        } catch (e) {}
-      } else {
-        setSafetyChecks(safetyData || []);
-        safeLocalStorage.setItem('writer_local_safety_checks_data', JSON.stringify(safetyData || []));
+      let sQuery = supabase.from('safety_monitoring_checklists').select('*').order('created_at', { ascending: false }).limit(200);
+      sQuery = sQuery.eq('branch', currentBranch);
+      let { data: safetyData, error: safetyError } = await sQuery;
+      if (safetyError && (safetyError.message?.includes('branch') || safetyError.code === '42703')) {
+        const fb = await supabase.from('safety_monitoring_checklists').select('*').order('created_at', { ascending: false }).limit(200);
+        if (fb.data) {
+          safetyData = fb.data.filter((s: any) => (s.branch || 'UAE') === currentBranch);
+          safetyError = null;
+        }
+      }
+      if (!safetyError && safetyData) {
+        setSafetyChecks(safetyData);
+        safeLocalStorage.setItem(`writer_local_safety_checks_data_${currentBranch}`, JSON.stringify(safetyData));
       }
 
-      const { data: surpriseData, error: surpriseError } = await supabase.from('surprise_visits').select('*').order('created_at', { ascending: false }).limit(200);
-      if (surpriseError) {
-        console.warn('Surprise visits fetch issue:', surpriseError.message);
-        try {
-          const saved = safeLocalStorage.getItem('writer_local_surprise_visits_data');
-          if (saved) setSurpriseVisits(JSON.parse(saved));
-        } catch (e) {}
-      } else {
-        setSurpriseVisits(surpriseData || []);
-        safeLocalStorage.setItem('writer_local_surprise_visits_data', JSON.stringify(surpriseData || []));
+      let svQuery = supabase.from('surprise_visits').select('*').order('created_at', { ascending: false }).limit(200);
+      svQuery = svQuery.eq('branch', currentBranch);
+      let { data: surpriseData, error: surpriseError } = await svQuery;
+      if (surpriseError && (surpriseError.message?.includes('branch') || surpriseError.code === '42703')) {
+        const fb = await supabase.from('surprise_visits').select('*').order('created_at', { ascending: false }).limit(200);
+        if (fb.data) {
+          surpriseData = fb.data.filter((s: any) => (s.branch || 'UAE') === currentBranch);
+          surpriseError = null;
+        }
+      }
+      if (!surpriseError && surpriseData) {
+        setSurpriseVisits(surpriseData);
+        safeLocalStorage.setItem(`writer_local_surprise_visits_data_${currentBranch}`, JSON.stringify(surpriseData));
       }
 
-      const { data: dailyData, error: dailyError } = await supabase.from('daily_monitoring_checklists').select('*').order('created_at', { ascending: false }).limit(200);
-      if (dailyError) {
-        console.warn('Daily monitoring fetch issue:', dailyError.message);
-        try {
-          const saved = safeLocalStorage.getItem('writer_local_daily_monitoring_data');
-          if (saved) setDailyMonitoring(JSON.parse(saved));
-        } catch (e) {}
-      } else {
-        setDailyMonitoring(dailyData || []);
-        safeLocalStorage.setItem('writer_local_daily_monitoring_data', JSON.stringify(dailyData || []));
+      let dQuery = supabase.from('daily_monitoring_checklists').select('*').order('created_at', { ascending: false }).limit(200);
+      dQuery = dQuery.eq('branch', currentBranch);
+      let { data: dailyData, error: dailyError } = await dQuery;
+      if (dailyError && (dailyError.message?.includes('branch') || dailyError.code === '42703')) {
+        const fb = await supabase.from('daily_monitoring_checklists').select('*').order('created_at', { ascending: false }).limit(200);
+        if (fb.data) {
+          dailyData = fb.data.filter((d: any) => (d.branch || 'UAE') === currentBranch);
+          dailyError = null;
+        }
+      }
+      if (!dailyError && dailyData) {
+        setDailyMonitoring(dailyData);
+        safeLocalStorage.setItem(`writer_local_daily_monitoring_data_${currentBranch}`, JSON.stringify(dailyData));
       }
     } catch (err: any) {
       console.warn('Unexpected error during fetchChecklists, loading offline caches:', err);
       loadOfflineChecklists();
     }
-  }, [addNotification, loadOfflineChecklists]);
+  }, [activeBranch, addNotification, loadOfflineChecklists]);
 
   const fetchActivityLogs = useCallback(async () => {
+    const currentBranch = activeBranch || 'UAE';
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('activity_logs')
         .select('*')
         .order('timestamp', { ascending: false })
         .limit(1000);
 
+      query = query.eq('branch', currentBranch);
+      let { data, error } = await query;
+
+      if (error && (error.message?.includes('branch') || error.code === '42703')) {
+        const fallback = await supabase.from('activity_logs').select('*').order('timestamp', { ascending: false }).limit(500);
+        if (fallback.data) {
+          data = fallback.data.filter((l: any) => (l.branch || 'UAE') === currentBranch);
+          error = null;
+        }
+      }
+
       if (!error && data && data.length > 0) {
         setActivityLogs(data);
-        safeLocalStorage.setItem('writer_activity_logs', JSON.stringify(data));
+        safeLocalStorage.setItem(`writer_activity_logs_${currentBranch}`, JSON.stringify(data.slice(0, 50)));
       } else {
-        const cached = safeLocalStorage.getItem('writer_activity_logs');
+        const cached = safeLocalStorage.getItem(`writer_activity_logs_${currentBranch}`);
         if (cached) {
           try { setActivityLogs(JSON.parse(cached)); } catch(e){}
         }
       }
     } catch (e) {
-      const cached = safeLocalStorage.getItem('writer_activity_logs');
+      const cached = safeLocalStorage.getItem(`writer_activity_logs_${currentBranch}`);
       if (cached) {
         try { setActivityLogs(JSON.parse(cached)); } catch(e){}
       }
     }
-  }, []);
+  }, [activeBranch]);
 
   const logActivity = useCallback(async (
     action_type: ActionType,
@@ -848,8 +1008,10 @@ const App: React.FC = () => {
   ) => {
     const activeUser = overrideUser || currentUser;
     if (!activeUser) return;
+    const currentBranch = activeBranch || 'UAE';
     const newLog: ActivityLog = {
       id: `LOG-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      branch: currentBranch,
       timestamp: Date.now(),
       user_id: activeUser.id || activeUser.employee_id || 'UNKNOWN',
       user_name: activeUser.name || 'User',
@@ -866,16 +1028,20 @@ const App: React.FC = () => {
     setActivityLogs(prev => [newLog, ...prev]);
 
     try {
-      await supabase.from('activity_logs').insert([newLog]);
+      const { error } = await supabase.from('activity_logs').insert([newLog]);
+      if (error && (error.message?.includes('branch') || error.code === '42703')) {
+        const { branch, ...stripped } = newLog;
+        await supabase.from('activity_logs').insert([stripped]);
+      }
     } catch (e) {
       console.warn("Supabase logActivity notice:", e);
     }
 
     try {
-      const existing = JSON.parse(safeLocalStorage.getItem('writer_activity_logs') || '[]');
-      safeLocalStorage.setItem('writer_activity_logs', JSON.stringify([newLog, ...existing].slice(0, 1000)));
+      const existing = JSON.parse(safeLocalStorage.getItem(`writer_activity_logs_${currentBranch}`) || '[]');
+      safeLocalStorage.setItem(`writer_activity_logs_${currentBranch}`, JSON.stringify([newLog, ...existing].slice(0, 50)));
     } catch (e) {}
-  }, [currentUser]);
+  }, [currentUser, activeBranch]);
 
   const handleRestoreItem = async (log: ActivityLog) => {
     if (!log.previous_data) {
@@ -1124,8 +1290,8 @@ const App: React.FC = () => {
   }, [fetchSettings]);
 
   useEffect(() => {
-    // Fetch operational data only when a user is logged in
-    if (currentUser) {
+    // Fetch operational data only when a user is logged in and activeBranch is set
+    if (currentUser && activeBranch) {
       fetchJobs();
       fetchUsers();
       fetchPersonnel();
@@ -1143,7 +1309,7 @@ const App: React.FC = () => {
       }, 10000);
       return () => clearInterval(interval);
     }
-  }, [currentUser, fetchJobs, fetchUsers, fetchPersonnel, fetchVehicles, fetchSettings, fetchChecklists, fetchSurveys, fetchActivityLogs]);
+  }, [currentUser, activeBranch, fetchJobs, fetchUsers, fetchPersonnel, fetchVehicles, fetchSettings, fetchChecklists, fetchSurveys, fetchActivityLogs]);
 
   useEffect(() => {
     if (activeTab === 'activity-log') {
@@ -1465,12 +1631,21 @@ const App: React.FC = () => {
   };
 
   const insertJobsInSupabase = async (jobsToInsert: Job[]) => {
-    const dbJobsToInsert = jobsToInsert.map(({ day_dates, ...j }: any) => j);
+    const currentBranch = activeBranch || 'UAE';
+    const dbJobsToInsert = jobsToInsert.map(({ day_dates, ...j }: any) => ({
+      ...j,
+      branch: j.branch || currentBranch
+    }));
     let { error } = await supabase.from('jobs').insert(dbJobsToInsert);
-    if (error && (error.message.includes("truck_qty") || error.message.includes("is_confirmed") || error.message.includes("column"))) {
+    if (error && (error.message.includes("truck_qty") || error.message.includes("is_confirmed") || error.message.includes("column") || error.message.includes("branch"))) {
       const strippedJobs = dbJobsToInsert.map(({ truck_qty, is_confirmed, ...j }: any) => j);
       let { error: retryError } = await supabase.from('jobs').insert(strippedJobs);
       error = retryError;
+      if (error && error.message.includes("branch")) {
+        const noBranchJobs = strippedJobs.map(({ branch, ...j }: any) => j);
+        const { error: noBranchErr } = await supabase.from('jobs').insert(noBranchJobs);
+        error = noBranchErr;
+      }
     }
     if (error && error.message.includes("last_edited_at")) {
       const fallbackJobs = dbJobsToInsert.map(({ last_edited_by, last_edited_at, is_confirmed, truck_qty, ...j }: any) => j);
@@ -1486,8 +1661,10 @@ const App: React.FC = () => {
   };
 
   const handleAddSurvey = async (survey: Omit<Survey, 'id' | 'created_at' | 'created_by_id'>) => {
+    const currentBranch = activeBranch || 'UAE';
     const newSurvey: Survey = {
       ...survey,
+      branch: currentBranch,
       id: `SRV-${Date.now()}`,
       created_by_id: currentUser?.id || 'unknown',
       created_at: Date.now()
@@ -1911,13 +2088,14 @@ const App: React.FC = () => {
   const handleAddJob = async (job: Partial<Job>) => {
     if (!currentUser) return;
     
+    const duration = job.duration && job.duration > 0 ? job.duration : 1;
     let baseDate = job.job_date;
     if (!baseDate) {
         baseDate = getUAEToday();
     }
 
-    const duration = job.duration || 1;
-    const cleanBaseId = getCleanJobNo(job.id || `AE-${Date.now()}`);
+    const branchPrefix = activeBranch === 'KSA' ? 'KSA-' : activeBranch === 'QATAR' ? 'QAT-' : 'AE-';
+    const cleanBaseId = getCleanJobNo(job.id || `${branchPrefix}${Date.now()}`);
 
     // --- Sunday Handling Detection ---
     let testDate = new Date(`${baseDate}T00:00:00Z`);
@@ -2029,6 +2207,7 @@ const App: React.FC = () => {
         const newJobEntry: Job = {
           ...job,
           id: uniqueId,
+          branch: activeBranch || 'UAE',
           title: cleanBaseId,
           status: isSunday 
             ? (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD) 
@@ -2371,12 +2550,18 @@ const App: React.FC = () => {
   const handleAddPersonnel = async (person: Omit<Personnel, 'id'>) => {
     const sanitizedPerson = {
       ...person,
+      branch: activeBranch || 'UAE',
       name: typeof person.name === 'string' ? person.name.trim() : person.name,
       type: typeof person.type === 'string' ? person.type.trim() as any : person.type,
       employee_id: typeof person.employee_id === 'string' ? person.employee_id.trim() : person.employee_id,
       emirates_id: typeof person.emirates_id === 'string' ? person.emirates_id.trim() : person.emirates_id,
     };
-    const { error } = await supabase.from('personnel').insert([sanitizedPerson]);
+    let { error } = await supabase.from('personnel').insert([sanitizedPerson]);
+    if (error && (error.message.includes('branch') || error.code === '42703')) {
+      const { branch, ...stripped } = sanitizedPerson;
+      const { error: retryError } = await supabase.from('personnel').insert([stripped]);
+      error = retryError;
+    }
     if (error) {
       if (error.message.includes("Could not find the 'type' column") || error.message.includes("column \"type\" of relation \"personnel\" does not exist")) {
         alert("Database Error: The 'personnel' table is missing the 'type' column. Please run the migration script in Supabase.");
@@ -2392,12 +2577,14 @@ const App: React.FC = () => {
   const handleEditPersonnel = async (person: Personnel) => {
     const sanitizedPerson = {
       ...person,
+      branch: person.branch || activeBranch || 'UAE',
       name: typeof person.name === 'string' ? person.name.trim() : person.name,
       type: typeof person.type === 'string' ? person.type.trim() as any : person.type,
       employee_id: typeof person.employee_id === 'string' ? person.employee_id.trim() : person.employee_id,
       emirates_id: typeof person.emirates_id === 'string' ? person.emirates_id.trim() : person.emirates_id,
     };
     const { error } = await supabase.from('personnel').update({
+        branch: sanitizedPerson.branch,
         name: sanitizedPerson.name,
         type: sanitizedPerson.type,
         employee_id: sanitizedPerson.employee_id,
@@ -2426,7 +2613,12 @@ const App: React.FC = () => {
   };
 
   const handleAddVehicle = async (vehicle: Omit<Vehicle, 'id'>) => {
-    const { error } = await supabase.from('vehicles').insert([vehicle]);
+    const vehicleWithBranch = { ...vehicle, branch: activeBranch || 'UAE' };
+    let { error } = await supabase.from('vehicles').insert([vehicleWithBranch]);
+    if (error && (error.message.includes('branch') || error.code === '42703')) {
+      const { error: retryError } = await supabase.from('vehicles').insert([vehicle]);
+      error = retryError;
+    }
     if (error) {
       if (error.message.includes("column \"name\" of relation \"vehicles\" does not exist")) {
         alert("Database Error: The 'vehicles' table is missing columns. Please run the migration script.");
@@ -2538,7 +2730,11 @@ const App: React.FC = () => {
             password: newUser.password,
             permissions: newUser.permissions, // Added permissions
             avatar: newUser.avatar,
-            status: newUser.status
+            status: newUser.status,
+            branch: newUser.branch || 'UAE',
+            allowed_branches: newUser.allowed_branches && newUser.allowed_branches.length > 0
+              ? newUser.allowed_branches
+              : ['UAE']
         }
      };
      
@@ -2580,6 +2776,36 @@ const App: React.FC = () => {
     addNotification('Your profile account credentials have been changed successfully.', 'success');
   };
 
+  const handleSelectBranch = useCallback((branch: BranchCode) => {
+    if (currentUser) {
+      const allowed = currentUser.role === UserRole.ADMIN 
+        ? ['UAE', 'KSA', 'QATAR']
+        : (currentUser.allowed_branches && currentUser.allowed_branches.length > 0
+            ? currentUser.allowed_branches
+            : [(currentUser.branch || 'UAE') as BranchCode]);
+      
+      if (!allowed.includes(branch)) {
+        addNotification(`Access Denied: You are UNAUTHORIZED to use the ${BRANCHES[branch]?.name || branch} branch. Authorized hubs: ${allowed.join(', ')}.`, 'error');
+        return;
+      }
+    }
+
+    // Clear stale data from previous branch
+    setJobs([]);
+    setSurveys([]);
+    setChecklists([]);
+    setPatrolLogs([]);
+    setSafetyChecks([]);
+    setSurpriseVisits([]);
+    setDailyMonitoring([]);
+    setActivityLogs([]);
+
+    setActiveBranch(branch);
+    safeSessionStorage.setItem('writer_active_branch', branch);
+    setIsBranchModalOpen(false);
+    addNotification(`Active Branch: ${BRANCHES[branch].name} (${branch})`, 'info');
+  }, [currentUser, addNotification]);
+
   const handleLogin = (user: UserProfile, latestUsers?: MockUser[]) => {
     if (latestUsers) {
       setAllCredentials(latestUsers);
@@ -2587,6 +2813,24 @@ const App: React.FC = () => {
       safeLocalStorage.setItem('writer_system_users', JSON.stringify(latestUsers));
     }
     setCurrentUser(user);
+
+    // Prompt user to select branch, or auto-assign if only 1 authorized
+    const allowed: BranchCode[] = user.role === UserRole.ADMIN 
+      ? (['UAE', 'KSA', 'QATAR'] as BranchCode[])
+      : (user.allowed_branches && user.allowed_branches.length > 0 
+          ? user.allowed_branches 
+          : [(user.branch || 'UAE') as BranchCode]);
+
+    if (allowed.length === 1) {
+      setActiveBranch(allowed[0]);
+      safeSessionStorage.setItem('writer_active_branch', allowed[0]);
+      setIsBranchModalOpen(false);
+    } else {
+      // Clear previous branch and prompt branch selector modal
+      setActiveBranch(null);
+      safeSessionStorage.removeItem('writer_active_branch');
+      setIsBranchModalOpen(true);
+    }
 
     // Synchronize & record login event into centralized audit log
     logActivity(
@@ -2603,8 +2847,8 @@ const App: React.FC = () => {
     // Reset active tab to a safe default if current default isn't allowed
     if (user.role !== UserRole.ADMIN && (!user.permissions || !user.permissions.dashboard)) {
         // Find first allowed tab
-        const allowed = user.permissions ? Object.entries(user.permissions).find(([_, val]) => val) : null;
-        if (allowed) {
+        const allowedTab = user.permissions ? Object.entries(user.permissions).find(([_, val]) => val) : null;
+        if (allowedTab) {
             // Map permission keys back to tab IDs if they differ
             const map: Record<string, string> = {
                 dashboard: 'dashboard',
@@ -2625,7 +2869,7 @@ const App: React.FC = () => {
                 users: 'users',
                 ai: 'ai'
             };
-            const targetTab = map[allowed[0]] || 'dashboard';
+            const targetTab = map[allowedTab[0]] || 'dashboard';
             setActiveTab(targetTab as any);
         } else {
             setActiveTab('dashboard');
@@ -2645,7 +2889,19 @@ const App: React.FC = () => {
         currentUser.name
       );
     }
+    safeSessionStorage.removeItem('writer_active_branch');
+    safeSessionStorage.removeItem('writer_current_user');
+    setActiveBranch(null);
     setCurrentUser(null);
+    setJobs([]);
+    setSurveys([]);
+    setChecklists([]);
+    setPatrolLogs([]);
+    setSafetyChecks([]);
+    setSurpriseVisits([]);
+    setDailyMonitoring([]);
+    setActivityLogs([]);
+    setIsBranchModalOpen(false);
   };
 
   const handleSundayConfirm = (action: 'Skip' | 'Include') => {
@@ -2673,6 +2929,25 @@ const App: React.FC = () => {
     );
   }
 
+  const currentUserAllowedBranches: BranchCode[] = currentUser.role === UserRole.ADMIN 
+    ? ['UAE', 'KSA', 'QATAR'] 
+    : (currentUser.allowed_branches && currentUser.allowed_branches.length > 0 
+        ? currentUser.allowed_branches 
+        : [(currentUser.branch || 'UAE') as BranchCode]);
+
+  // Enforce mandatory branch selection right after login or if active branch is unauthorized
+  if (!activeBranch || !currentUserAllowedBranches.includes(activeBranch)) {
+    return (
+      <BranchSelectionModal
+        isOpen={true}
+        isMandatory={true}
+        currentUser={currentUser}
+        activeBranch={activeBranch && currentUserAllowedBranches.includes(activeBranch) ? activeBranch : undefined}
+        onSelectBranch={handleSelectBranch}
+      />
+    );
+  }
+
   // Users restricted to view only Final Assessment in Job Costing
   const restrictedCostingUsers = [
     'OPS-101', 'OPS-102', 'OPS-103', 'OPS-104', 'OPS-105', 
@@ -2682,6 +2957,17 @@ const App: React.FC = () => {
   return (
     <div className="flex min-h-screen bg-[#f8fafc] text-slate-900 font-sans selection:bg-blue-100 selection:text-blue-900 overflow-hidden">
       <HolidayAlertModal isOpen={showHolidayAlert} onClose={() => setShowHolidayAlert(false)} />
+      
+      {/* Branch Selection & Switcher Modal */}
+      <BranchSelectionModal
+        isOpen={isBranchModalOpen}
+        isMandatory={false}
+        currentUser={currentUser}
+        activeBranch={activeBranch}
+        onSelectBranch={handleSelectBranch}
+        onClose={() => setIsBranchModalOpen(false)}
+      />
+
       {currentUser && (
         <ProfileUpdateModal
           isOpen={isProfileModalOpen}
@@ -2811,6 +3097,8 @@ const App: React.FC = () => {
         setIsCollapsed={setIsSidebarCollapsed}
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={closeMobileMenu}
+        activeBranch={activeBranch || 'UAE'}
+        onOpenBranchModal={() => setIsBranchModalOpen(true)}
       />
 
       <div className="flex-1 flex flex-col h-screen overflow-hidden w-full relative">
@@ -2841,16 +3129,119 @@ const App: React.FC = () => {
                   {currentUser.role}
                 </span>
               </div>
+
+              {/* Active Branch Badge & Switcher Button in Header */}
+              {activeBranch && (
+                <button
+                  type="button"
+                  onClick={() => setIsBranchModalOpen(true)}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50/80 hover:bg-blue-50/70 hover:border-blue-300 transition-all shadow-sm group"
+                  title={`Active Branch: ${BRANCHES[activeBranch]?.name} (${activeBranch}). Click to switch branch.`}
+                >
+                  <span className="text-base leading-none">{BRANCHES[activeBranch]?.flag}</span>
+                  <div className="flex flex-col text-left">
+                    <span className="text-[11px] font-black text-slate-800 leading-tight flex items-center gap-1 group-hover:text-blue-700">
+                      <span>{activeBranch}</span>
+                      <span className="text-[10px] text-slate-400 font-normal hidden sm:inline">Hub</span>
+                    </span>
+                    <span className="text-[9px] text-slate-500 font-semibold leading-tight hidden md:inline">
+                      {BRANCHES[activeBranch]?.currency}
+                    </span>
+                  </div>
+                  <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-blue-600 transition-colors ml-0.5" />
+                </button>
+              )}
             </div>
           </div>
 
           <div className="flex items-center gap-2 md:gap-8">
-            <div className="hidden lg:flex items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 w-64 group focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
-              <Search className="w-4 h-4 text-slate-400" />
-              <input type="text" placeholder="Global job search..." className="bg-transparent border-none outline-none text-xs ml-3 w-full font-medium" />
+            {/* Global Search - Strict Branch Isolation */}
+            <div className="relative hidden lg:block">
+              <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 w-72 group focus-within:ring-2 focus-within:ring-blue-500/20 transition-all">
+                <Search className="w-4 h-4 text-slate-400" />
+                <input 
+                  type="text" 
+                  value={globalSearchQuery}
+                  onChange={(e) => setGlobalSearchQuery(e.target.value)}
+                  onFocus={() => setIsGlobalSearchFocused(true)}
+                  onBlur={() => setTimeout(() => setIsGlobalSearchFocused(false), 200)}
+                  placeholder={`Search ${activeBranch || 'UAE'} jobs & records...`} 
+                  className="bg-transparent border-none outline-none text-xs ml-3 w-full font-medium placeholder:text-slate-400" 
+                />
+                {globalSearchQuery && (
+                  <button 
+                    onClick={() => { setGlobalSearchQuery(''); setIsGlobalSearchFocused(false); }}
+                    className="text-slate-400 hover:text-slate-600 ml-1"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Instant Search Results Dropdown */}
+              {isGlobalSearchFocused && globalSearchQuery.trim() && (
+                <div 
+                  className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-150"
+                  onMouseDown={(e) => e.preventDefault()}
+                >
+                  <div className="p-2.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-semibold">
+                    <span className="flex items-center gap-1.5">
+                      <span>{BRANCHES[activeBranch || 'UAE']?.flag}</span>
+                      <span>{BRANCHES[activeBranch || 'UAE']?.name} Search</span>
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-bold">{matchingSearchJobs.length} match(es)</span>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
+                    {matchingSearchJobs.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-slate-400">
+                        No {activeBranch} jobs matching "{globalSearchQuery}"
+                      </div>
+                    ) : (
+                      matchingSearchJobs.map((j) => (
+                        <div
+                          key={j.id}
+                          onClick={() => {
+                            setActiveTab('schedule');
+                            setIsGlobalSearchFocused(false);
+                            setGlobalSearchQuery('');
+                          }}
+                          className="p-3 hover:bg-blue-50/60 cursor-pointer transition-colors flex items-center justify-between gap-3 text-left"
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs text-slate-900 truncate">
+                                {j.shipper_name || 'Unnamed Client'}
+                              </span>
+                              <span className="text-[10px] font-mono font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded">
+                                {j.id}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 truncate flex items-center gap-2 mt-0.5">
+                              <span>{j.location || 'Location not set'}</span>
+                              <span>&bull;</span>
+                              <span>{j.job_date}</span>
+                            </div>
+                          </div>
+                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full shrink-0 ${
+                            j.status === JobStatus.ACTIVE ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            {j.status || 'Active'}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
-            <button className="lg:hidden p-2 text-slate-500 hover:bg-slate-50 rounded-lg">
+            <button 
+              onClick={() => {
+                setActiveTab('schedule');
+              }}
+              className="lg:hidden p-2 text-slate-500 hover:bg-slate-50 rounded-lg"
+              title="Search jobs"
+            >
               <Search className="w-5 h-5" />
             </button>
 
@@ -2934,7 +3325,7 @@ const App: React.FC = () => {
 
         <main className="flex-1 p-3 md:p-8 lg:p-10 overflow-y-auto custom-scrollbar w-full">
           <div className="max-w-[1700px] mx-auto pb-12">
-            {activeTab === 'dashboard' && <Dashboard jobs={jobs} settings={settings} onSetLimit={handleSetLimit} isAdmin={currentUser.role === UserRole.ADMIN} />}
+            {activeTab === 'dashboard' && <Dashboard jobs={jobs} settings={settings} onSetLimit={handleSetLimit} isAdmin={currentUser.role === UserRole.ADMIN} activeBranch={activeBranch || 'UAE'} />}
             {activeTab === 'schedule' && (
               <ScheduleView 
                 jobs={jobs} 
@@ -2976,6 +3367,14 @@ const App: React.FC = () => {
                 currentUser={currentUser}
                 onUpdateCustomsStatus={handleUpdateCustomsStatus}
                 logo={settings.company_logo}
+              />
+            )}
+            {activeTab === 'quotations' && (
+              <Quotations
+                jobs={jobs}
+                currentUser={currentUser}
+                logo={settings.company_logo}
+                activeBranch={activeBranch || 'UAE'}
               />
             )}
             {activeTab === 'approvals' && (
@@ -3059,6 +3458,7 @@ const App: React.FC = () => {
                 onlyFinalAssessment={restrictedCostingUsers.includes(currentUser.employee_id)} // Restrict costing view for specific users
                 initialSelectedJobId={costingJobId}
                 onLogActivity={logActivity}
+                activeBranch={activeBranch || 'UAE'}
               />
             )}
             {activeTab === 'tracking' && <TrackingView jobs={jobs} onUpdateJob={handleUpdateJob} logo={settings.company_logo} />}
@@ -3075,7 +3475,7 @@ const App: React.FC = () => {
               />
             )}
             {activeTab === 'groupage-tracker' && (
-              <GroupageTracker currentUser={currentUser} onLogActivity={logActivity} />
+              <GroupageTracker currentUser={currentUser} activeBranch={activeBranch || 'UAE'} onLogActivity={logActivity} />
             )}
             {activeTab === 'activity-log' && (
               <ActivityLogView 

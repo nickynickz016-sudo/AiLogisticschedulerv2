@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import { ImportClearanceCostSheet } from '../types';
+import { ImportClearanceCostSheet, DEFAULT_IMPORT_CLEARANCE_ITEMS, ImportCostItem } from '../types';
 
 export interface GenerateImportCostPdfOptions {
   sheet: ImportClearanceCostSheet;
@@ -131,7 +131,7 @@ export const generateImportCostSheetPdf = ({ sheet, logo }: GenerateImportCostPd
   // 3. TABLE LAYOUT
   // Column widths:
   // Sl No: 12mm
-  // Description: 82mm
+  // Particulars / Description: 82mm
   // Cost DHS: 28mm
   // Cost Fils: 15mm
   // Invoice DHS: 28mm
@@ -186,21 +186,37 @@ export const generateImportCostSheetPdf = ({ sheet, logo }: GenerateImportCostPd
   // Sl No.
   doc.text('Sl No.', xSl + colW.sl / 2, tableTopY + 7, { align: 'center' });
 
+  // Description / Particulars
+  doc.text('Particulars / Description', xDesc + colW.desc / 2, tableTopY + 7, { align: 'center' });
+
   // Top header labels
   doc.text('Cost Amount', xCostDhs + (colW.costDhs + colW.costFils) / 2, tableTopY + 4, { align: 'center' });
   doc.text('Invoice Amount', xInvDhs + (colW.invDhs + colW.invFils) / 2, tableTopY + 4, { align: 'center' });
 
-  // Sub headers
-  doc.text('DHS', xCostDhs + colW.costDhs / 2, tableTopY + headerRow1H + 4, { align: 'center' });
+  // Sub headers: DHS header right-aligned above DHS numbers; Fils header centered above Fils numbers
+  doc.text('DHS', xCostDhs + colW.costDhs - 3, tableTopY + headerRow1H + 4, { align: 'right' });
   doc.text('Fils', xCostFils + colW.costFils / 2, tableTopY + headerRow1H + 4, { align: 'center' });
-  doc.text('DHS', xInvDhs + colW.invDhs / 2, tableTopY + headerRow1H + 4, { align: 'center' });
+  doc.text('DHS', xInvDhs + colW.invDhs - 3, tableTopY + headerRow1H + 4, { align: 'right' });
   doc.text('Fils', xInvFils + colW.invFils / 2, tableTopY + headerRow1H + 4, { align: 'center' });
 
   let rowY = tableTopY + tableHeaderH;
   const rowHeight = 5.6;
 
-  // Draw 23 items + custom items
-  const items = sheet.items || [];
+  // Draw 23 items + custom items (fallback to default standard items if none present)
+  let items: ImportCostItem[] = sheet.items && sheet.items.length > 0 ? sheet.items : [];
+  if (items.length === 0) {
+    items = DEFAULT_IMPORT_CLEARANCE_ITEMS.map((def, idx) => ({
+      id: `item-${idx + 1}`,
+      sl_no: def.sl_no,
+      description: def.description,
+      cost_dhs: 0,
+      cost_fils: 0,
+      cost_amount: 0,
+      invoice_dhs: 0,
+      invoice_fils: 0,
+      invoice_amount: 0,
+    }));
+  }
   
   items.forEach((item, index) => {
     // Outer row line
@@ -227,62 +243,82 @@ export const generateImportCostSheetPdf = ({ sheet, logo }: GenerateImportCostPd
     doc.setFont('helvetica', 'bold');
     doc.text(item.description || '', xDesc + 3, rowY + 4);
 
-    // Cost Amount (Segregated into DHS and Fils columns)
-    const costTotal = (item.cost_amount !== undefined && item.cost_amount !== null && item.cost_amount > 0)
-      ? item.cost_amount
-      : ((item.cost_dhs || 0) + (item.cost_fils || 0) / 100);
+    // Cost Amount (Strictly segregated into DHS and Fils columns)
+    const rawCostAmt = typeof item.cost_amount === 'number' ? item.cost_amount : 0;
+    const rawCostDhs = typeof item.cost_dhs === 'number' ? item.cost_dhs : null;
+    const rawCostFils = typeof item.cost_fils === 'number' ? item.cost_fils : null;
 
-    const hasCost = costTotal > 0 || (item.cost_dhs !== undefined && item.cost_dhs > 0) || (item.cost_fils !== undefined && item.cost_fils > 0);
+    let costDhsVal: number | null = null;
+    let costFilsVal: number | null = null;
+
+    if (rawCostDhs !== null && rawCostDhs > 0) {
+      costDhsVal = Math.floor(rawCostDhs);
+      costFilsVal = rawCostFils !== null && rawCostFils >= 0 ? rawCostFils : 0;
+    } else if (rawCostFils !== null && rawCostFils > 0) {
+      costDhsVal = 0;
+      costFilsVal = rawCostFils;
+    } else if (rawCostAmt > 0) {
+      const cents = Math.round(rawCostAmt * 100);
+      costDhsVal = Math.floor(cents / 100);
+      costFilsVal = cents % 100;
+    }
+
+    const hasCost = (costDhsVal !== null && costDhsVal > 0) || (costFilsVal !== null && costFilsVal > 0);
 
     if (hasCost) {
-      const totalCostCents = Math.round(costTotal * 100);
-      const dhsVal = Math.floor(totalCostCents / 100);
-      const filsVal = totalCostCents % 100;
-
-      const dhsText = (dhsVal > 0 || (item.cost_dhs !== undefined && item.cost_dhs > 0)) 
-        ? dhsVal.toLocaleString('en-US') 
-        : (filsVal > 0 ? '0' : '');
-      const filsText = String(filsVal).padStart(2, '0');
-
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
       doc.setTextColor(0, 0, 0);
 
-      // Cost DHS in DHS column
-      if (dhsText) {
-        doc.text(dhsText, xCostDhs + colW.costDhs - 2.5, rowY + 3.8, { align: 'right' });
+      // Cost DHS in DHS column (aligned right with standard margin)
+      if (costDhsVal !== null && costDhsVal > 0) {
+        doc.text(costDhsVal.toLocaleString('en-US'), xCostDhs + colW.costDhs - 3, rowY + 3.8, { align: 'right' });
+      } else if (costFilsVal !== null && costFilsVal > 0) {
+        doc.text('0', xCostDhs + colW.costDhs - 3, rowY + 3.8, { align: 'right' });
       }
-      // Cost Fils in Fils column
-      doc.text(filsText, xCostFils + colW.costFils / 2, rowY + 3.8, { align: 'center' });
+
+      // Cost Fils in Fils column (centered neatly)
+      const filsStr = String(costFilsVal !== null ? costFilsVal : 0).padStart(2, '0');
+      doc.text(filsStr, xCostFils + colW.costFils / 2, rowY + 3.8, { align: 'center' });
     }
 
-    // Invoice Amount (Segregated into DHS and Fils columns)
-    const invTotal = (item.invoice_amount !== undefined && item.invoice_amount !== null && item.invoice_amount > 0)
-      ? item.invoice_amount
-      : ((item.invoice_dhs || 0) + (item.invoice_fils || 0) / 100);
+    // Invoice Amount (Strictly segregated into DHS and Fils columns)
+    const rawInvAmt = typeof item.invoice_amount === 'number' ? item.invoice_amount : 0;
+    const rawInvDhs = typeof item.invoice_dhs === 'number' ? item.invoice_dhs : null;
+    const rawInvFils = typeof item.invoice_fils === 'number' ? item.invoice_fils : null;
 
-    const hasInvoice = invTotal > 0 || (item.invoice_dhs !== undefined && item.invoice_dhs > 0) || (item.invoice_fils !== undefined && item.invoice_fils > 0);
+    let invDhsVal: number | null = null;
+    let invFilsVal: number | null = null;
+
+    if (rawInvDhs !== null && rawInvDhs > 0) {
+      invDhsVal = Math.floor(rawInvDhs);
+      invFilsVal = rawInvFils !== null && rawInvFils >= 0 ? rawInvFils : 0;
+    } else if (rawInvFils !== null && rawInvFils > 0) {
+      invDhsVal = 0;
+      invFilsVal = rawInvFils;
+    } else if (rawInvAmt > 0) {
+      const cents = Math.round(rawInvAmt * 100);
+      invDhsVal = Math.floor(cents / 100);
+      invFilsVal = cents % 100;
+    }
+
+    const hasInvoice = (invDhsVal !== null && invDhsVal > 0) || (invFilsVal !== null && invFilsVal > 0);
 
     if (hasInvoice) {
-      const totalInvCents = Math.round(invTotal * 100);
-      const invDhsVal = Math.floor(totalInvCents / 100);
-      const invFilsVal = totalInvCents % 100;
-
-      const invDhsText = (invDhsVal > 0 || (item.invoice_dhs !== undefined && item.invoice_dhs > 0)) 
-        ? invDhsVal.toLocaleString('en-US') 
-        : (invFilsVal > 0 ? '0' : '');
-      const invFilsText = String(invFilsVal).padStart(2, '0');
-
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
       doc.setTextColor(0, 0, 0);
 
       // Invoice DHS in DHS column
-      if (invDhsText) {
-        doc.text(invDhsText, xInvDhs + colW.invDhs - 2.5, rowY + 3.8, { align: 'right' });
+      if (invDhsVal !== null && invDhsVal > 0) {
+        doc.text(invDhsVal.toLocaleString('en-US'), xInvDhs + colW.invDhs - 3, rowY + 3.8, { align: 'right' });
+      } else if (invFilsVal !== null && invFilsVal > 0) {
+        doc.text('0', xInvDhs + colW.invDhs - 3, rowY + 3.8, { align: 'right' });
       }
+
       // Invoice Fils in Fils column
-      doc.text(invFilsText, xInvFils + colW.invFils / 2, rowY + 3.8, { align: 'center' });
+      const invFilsStr = String(invFilsVal !== null ? invFilsVal : 0).padStart(2, '0');
+      doc.text(invFilsStr, xInvFils + colW.invFils / 2, rowY + 3.8, { align: 'center' });
     }
 
     rowY += rowHeight;
@@ -321,7 +357,7 @@ export const generateImportCostSheetPdf = ({ sheet, logo }: GenerateImportCostPd
   doc.setTextColor(0, 0, 0);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8.5);
-  doc.text(totalCostDhs.toLocaleString('en-US'), xCostDhs + colW.costDhs - 2.5, rowY + 4.5, { align: 'right' });
+  doc.text(totalCostDhs.toLocaleString('en-US'), xCostDhs + colW.costDhs - 3, rowY + 4.5, { align: 'right' });
   doc.text(String(totalCostFils).padStart(2, '0'), xCostFils + colW.costFils / 2, rowY + 4.5, { align: 'center' });
 
   // Total Invoice value segregated into DHS and Fils
@@ -330,7 +366,7 @@ export const generateImportCostSheetPdf = ({ sheet, logo }: GenerateImportCostPd
     const totalInvDhs = Math.floor(totalInvCents / 100);
     const totalInvFils = totalInvCents % 100;
 
-    doc.text(totalInvDhs.toLocaleString('en-US'), xInvDhs + colW.invDhs - 2.5, rowY + 4.5, { align: 'right' });
+    doc.text(totalInvDhs.toLocaleString('en-US'), xInvDhs + colW.invDhs - 3, rowY + 4.5, { align: 'right' });
     doc.text(String(totalInvFils).padStart(2, '0'), xInvFils + colW.invFils / 2, rowY + 4.5, { align: 'center' });
   }
 

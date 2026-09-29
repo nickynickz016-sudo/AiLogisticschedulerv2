@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Edit2, Save, X, Plus, Package, AlertTriangle, Loader2, Database, FileInput, ClipboardList, ChevronRight, Calculator, Truck, User, MapPin, RefreshCw, Trash2, Printer, ChevronDown, FileText, FileDown, Calendar, Info, CheckCircle2, BarChart2 } from 'lucide-react';
 import { supabase, fetchAllJobsFromDb } from '../supabaseClient';
-import { InventoryItem, Job, JobCostSheet, CostSheetItem, UserProfile, InventoryConsumption, InventoryPriceHistory } from '../types';
+import { InventoryItem, Job, JobCostSheet, CostSheetItem, UserProfile, InventoryConsumption, InventoryPriceHistory, BranchCode, BRANCHES } from '../types';
 import { formatJobNoForExcel, getCleanJobNo } from '../utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -15,6 +15,7 @@ interface InventoryProps {
   isReadOnly?: boolean;
   onlyFinalAssessment?: boolean;
   initialSelectedJobId?: string;
+  activeBranch?: BranchCode;
   onLogActivity?: (action_type: string, entity_type: string, entity_id: string, details: string, entity_title?: string, previous_data?: any, new_data?: any) => void;
 }
 
@@ -25,6 +26,7 @@ export const Inventory: React.FC<InventoryProps> = ({
   isReadOnly = false, 
   onlyFinalAssessment = false,
   initialSelectedJobId,
+  activeBranch = 'UAE',
   onLogActivity
 }) => {
   const [viewMode, setViewMode] = useState<'inventory' | 'costing'>(initialSelectedJobId ? 'costing' : 'inventory');
@@ -186,16 +188,32 @@ export const Inventory: React.FC<InventoryProps> = ({
   const fetchSummary = async () => {
     setIsSaving(true);
     try {
-      const { data, error } = await supabase
-        .from('job_cost_sheets')
-        .select('*');
+      let sheetQuery = supabase.from('job_cost_sheets').select('*');
+      if (activeBranch) {
+        sheetQuery = sheetQuery.eq('branch', activeBranch);
+      }
+      let { data, error } = await sheetQuery;
       
+      if (error && (error.message?.includes('branch') || error.code === '42703')) {
+        const fallback = await supabase.from('job_cost_sheets').select('*');
+        if (fallback.data) {
+          data = fallback.data.filter((s: any) => (s.branch || 'UAE') === activeBranch);
+          error = null;
+        }
+      }
       if (error) throw error;
 
       // Query database jobs and import clearance to build complete lookup list
-      const [{ data: dbJobs }, { data: importClearanceSheets }] = await Promise.all([
-        fetchAllJobsFromDb(),
-        supabase.from('import_clearance_cost_sheets').select('*')
+      let impQuery = supabase.from('import_clearance_cost_sheets').select('*');
+      if (activeBranch) impQuery = impQuery.eq('branch', activeBranch);
+      let { data: importClearanceSheets, error: impErr } = await impQuery;
+      if (impErr && (impErr.message?.includes('branch') || impErr.code === '42703')) {
+        const impFb = await supabase.from('import_clearance_cost_sheets').select('*');
+        if (impFb.data) importClearanceSheets = impFb.data.filter((s: any) => (s.branch || 'UAE') === activeBranch);
+      }
+
+      const [{ data: dbJobs }] = await Promise.all([
+        fetchAllJobsFromDb(activeBranch)
       ]);
 
       const allKnownJobs: Job[] = [...(jobs || [])];
@@ -244,10 +262,24 @@ export const Inventory: React.FC<InventoryProps> = ({
 
   const fetchInventory = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    let query = supabase
       .from('inventory_items')
       .select('*')
       .order('id', { ascending: true });
+    
+    if (activeBranch) {
+      query = query.eq('branch', activeBranch);
+    }
+
+    let { data, error } = await query;
+    
+    if (error && (error.message?.includes('branch') || error.code === '42703')) {
+      const fb = await supabase.from('inventory_items').select('*').order('id', { ascending: true });
+      if (fb.data) {
+        data = fb.data.filter((i: any) => (i.branch || 'UAE') === activeBranch);
+        error = null;
+      }
+    }
     
     if (error) {
       console.error('Error fetching inventory:', error);
@@ -1086,6 +1118,7 @@ export const Inventory: React.FC<InventoryProps> = ({
       .from('inventory_items')
       .insert([{
         code: newItem.code,
+        branch: activeBranch || 'UAE',
         description: newItem.description,
         unit: newItem.unit,
         price: newItem.price,
@@ -1376,8 +1409,12 @@ export const Inventory: React.FC<InventoryProps> = ({
         // However, to keep it simple and less prone to sync errors, we'll save the items that have any activity.
         const itemsToSave = currentSheet.items.filter(i => i.issued_qty > 0 || i.returned_qty > 0);
 
+        const targetJob = jobs.find(j => j.id === currentSheet.job_id || j.id === selectedJobId);
+        const sheetBranch = targetJob?.branch || activeBranch || 'UAE';
+
         const payload = {
             job_id: currentSheet.job_id,
+            branch: sheetBranch,
             items: itemsToSave,
             manual_items: currentSheet.manual_items || [],
             status: status,
@@ -1387,9 +1424,15 @@ export const Inventory: React.FC<InventoryProps> = ({
             job_category: currentSheet.job_category || null
         };
 
-        const { error: saveError } = await supabase
+        let { error: saveError } = await supabase
             .from('job_cost_sheets')
             .upsert(payload);
+
+        if (saveError && (saveError.message.includes('branch') || saveError.message.includes('column'))) {
+            const { branch, ...stripped } = payload;
+            const { error: retryErr } = await supabase.from('job_cost_sheets').upsert(stripped);
+            saveError = retryErr;
+        }
 
         if (saveError) throw saveError;
 

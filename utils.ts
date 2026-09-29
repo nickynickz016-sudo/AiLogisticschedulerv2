@@ -1,3 +1,5 @@
+import * as XLSX from 'xlsx';
+
 export const getUAEToday = (): string => {
   // Returns YYYY-MM-DD in Asia/Dubai timezone
   return new Intl.DateTimeFormat('en-CA', { 
@@ -105,10 +107,22 @@ export const safeLocalStorage = {
   setItem: (key: string, value: string): void => {
     // Always store in memory fallback to guarantee availability during active session
     memoryStorage.set(key, value);
+
+    // Auto-prune activity logs, snapshots, and large arrays before saving to localStorage
+    let payload = value;
+    if (key.includes('activity_logs') || key.includes('history') || key.includes('archive')) {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed) && parsed.length > 20) {
+          payload = JSON.stringify(parsed.slice(0, 20));
+        }
+      } catch (_) {}
+    }
+
     try {
-      localStorage.setItem(key, value);
+      localStorage.setItem(key, payload);
     } catch (e) {
-      console.warn("Storage set failed for key:", key, "Attempting to prune old keys to free up space...", e);
+      // Attempt quota recovery
       try {
         const keysToRemove: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
@@ -119,40 +133,53 @@ export const safeLocalStorage = {
             k.startsWith('survey_alert_sent_') || 
             k.startsWith('notifications_') || 
             k.startsWith('jobs_snapshot_') ||
-            k.startsWith('google_calendar_tokens')
+            k.startsWith('google_calendar_tokens') ||
+            k.includes('_temp_')
           )) {
             keysToRemove.push(k);
           }
         }
-        keysToRemove.forEach(k => localStorage.removeItem(k));
+        keysToRemove.forEach(k => {
+          try { localStorage.removeItem(k); } catch (_) {}
+        });
         
+        // Compact known heavy keys
         const pruneList = [
+          'writer_activity_logs',
+          'writer_quotations',
           'writer_local_daily_monitoring_data',
           'writer_local_surprise_visits_data',
           'writer_local_safety_checks_data',
           'writer_local_patrol_logs_data',
           'writer_local_checklists_data',
-          'writer_local_surveys_data',
-          'writer_survey_packing_lists_v1',
-          'writer_survey_packing_audit_v1'
+          'writer_local_surveys_data'
         ];
         pruneList.forEach(pk => {
-          const stored = localStorage.getItem(pk);
-          if (stored) {
-            try {
+          try {
+            const stored = localStorage.getItem(pk);
+            if (stored) {
               const parsed = JSON.parse(stored);
-              if (Array.isArray(parsed) && parsed.length > 5) {
-                const pruned = parsed.slice(-5);
-                localStorage.setItem(pk, JSON.stringify(pruned));
+              if (Array.isArray(parsed)) {
+                const limit = pk.includes('activity_logs') ? 10 : 3;
+                if (parsed.length > limit) {
+                  localStorage.setItem(pk, JSON.stringify(parsed.slice(0, limit)));
+                }
               }
-            } catch (_) {}
-          }
+            }
+          } catch (_) {}
         });
 
-        localStorage.setItem(key, value);
-        console.log("Successfully recovered from QuotaExceededError and saved key:", key);
-      } catch (retryError) {
-        console.warn("Notice: Storage set failed even after pruning. Stored in memory-only mode for key:", key);
+        // If target payload is an array, trim more aggressively
+        try {
+          const parsed = JSON.parse(payload);
+          if (Array.isArray(parsed) && parsed.length > 10) {
+            payload = JSON.stringify(parsed.slice(0, 10));
+          }
+        } catch (_) {}
+
+        localStorage.setItem(key, payload);
+      } catch (_) {
+        // Silently keep in memory storage - session continuity is preserved without warning noise
       }
     }
   },
@@ -202,3 +229,93 @@ export const safeSessionStorage = {
     }
   }
 };
+
+/**
+ * Universally downloads a PDF file across all desktop/mobile browsers,
+ * iframe environments (such as AI Studio preview or sandboxed portals), and platforms.
+ */
+export const downloadPdfBlob = (blob: Blob, fileName: string): void => {
+  try {
+    // 1. IE / legacy Edge msSaveOrOpenBlob
+    if (typeof (window.navigator as any)?.msSaveOrOpenBlob === 'function') {
+      (window.navigator as any).msSaveOrOpenBlob(blob, fileName);
+      return;
+    }
+
+    // 2. Standard Blob Object URL via hidden link (without target="_blank" so download attribute isn't suppressed)
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+
+    setTimeout(() => {
+      try {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } catch (_) {}
+    }, 2000);
+  } catch (err) {
+    console.warn('downloadPdfBlob standard trigger failed, attempting FileReader data URL fallback:', err);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64data = reader.result as string;
+        const link = document.createElement('a');
+        link.href = base64data;
+        link.download = fileName;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        setTimeout(() => {
+          try { document.body.removeChild(link); } catch (_) {}
+        }, 2000);
+      };
+      reader.readAsDataURL(blob);
+    } catch (fallbackErr) {
+      console.error('All PDF download mechanisms failed:', fallbackErr);
+    }
+  }
+};
+
+/**
+ * Universally downloads an XLSX workbook across all desktop/mobile browsers,
+ * iframe environments (such as AI Studio preview or sandboxed portals), and platforms.
+ */
+export const downloadExcelWorkbook = (wb: XLSX.WorkBook, fileName: string): void => {
+  try {
+    const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([excelBuffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8'
+    });
+
+    // Check for IE / legacy edge msSaveOrOpenBlob
+    if (typeof (window.navigator as any)?.msSaveOrOpenBlob === 'function') {
+      (window.navigator as any).msSaveOrOpenBlob(blob, fileName);
+      return;
+    }
+
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName);
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+
+    setTimeout(() => {
+      try {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      } catch (e) {
+        // ignore cleanup errors
+      }
+    }, 1500);
+  } catch (error) {
+    console.warn('Blob Excel download failed, falling back to XLSX.writeFile:', error);
+    XLSX.writeFile(wb, fileName);
+  }
+};
+

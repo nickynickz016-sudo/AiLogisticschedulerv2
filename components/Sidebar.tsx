@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
-import { LayoutDashboard, Calendar, CheckSquare, Zap, Box, Users, SlidersHorizontal, UserCog, FileCheck, ChevronLeft, ChevronRight, ClipboardList, X, FileText, Clipboard, Map, Bus, ClipboardCheck, History } from 'lucide-react';
-import { UserProfile, UserRole } from '../types';
+import { LayoutDashboard, Calendar, CheckSquare, Zap, Box, Users, SlidersHorizontal, UserCog, FileCheck, ChevronLeft, ChevronRight, ClipboardList, X, FileText, Clipboard, Map, Bus, ClipboardCheck, History, ReceiptText, Globe, Repeat } from 'lucide-react';
+import { UserProfile, UserRole, BranchCode, BRANCHES } from '../types';
 
 interface SidebarProps {
   activeTab: string;
@@ -11,6 +11,8 @@ interface SidebarProps {
   setIsCollapsed: (val: boolean) => void;
   isMobileOpen?: boolean; 
   onCloseMobile?: () => void;
+  activeBranch?: BranchCode;
+  onOpenBranchModal?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
@@ -20,7 +22,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed, 
   setIsCollapsed,
   isMobileOpen,
-  onCloseMobile
+  onCloseMobile,
+  activeBranch = 'UAE',
+  onOpenBranchModal
 }) => {
   
   const allMenuItems = [
@@ -28,6 +32,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'schedule', label: 'Job Schedule', icon: Calendar, permission: 'schedule' },
     { id: 'warehouse', label: 'Warehouse Area', icon: Box, permission: 'warehouse' },
     { id: 'import-clearance', label: 'Import Clearance', icon: FileCheck, permission: 'importClearance' },
+    { id: 'quotations', label: 'Quotations', icon: ReceiptText, permission: 'quotations' },
     { id: 'approvals', label: 'Approval Pool', icon: CheckSquare, permission: 'approvals' },
     { id: 'survey-tracker', label: 'Survey Tracker', icon: ClipboardCheck, permission: 'surveyTracker' },
     { id: 'survey-packing', label: 'Survey / Packing List', icon: ClipboardList, permission: 'digitalPackingList' },
@@ -68,13 +73,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span className="text-3xl md:text-4xl font-black text-slate-900 tracking-tighter leading-none">WRITER</span>
               <div className="flex flex-col mt-1">
                 <span className="text-[10px] md:text-[11px] font-black text-[#E31E24] tracking-[0.4em] uppercase leading-none">Relocations</span>
-                <span className="text-[9px] md:text-[10px] font-bold text-slate-400 tracking-[0.2em] uppercase mt-1">United Arab Emirates</span>
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <span className="text-sm">{BRANCHES[activeBranch]?.flag}</span>
+                  <span className="text-[10px] font-bold text-slate-600 tracking-wider uppercase">
+                    {BRANCHES[activeBranch]?.country || BRANCHES[activeBranch]?.name}
+                  </span>
+                </div>
               </div>
+              {onOpenBranchModal && (
+                <button
+                  type="button"
+                  onClick={onOpenBranchModal}
+                  className="mt-2.5 px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-700 hover:text-blue-700 text-[11px] font-semibold flex items-center justify-between transition-all"
+                  title="Switch Branch"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span>Hub: <strong>{activeBranch}</strong></span>
+                  </span>
+                  <Repeat className="w-3 h-3 ml-2 text-slate-400" />
+                </button>
+              )}
             </>
           ) : (
-            <div className="flex flex-col items-center">
+            <div 
+              onClick={onOpenBranchModal}
+              className="flex flex-col items-center cursor-pointer hover:opacity-80"
+              title={`Active Branch: ${activeBranch} (Click to switch)`}
+            >
               <span className="text-2xl font-black text-slate-900 leading-none">W</span>
-              <span className="text-[8px] font-black text-[#E31E24] uppercase mt-0.5">UAE</span>
+              <span className="text-base mt-0.5">{BRANCHES[activeBranch]?.flag}</span>
+              <span className="text-[8px] font-black text-[#E31E24] uppercase mt-0.5">{activeBranch}</span>
             </div>
           )}
         </div>

@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
-import { UserProfile, UserRole, UserPermissions, SystemSettings } from '../types';
+import { UserProfile, UserRole, UserPermissions, SystemSettings, BranchCode, BRANCHES } from '../types';
 import { 
   UserPlus, ShieldAlert, ToggleLeft, ToggleRight, User, Fingerprint, Mail, 
   CheckCircle, X, Lock, Key, Shield, Edit2, Save, Radio, MessageSquare, 
-  AlertTriangle, Power, Trash2, Database, RefreshCw, History, Check, ExternalLink, AlertCircle 
+  AlertTriangle, Power, Trash2, Database, RefreshCw, History, Check, ExternalLink, AlertCircle, Globe,
+  ShieldCheck, CheckCircle2, XCircle
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { safeLocalStorage } from '../utils';
@@ -41,6 +42,7 @@ const DEFAULT_PERMISSIONS: UserPermissions = {
   ai: false,
   groupageTracker: true,
   activityLog: true,
+  quotations: true,
 };
 
 const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
@@ -49,6 +51,7 @@ const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
   jobBoard: 'Job Board (Admin)',
   warehouse: 'Warehouse Activity',
   importClearance: 'Import Clearance',
+  quotations: 'Quotations Management',
   approvals: 'Approval Queue',
   writerDocs: 'Writer Docs',
   inventory: 'Inventory Control',
@@ -79,10 +82,104 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     role: UserRole.USER,
     status: 'Active' as const,
     avatar: `https://picsum.photos/seed/${Math.random()}/100`,
+    branch: 'UAE' as BranchCode,
+    allowed_branches: ['UAE', 'KSA', 'QATAR'] as BranchCode[],
     permissions: { ...DEFAULT_PERMISSIONS }
   });
 
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  const [branchModalUser, setBranchModalUser] = useState<UserProfile | null>(null);
+  const [modalBranches, setModalBranches] = useState<BranchCode[]>([]);
+
+  const toggleAllowedBranch = (branchCode: BranchCode, isEditing = false) => {
+    if (isEditing && editingUser) {
+      const current: BranchCode[] = editingUser.allowed_branches && editingUser.allowed_branches.length > 0 
+        ? editingUser.allowed_branches 
+        : (['UAE', 'KSA', 'QATAR'] as BranchCode[]);
+      const next: BranchCode[] = current.includes(branchCode)
+        ? (current.length > 1 ? current.filter(b => b !== branchCode) : current)
+        : [...current, branchCode];
+      setEditingUser({ ...editingUser, allowed_branches: next });
+    } else {
+      const current: BranchCode[] = newUser.allowed_branches && newUser.allowed_branches.length > 0 
+        ? newUser.allowed_branches 
+        : (['UAE', 'KSA', 'QATAR'] as BranchCode[]);
+      const next: BranchCode[] = current.includes(branchCode)
+        ? (current.length > 1 ? current.filter(b => b !== branchCode) : current)
+        : [...current, branchCode];
+      setNewUser({ ...newUser, allowed_branches: next });
+    }
+  };
+
+  const openBranchModal = (user: UserProfile) => {
+    setBranchModalUser(user);
+    const current: BranchCode[] = user.allowed_branches && user.allowed_branches.length > 0
+      ? user.allowed_branches
+      : (user.role === UserRole.ADMIN ? (['UAE', 'KSA', 'QATAR'] as BranchCode[]) : [(user.branch || 'UAE') as BranchCode]);
+    setModalBranches(current);
+  };
+
+  const handleToggleModalBranch = (branchCode: BranchCode) => {
+    setModalBranches(prev => {
+      if (prev.includes(branchCode)) {
+        if (prev.length <= 1) {
+          alert(`At least one branch must remain AUTHORIZED so staff member "${branchModalUser?.name}" can access the system.`);
+          return prev;
+        }
+        return prev.filter(b => b !== branchCode);
+      } else {
+        return [...prev, branchCode];
+      }
+    });
+  };
+
+  const handleSaveModalBranches = () => {
+    if (!branchModalUser) return;
+    if (modalBranches.length === 0) {
+      alert("At least one branch must be AUTHORIZED.");
+      return;
+    }
+    const newPrimaryBranch: BranchCode = (branchModalUser.branch && modalBranches.includes(branchModalUser.branch)) 
+      ? branchModalUser.branch 
+      : modalBranches[0];
+    
+    const updatedUser: UserProfile = {
+      ...branchModalUser,
+      branch: newPrimaryBranch,
+      allowed_branches: modalBranches
+    };
+    onUpdateUser(updatedUser);
+    setBranchModalUser(null);
+  };
+
+  const handleQuickToggleBranch = (user: UserProfile, branchCode: BranchCode) => {
+    const currentAllowed: BranchCode[] = user.allowed_branches && user.allowed_branches.length > 0
+      ? user.allowed_branches
+      : (user.role === UserRole.ADMIN ? (['UAE', 'KSA', 'QATAR'] as BranchCode[]) : [(user.branch || 'UAE') as BranchCode]);
+    
+    const isCurrentlyAllowed = currentAllowed.includes(branchCode);
+    let nextAllowed: BranchCode[];
+
+    if (isCurrentlyAllowed) {
+      if (currentAllowed.length <= 1) {
+        alert(`Cannot mark ${branchCode} as UNAUTHORIZED: Staff member "${user.name}" must retain at least one authorized branch.`);
+        return;
+      }
+      nextAllowed = currentAllowed.filter(b => b !== branchCode);
+    } else {
+      nextAllowed = [...currentAllowed, branchCode];
+    }
+
+    const newPrimaryBranch: BranchCode = (user.branch && nextAllowed.includes(user.branch)) 
+      ? user.branch 
+      : nextAllowed[0];
+    const updatedUser: UserProfile = {
+      ...user,
+      branch: newPrimaryBranch,
+      allowed_branches: nextAllowed
+    };
+    onUpdateUser(updatedUser);
+  };
 
   // System Alert State
   const [alertForm, setAlertForm] = useState({
@@ -285,6 +382,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({
       role: UserRole.USER,
       status: 'Active',
       avatar: `https://picsum.photos/seed/${Math.random()}/100`,
+      branch: 'UAE' as BranchCode,
+      allowed_branches: ['UAE', 'KSA', 'QATAR'] as BranchCode[],
       permissions: { ...DEFAULT_PERMISSIONS }
     });
   };
@@ -560,6 +659,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
               <th className="p-6">Employee ID</th>
               <th className="p-6">User Details</th>
               <th className="p-6">Role</th>
+              <th className="p-6">Branch Access (Strict Authorization)</th>
               <th className="p-6">Credentials</th>
               <th className="p-6">Access Modules</th>
               <th className="p-6">Status</th>
@@ -590,6 +690,50 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                   }`}>
                     {user.role}
                   </span>
+                </td>
+                <td className="p-6">
+                  <div className="flex flex-col gap-1.5 min-w-[210px]">
+                    <div className="space-y-1">
+                      {(['UAE', 'KSA', 'QATAR'] as BranchCode[]).map(b => {
+                        const userAllowed = user.allowed_branches && user.allowed_branches.length > 0
+                          ? user.allowed_branches
+                          : (user.role === UserRole.ADMIN ? ['UAE', 'KSA', 'QATAR'] : [(user.branch || 'UAE') as BranchCode]);
+                        const isAuth = userAllowed.includes(b);
+
+                        return (
+                          <button
+                            key={b}
+                            type="button"
+                            onClick={() => handleQuickToggleBranch(user, b)}
+                            className={`w-full flex items-center justify-between px-2.5 py-1 rounded-lg text-[10px] font-bold border transition-all text-left group/btn cursor-pointer ${
+                              isAuth 
+                                ? 'bg-emerald-50/80 text-emerald-800 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300' 
+                                : 'bg-rose-50/50 text-rose-700 border-rose-200 hover:bg-rose-100 hover:border-rose-300'
+                            }`}
+                            title={`Click to mark ${b} as ${isAuth ? 'UNAUTHORIZED' : 'AUTHORIZED'}`}
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <span>{BRANCHES[b]?.flag}</span>
+                              <span className="font-extrabold">{b}</span>
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
+                              isAuth ? 'bg-emerald-200/70 text-emerald-900' : 'bg-rose-200/70 text-rose-900'
+                            }`}>
+                              {isAuth ? 'Authorized' : 'Unauthorized'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openBranchModal(user)}
+                      className="inline-flex items-center gap-1.5 text-[10px] font-bold text-blue-600 hover:text-blue-800 px-2 py-1 rounded-lg bg-blue-50/60 hover:bg-blue-100/80 border border-blue-200/50 transition-colors w-fit mt-0.5"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Manage Hubs</span>
+                    </button>
+                  </div>
                 </td>
                 <td className="p-6">
                   <div className="space-y-1">
@@ -717,6 +861,63 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                         </select>
                     </div>
 
+                    {/* Branch Authorization */}
+                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200/80">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                                <Globe className="w-4 h-4 text-blue-600" />
+                                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Branch Access Authorization</h4>
+                            </div>
+                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                                Strict Multi-Hub Control
+                            </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mb-4 font-medium leading-relaxed">
+                            Strictly specify which branches this user is authorized to use. Any branch left as <strong>Unauthorized</strong> will be completely restricted and inaccessible to them.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {(['UAE', 'KSA', 'QATAR'] as BranchCode[]).map(bCode => {
+                                const isAuth = (newUser.allowed_branches || ['UAE', 'KSA', 'QATAR']).includes(bCode);
+                                return (
+                                    <div 
+                                        key={bCode} 
+                                        onClick={() => toggleAllowedBranch(bCode, false)}
+                                        className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-3 ${
+                                            isAuth 
+                                              ? 'bg-emerald-50/50 border-emerald-500 shadow-sm' 
+                                              : 'bg-rose-50/30 border-rose-200 hover:border-rose-300'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-2xl">{BRANCHES[bCode]?.flag}</span>
+                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                                isAuth 
+                                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                                                  : 'bg-rose-100 text-rose-800 border border-rose-300'
+                                            }`}>
+                                                {isAuth ? 'Authorized' : 'Unauthorized'}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <p className="font-extrabold text-xs text-slate-800">{BRANCHES[bCode]?.name}</p>
+                                            <p className="text-[10px] text-slate-400 font-mono mt-0.5">{BRANCHES[bCode]?.currency} Hub</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className={`w-full py-1 px-2 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-colors ${
+                                                isAuth
+                                                  ? 'bg-emerald-600 text-white border-emerald-700'
+                                                  : 'bg-white text-rose-700 border-rose-300 hover:bg-rose-50'
+                                            }`}
+                                        >
+                                            {isAuth ? '✓ Authorized' : '✕ Unauthorized'}
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                     {newUser.role === UserRole.USER && (
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
                             <div className="flex items-center gap-2 mb-4">
@@ -789,6 +990,63 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                         </select>
                     </div>
 
+                    {/* Branch Authorization */}
+                    <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200/80">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                                <Globe className="w-4 h-4 text-blue-600" />
+                                <h4 className="text-xs font-black text-slate-800 uppercase tracking-widest">Branch Access Authorization</h4>
+                            </div>
+                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                                Strict Multi-Hub Control
+                            </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 mb-4 font-medium leading-relaxed">
+                            Strictly specify which branches this user is authorized to use. Any branch left as <strong>Unauthorized</strong> will be completely restricted and inaccessible to them.
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {(['UAE', 'KSA', 'QATAR'] as BranchCode[]).map(bCode => {
+                                const isAuth = (editingUser.allowed_branches || ['UAE', 'KSA', 'QATAR']).includes(bCode);
+                                return (
+                                    <div 
+                                        key={bCode} 
+                                        onClick={() => toggleAllowedBranch(bCode, true)}
+                                        className={`p-3.5 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between gap-3 ${
+                                            isAuth 
+                                              ? 'bg-emerald-50/50 border-emerald-500 shadow-sm' 
+                                              : 'bg-rose-50/30 border-rose-200 hover:border-rose-300'
+                                        }`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-2xl">{BRANCHES[bCode]?.flag}</span>
+                                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
+                                                isAuth 
+                                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                                                  : 'bg-rose-100 text-rose-800 border border-rose-300'
+                                            }`}>
+                                                {isAuth ? 'Authorized' : 'Unauthorized'}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <p className="font-extrabold text-xs text-slate-800">{BRANCHES[bCode]?.name}</p>
+                                            <p className="text-[10px] text-slate-400 font-mono mt-0.5">{BRANCHES[bCode]?.currency} Hub</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className={`w-full py-1 px-2 rounded-lg text-[10px] font-black uppercase tracking-wider border transition-colors ${
+                                                isAuth
+                                                  ? 'bg-emerald-600 text-white border-emerald-700'
+                                                  : 'bg-white text-rose-700 border-rose-300 hover:bg-rose-50'
+                                            }`}
+                                        >
+                                            {isAuth ? '✓ Authorized' : '✕ Unauthorized'}
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
                     {editingUser.role === UserRole.USER && (
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
                             <div className="flex items-center gap-2 mb-4">
@@ -821,6 +1079,178 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                  </div>
               </form>
            </div>
+        </div>
+      )}
+
+      {/* STRICT BRANCH ACCESS MANAGEMENT MODAL */}
+      {branchModalUser && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[90vh]">
+            <div className="p-6 md:p-8 border-b bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 text-white flex justify-between items-start shrink-0">
+              <div>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="p-1.5 bg-blue-500/20 text-blue-300 border border-blue-400/30 rounded-lg">
+                    <Globe className="w-4 h-4" />
+                  </span>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-blue-300">
+                    Branch Security & Access Control
+                  </span>
+                </div>
+                <h3 className="text-lg font-black text-white tracking-tight">
+                  Strict Branch Access: {branchModalUser.name}
+                </h3>
+                <p className="text-xs text-slate-300 mt-1 font-medium">
+                  Staff ID: <span className="font-mono text-white font-bold">{branchModalUser.employee_id}</span> • Role: <span className="uppercase text-blue-300 font-bold">{branchModalUser.role}</span>
+                </p>
+              </div>
+              <button 
+                onClick={() => setBranchModalUser(null)} 
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-6">
+              <div className="p-4 bg-blue-50/60 border border-blue-200 rounded-2xl text-xs text-blue-900 leading-relaxed">
+                <strong>Strict Branch Isolation Rule:</strong> You can explicitly mark which hub(s) this user is authorized to use. Any hub marked <strong>UNAUTHORIZED</strong> is strictly locked out — jobs, warehouse checklists, quotations, cost sheets, and reports from that branch will never be accessible to them.
+              </div>
+
+              {/* Quick Presets */}
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-2">
+                  Quick Access Presets:
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setModalBranches(['UAE'])}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                      modalBranches.length === 1 && modalBranches[0] === 'UAE'
+                        ? 'bg-blue-600 text-white border-blue-700 shadow-sm'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    🇦🇪 UAE Only
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalBranches(['KSA'])}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                      modalBranches.length === 1 && modalBranches[0] === 'KSA'
+                        ? 'bg-blue-600 text-white border-blue-700 shadow-sm'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    🇸🇦 KSA Only
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalBranches(['QATAR'])}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                      modalBranches.length === 1 && modalBranches[0] === 'QATAR'
+                        ? 'bg-blue-600 text-white border-blue-700 shadow-sm'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    🇶🇦 Qatar Only
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalBranches(['UAE', 'KSA', 'QATAR'])}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all ${
+                      modalBranches.length === 3
+                        ? 'bg-blue-600 text-white border-blue-700 shadow-sm'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    🌐 All Hubs
+                  </button>
+                </div>
+              </div>
+
+              {/* Branch Cards */}
+              <div className="space-y-3">
+                {(['UAE', 'KSA', 'QATAR'] as BranchCode[]).map(bCode => {
+                  const isAuth = modalBranches.includes(bCode);
+                  const branch = BRANCHES[bCode];
+
+                  return (
+                    <div
+                      key={bCode}
+                      className={`p-4 rounded-2xl border-2 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                        isAuth
+                          ? 'bg-emerald-50/50 border-emerald-400 shadow-sm'
+                          : 'bg-rose-50/30 border-rose-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <span className="text-3xl p-1 bg-white rounded-xl border border-slate-100 shadow-xs">
+                          {branch?.flag}
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold text-sm text-slate-900">{branch?.name}</h4>
+                            <span className="text-xs font-mono font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
+                              {bCode}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 font-medium mt-0.5">
+                            Port: <span className="font-semibold text-slate-700">{branch?.port}</span> • Currency: <span className="font-semibold text-slate-700">{branch?.currency}</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
+                          isAuth
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                            : 'bg-rose-100 text-rose-800 border border-rose-300'
+                        }`}>
+                          {isAuth ? '✓ AUTHORIZED' : '✕ UNAUTHORIZED'}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => handleToggleModalBranch(bCode)}
+                          className={`py-2 px-4 rounded-xl text-xs font-bold transition-all shadow-sm ${
+                            isAuth
+                              ? 'bg-rose-600 hover:bg-rose-700 text-white'
+                              : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          }`}
+                        >
+                          {isAuth ? 'Mark Unauthorized' : 'Mark Authorized'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="p-6 border-t bg-slate-50 flex items-center justify-between gap-4 shrink-0">
+              <p className="text-xs text-slate-500 font-medium">
+                Authorized Hubs: <strong className="text-slate-800">{modalBranches.join(', ')}</strong>
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setBranchModalUser(null)}
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-600 font-bold text-xs uppercase tracking-wider transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveModalBranches}
+                  className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md shadow-blue-200 flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Save Branch Restrictions</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
