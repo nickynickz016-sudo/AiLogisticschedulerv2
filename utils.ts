@@ -21,12 +21,19 @@ export const getUAEDate = (date: Date): string => {
 
 export const getCleanJobNo = (id: string): string => {
   if (!id) return '';
-  // Split by '#' first (new format: AE-12345#day1-1)
-  const hashSplit = id.split('#')[0];
+  // Split by '#' first (e.g. AE-12345#day1-1, AE-12345#day2, AE-12345#sub1)
+  let clean = id.split('#')[0].trim();
   
-  // Handle legacy multi-day format first (AE-12345-D2 or AE-12345-D2-1)
-  const clean = hashSplit.replace(/-D\d+(-\d+)?$/i, '');
-  
+  // Strip day indicators:
+  // -D1, -D2, -D01, _D2
+  clean = clean.replace(/[-_ ]*D\d+(-\d+)?$/i, '');
+  // -Day 1, -Day 2, -Day1, Day 1
+  clean = clean.replace(/[-_ ]*Day\s*\d+(-\d+)?$/i, '');
+  // (Day 1), (Day 2)
+  clean = clean.replace(/\s*\([Dd]ay\s*\d+\)$/i, '');
+  // -Part 1, -Part 2, (Part 1)
+  clean = clean.replace(/[-_ ]*Part\s*\d+$/i, '').replace(/\s*\([Pp]art\s*\d+\)$/i, '');
+
   // For legacy single-day duplicate format like AE-12345-26-1, or any custom format ending in a suffix:
   // We only strip the last numeric suffix if the ID has 4 or more hyphenated parts (e.g. AE-3522-26-1 -> AE-3522-26)
   // This preserves the year suffix "-26" (which results in 3 parts: AE-3522-26)
@@ -35,11 +42,11 @@ export const getCleanJobNo = (id: string): string => {
     const last = parts[parts.length - 1];
     const prev = parts[parts.length - 2];
     if (/^\d+$/.test(last) && /^\d+$/.test(prev)) {
-      return parts.slice(0, -1).join('-');
+      clean = parts.slice(0, -1).join('-');
     }
   }
   
-  return clean;
+  return clean.trim();
 };
 
 export const formatJobNoForExcel = (id: string): string => {

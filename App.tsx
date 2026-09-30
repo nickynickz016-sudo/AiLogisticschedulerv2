@@ -3325,7 +3325,16 @@ const App: React.FC = () => {
 
         <main className="flex-1 p-3 md:p-8 lg:p-10 overflow-y-auto custom-scrollbar w-full">
           <div className="max-w-[1700px] mx-auto pb-12">
-            {activeTab === 'dashboard' && <Dashboard jobs={jobs} settings={settings} onSetLimit={handleSetLimit} isAdmin={currentUser.role === UserRole.ADMIN} activeBranch={activeBranch || 'UAE'} />}
+            {activeTab === 'dashboard' && (
+              <Dashboard 
+                jobs={jobs} 
+                settings={settings} 
+                onSetLimit={handleSetLimit} 
+                isAdmin={currentUser.role === UserRole.ADMIN} 
+                activeBranch={activeBranch || 'UAE'} 
+                users={systemUsers}
+              />
+            )}
             {activeTab === 'schedule' && (
               <ScheduleView 
                 jobs={jobs} 

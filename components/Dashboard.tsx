@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { getUAEToday } from '../utils';
-import { Job, JobStatus, SystemSettings, JobCostSheet, CustomsStatus, BranchCode, BRANCHES } from '../types';
+import { Job, JobStatus, SystemSettings, JobCostSheet, CustomsStatus, BranchCode, BRANCHES, UserProfile } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, Download, Loader2, Activity, Calendar, X, Filter, CalendarRange, ListFilter, Camera, DollarSign, FileText, PieChart as PieIcon, Globe } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -9,6 +9,7 @@ import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import * as XLSX from 'xlsx';
 import { supabase } from '../supabaseClient';
+import { TerminalOperationsAnalysis } from './TerminalOperationsAnalysis';
 
 // Extend jsPDF with the autoTable plugin
 type jsPDFWithAutoTable = jsPDF & {
@@ -21,9 +22,10 @@ interface DashboardProps {
   onSetLimit: (date: string, limit: number) => void;
   isAdmin: boolean;
   activeBranch?: BranchCode;
+  users?: UserProfile[];
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin, activeBranch = 'UAE' }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin, activeBranch = 'UAE', users = [] }) => {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [showDownloadOptions, setShowDownloadOptions] = useState(false);
   const [isScreenshotting, setIsScreenshotting] = useState(false);
@@ -50,93 +52,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin, a
     !j.is_transporter
   ).length;
 
-  const [timeframe, setTimeframe] = useState<'weekly' | 'monthly' | 'yearly'>('weekly');
-  const [chartData, setChartData] = useState<{name: string, v: number}[]>([]);
 
-  const COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#6366f1', '#ef4444', '#94a3b8'];
-
-  const statusData = useMemo(() => {
-    const counts: Record<string, number> = {};
-    Object.values(JobStatus).forEach(status => counts[status] = 0);
-    
-    jobs.forEach(job => {
-      if (!job.is_transporter) {
-        counts[job.status] = (counts[job.status] || 0) + 1;
-      }
-    });
-
-    return Object.entries(counts)
-      .filter(([_, count]) => count > 0)
-      .map(([status, count]) => ({
-        name: status.replace(/_/g, ' '),
-        value: count
-      }));
-  }, [jobs]);
-
-  useEffect(() => {
-    const calculateTrend = () => {
-      const counts: Record<string, number> = {};
-      const todayDate = new Date(today);
-      
-      if (timeframe === 'weekly' || timeframe === 'monthly') {
-        const days = timeframe === 'weekly' ? 7 : 30;
-        
-        // Initialize range with 0
-        for (let i = days - 1; i >= 0; i--) {
-          const d = new Date(todayDate);
-          d.setDate(d.getDate() - i);
-          const dateStr = d.toISOString().split('T')[0];
-          counts[dateStr] = 0;
-        }
-
-        // Fill counts
-        jobs.forEach(job => {
-          if (job.job_date && counts[job.job_date] !== undefined && !job.is_transporter) {
-            counts[job.job_date]++;
-          }
-        });
-
-        const data = Object.entries(counts)
-          .sort(([dateA], [dateB]) => dateA.localeCompare(dateB))
-          .map(([date, count]) => ({
-            name: timeframe === 'weekly' 
-              ? new Date(date).toLocaleDateString('en-US', { weekday: 'short' })
-              : new Date(date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }),
-            v: count
-          }));
-        
-        setChartData(data);
-      } else if (timeframe === 'yearly') {
-        // Monthly breakdown for the last 12 months
-        for (let i = 11; i >= 0; i--) {
-          const d = new Date(todayDate);
-          d.setMonth(d.getMonth() - i);
-          const monthStr = d.toISOString().slice(0, 7); // YYYY-MM
-          counts[monthStr] = 0;
-        }
-
-        jobs.forEach(job => {
-          if (job.job_date && !job.is_transporter) {
-            const monthStr = job.job_date.slice(0, 7);
-            if (counts[monthStr] !== undefined) {
-              counts[monthStr]++;
-            }
-          }
-        });
-
-        const data = Object.entries(counts)
-          .sort(([monthA], [monthB]) => monthA.localeCompare(monthB))
-          .map(([month, count]) => ({
-            name: new Date(month + '-01').toLocaleDateString('en-US', { month: 'short' }),
-            v: count
-          }));
-        
-        setChartData(data);
-      }
-    };
-
-    calculateTrend();
-  }, [jobs, today, timeframe]);
 
   const stats = [
     { label: 'Job Executed', value: jobs.filter(j => j.status === JobStatus.ACTIVE && !j.is_transporter).length, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50/50' },
@@ -575,103 +491,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin, a
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-10">
-        <div className="lg:col-span-2 bg-white rounded-[2.5rem] p-6 md:p-10 border border-slate-200 shadow-sm relative overflow-hidden group">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 md:mb-12 gap-4">
-            <div>
-              <h3 className="font-black text-xl text-slate-800 uppercase tracking-tight">Job Trend Analysis</h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">Scheduled jobs frequency</p>
-            </div>
-            <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200">
-               <button 
-                onClick={() => setTimeframe('weekly')}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${timeframe === 'weekly' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-               >
-                 Weekly
-               </button>
-               <button 
-                onClick={() => setTimeframe('monthly')}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${timeframe === 'monthly' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-               >
-                 Monthly
-               </button>
-               <button 
-                onClick={() => setTimeframe('yearly')}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${timeframe === 'yearly' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-               >
-                 Yearly
-               </button>
-            </div>
-          </div>
-          <div className="w-full" style={{ height: '400px', minHeight: '400px' }}>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-              <BarChart data={chartData}>
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: '800'}} />
-                <Tooltip 
-                    cursor={{fill: '#f8fafc'}} 
-                    contentStyle={{borderRadius: '16px', border: '1px solid #e2e8f0', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                    labelStyle={{fontWeight: '900', color: '#1e293b', marginBottom: '4px', textTransform: 'uppercase', fontSize: '10px'}}
-                    formatter={(value: number) => [`${value} Jobs`, 'Volume']}
-                />
-                <Bar dataKey="v" radius={[12, 12, 0, 0]} fill="#3b82f6" fillOpacity={0.8} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 blur-[100px] rounded-full"></div>
-        </div>
-
-        <div className="bg-white rounded-[2.5rem] p-6 md:p-10 border border-slate-200 shadow-sm relative flex flex-col">
-          <div className="mb-8">
-            <h3 className="font-black text-xl text-slate-800 uppercase tracking-tight flex items-center gap-3">
-              <PieIcon className="w-5 h-5 text-indigo-500" />
-              Workload
-            </h3>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">Status distribution</p>
-          </div>
-          
-          <div className="flex-1 flex flex-col justify-center">
-            <div className="h-[250px] w-full relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={statusData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {statusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip 
-                    contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}}
-                    labelStyle={{fontWeight: '900'}}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="text-center">
-                  <p className="text-2xl font-black text-slate-800">{jobs.filter(j => !j.is_transporter).length}</p>
-                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Total</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-8 grid grid-cols-2 gap-3">
-              {statusData.map((entry, index) => (
-                <div key={entry.name} className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                  <span className="text-[10px] font-black text-slate-600 uppercase tracking-tight truncate">{entry.name}</span>
-                  <span className="text-[10px] font-bold text-slate-400 ml-auto">{entry.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Precision Operations & Unique Job Analysis Engine (Replaces Job Trend Analysis) */}
+      <TerminalOperationsAnalysis 
+        jobs={jobs} 
+        users={users} 
+        activeBranch={activeBranch} 
+      />
 
       {/* Activities Summary Modal */}
       {showSummary && (
