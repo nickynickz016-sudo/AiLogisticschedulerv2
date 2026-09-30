@@ -59,6 +59,7 @@ export const BRANCHES: Record<BranchCode, Branch> = {
 
 export enum UserRole {
   ADMIN = 'ADMIN',
+  SEMI_ADMIN = 'SEMI_ADMIN',
   USER = 'USER'
 }
 

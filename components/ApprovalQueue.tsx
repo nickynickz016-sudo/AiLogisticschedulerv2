@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import SignatureCanvas from 'react-signature-canvas';
-import { Job, JobStatus, Personnel, Vehicle, UserProfile, SystemSettings, WarehouseChecklist, NightPatrollingChecklist, SafetyMonitoringChecklist, SurpriseVisitChecklist, DailyMonitoringChecklist } from '../types';
+import { Job, JobStatus, Personnel, Vehicle, UserProfile, UserRole, SystemSettings, WarehouseChecklist, NightPatrollingChecklist, SafetyMonitoringChecklist, SurpriseVisitChecklist, DailyMonitoringChecklist } from '../types';
 import { Check, X, User, AlertTriangle, Truck, Users, Layout, CheckCircle2, Calendar, AlertCircle, Maximize2, Minimize2, Search, FileText, Box, FileCheck, ShieldAlert, ShieldCheck, Flame, Activity, Clock8, ClipboardCheck } from 'lucide-react';
 
 interface ApprovalQueueProps {
@@ -63,11 +63,11 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({
   const [expandedSection, setExpandedSection] = useState<'leader' | 'crew' | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const isOpsAdmin = currentUser.employee_id === 'OPS-ADMIN-01';
-  const isKarthik = currentUser.name.toLowerCase().includes('karthik') || isOpsAdmin;
+  const isOpsAdmin = currentUser.role === UserRole.SEMI_ADMIN || currentUser.employee_id === 'OPS-ADMIN-01' || currentUser.employee_id === 'OPS-ADMIN-02' || currentUser.name.toLowerCase().includes('karthik') || currentUser.name.toLowerCase().includes('reena');
+  const isOpsIncharge = isOpsAdmin;
 
   const canApproveWarehouse = (type: string) => {
-     if (type === 'safety' || type === 'surprise') return isKarthik;
+     if (type === 'safety' || type === 'surprise') return isOpsIncharge;
      return isAdmin || isOpsAdmin;
   };
 
@@ -340,7 +340,7 @@ export const ApprovalQueue: React.FC<ApprovalQueueProps> = ({
                ) : (
                 <div className="px-6 py-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Restricted Access</p>
-                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">Karthik's Signature Required</p>
+                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-tight">Ops Incharge (Karthik / Reena) Signature Required</p>
                 </div>
                )}
             </div>

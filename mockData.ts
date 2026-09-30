@@ -132,7 +132,7 @@ const SANTOSH_ACCESS = {
   quotations: true,
 };
 
-const SEMI_ADMIN_ACCESS = {
+export const SEMI_ADMIN_ACCESS = {
   dashboard: true,
   schedule: true,
   jobBoard: true,
@@ -352,9 +352,22 @@ const BASE_USERS: MockUser[] = [
       id: 'k1a2r3t4-h5i6-7890-1234-567890abcdef',
       employee_id: 'OPS-ADMIN-01',
       name: 'Karthik',
-      role: UserRole.USER,
+      role: UserRole.SEMI_ADMIN,
       permissions: SEMI_ADMIN_ACCESS,
       avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Karthik',
+      status: 'Active',
+    },
+  },
+  {
+    username: 'Reena',
+    password: 'Writer@123',
+    profile: {
+      id: 'r1e2e3n4-a5d6-7890-1234-567890abcdef',
+      employee_id: 'OPS-ADMIN-02',
+      name: 'Reena Dsouza',
+      role: UserRole.SEMI_ADMIN,
+      permissions: SEMI_ADMIN_ACCESS,
+      avatar: 'https://api.dicebear.com/8.x/initials/svg?seed=Reena',
       status: 'Active',
     },
   },
@@ -443,9 +456,13 @@ export const USERS: MockUser[] = BASE_USERS.map(u => {
   let allowed_branches: ('UAE' | 'KSA' | 'QATAR')[] = ['UAE', 'KSA', 'QATAR'];
   let primary_branch: 'UAE' | 'KSA' | 'QATAR' = 'UAE';
 
-  if (u.profile.role === UserRole.ADMIN || u.username === 'Karthik') {
+  if (u.profile.role === UserRole.ADMIN || u.profile.role === UserRole.SEMI_ADMIN || u.username === 'Karthik') {
     allowed_branches = ['UAE', 'KSA', 'QATAR'];
     primary_branch = 'UAE';
+  } else if (u.username === 'Reena') {
+    // Reena Dsouza: Semi-Admin Ops for Qatar branch with multi-hub oversight
+    allowed_branches = ['QATAR', 'UAE', 'KSA'];
+    primary_branch = 'QATAR';
   } else if (u.username === 'User1') {
     // Roxanne: UAE only (KSA & QATAR unauthorized)
     allowed_branches = ['UAE'];

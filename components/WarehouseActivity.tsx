@@ -74,7 +74,8 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
   const dailyActivities = jobs.filter(j => j.is_warehouse_activity && j.job_date === selectedDate);
   const slotsRemaining = isHoliday ? 0 : Math.max(0, whCapacity - dailyActivities.length);
 
-  const canManageWarehouse = currentUser.role === UserRole.ADMIN || currentUser.employee_id === 'OPS-ADMIN-01';
+  const isOpsAdmin = currentUser.role === UserRole.SEMI_ADMIN || currentUser.employee_id === 'OPS-ADMIN-01' || currentUser.employee_id === 'OPS-ADMIN-02' || currentUser.name.toLowerCase().includes('karthik') || currentUser.name.toLowerCase().includes('reena');
+  const canManageWarehouse = currentUser.role === UserRole.ADMIN || isOpsAdmin;
 
   const handleDownloadPDF = () => {
     const doc = new jsPDF({ orientation: 'landscape' });

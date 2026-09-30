@@ -695,10 +695,10 @@ export const WarehouseChecklist: React.FC<WarehouseChecklistProps> = ({
     pdf.save(`${name}.pdf`);
   };
 
-  const isOpsAdmin = currentUser.employee_id === 'OPS-ADMIN-01';
-  const isKarthik = currentUser.name.toLowerCase().includes('karthik') || isOpsAdmin;
+  const isOpsAdmin = currentUser.role === UserRole.SEMI_ADMIN || currentUser.employee_id === 'OPS-ADMIN-01' || currentUser.employee_id === 'OPS-ADMIN-02' || currentUser.name.toLowerCase().includes('karthik') || currentUser.name.toLowerCase().includes('reena');
+  const isOpsIncharge = isOpsAdmin;
   const canApprove = (module: string) => {
-    if (module === 'safety' || module === 'surprise') return isKarthik;
+    if (module === 'safety' || module === 'surprise') return isOpsIncharge;
     return currentUser.role === UserRole.ADMIN || isOpsAdmin;
   };
 
@@ -1763,7 +1763,7 @@ export const WarehouseChecklist: React.FC<WarehouseChecklistProps> = ({
                     }`}
                     disabled={!canApprove(type)}
                   >
-                    {canApprove(type) ? 'View & Sign' : 'Restricted to Karthik'}
+                    {canApprove(type) ? 'View & Sign' : 'Restricted to Ops Incharge (Karthik / Reena)'}
                   </button>
                 </div>
               ))}
@@ -2021,14 +2021,14 @@ export const WarehouseChecklist: React.FC<WarehouseChecklistProps> = ({
                    <div className="grid grid-cols-2 gap-8 mb-8">
                       <div className="space-y-4">
                          <div className="flex justify-between items-center">
-                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Admin Incharge Sig (Karthik)</span>
+                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Admin Incharge Sig ({currentUser.name.toLowerCase().includes('reena') ? 'Reena' : 'Karthik'})</span>
                            <button onClick={() => sigPadAdmin.current?.clear()} className="text-[9px] font-black text-rose-500 uppercase">Clear</button>
                          </div>
                          <div className="bg-white rounded-2xl overflow-hidden h-32"><SignatureCanvas penColor='black' canvasProps={{className: 'w-full h-full'}} ref={sigPadAdmin} /></div>
                       </div>
                       <div className="space-y-4">
                          <div className="flex justify-between items-center">
-                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Warehouse Incharge Sig (Karthik)</span>
+                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Warehouse Incharge Sig ({currentUser.name.toLowerCase().includes('reena') ? 'Reena' : 'Karthik'})</span>
                            <button onClick={() => sigPadWarehouse.current?.clear()} className="text-[9px] font-black text-rose-500 uppercase">Clear</button>
                          </div>
                          <div className="bg-white rounded-2xl overflow-hidden h-32"><SignatureCanvas penColor='black' canvasProps={{className: 'w-full h-full'}} ref={sigPadWarehouse} /></div>
@@ -2212,14 +2212,14 @@ export const WarehouseChecklist: React.FC<WarehouseChecklistProps> = ({
                    <div className="grid grid-cols-2 gap-8 mb-8">
                       <div className="space-y-4">
                          <div className="flex justify-between items-center">
-                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Admin Incharge Sig (Karthik)</span>
+                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Admin Incharge Sig ({currentUser.name.toLowerCase().includes('reena') ? 'Reena' : 'Karthik'})</span>
                            <button onClick={() => sigPadAdmin.current?.clear()} className="text-[9px] font-black text-rose-500 uppercase">Clear</button>
                          </div>
                          <div className="bg-white rounded-2xl overflow-hidden h-32"><SignatureCanvas penColor='black' canvasProps={{className: 'w-full h-full'}} ref={sigPadAdmin} /></div>
                       </div>
                       <div className="space-y-4">
                          <div className="flex justify-between items-center">
-                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Warehouse Incharge Sig (Karthik)</span>
+                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Warehouse Incharge Sig ({currentUser.name.toLowerCase().includes('reena') ? 'Reena' : 'Karthik'})</span>
                            <button onClick={() => sigPadWarehouse.current?.clear()} className="text-[9px] font-black text-rose-500 uppercase">Clear</button>
                          </div>
                          <div className="bg-white rounded-2xl overflow-hidden h-32"><SignatureCanvas penColor='black' canvasProps={{className: 'w-full h-full'}} ref={sigPadWarehouse} /></div>
@@ -2575,14 +2575,14 @@ export const WarehouseChecklist: React.FC<WarehouseChecklistProps> = ({
                    <div className="grid grid-cols-2 gap-8 mb-8">
                       <div className="space-y-4">
                          <div className="flex justify-between items-center">
-                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Admin Incharge Sig (Karthik)</span>
+                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Admin Incharge Sig ({currentUser.name.toLowerCase().includes('reena') ? 'Reena' : 'Karthik'})</span>
                            <button onClick={() => sigPadAdmin.current?.clear()} className="text-[9px] font-black text-rose-500 uppercase">Clear</button>
                          </div>
                          <div className="bg-white rounded-2xl overflow-hidden h-32"><SignatureCanvas penColor='black' canvasProps={{className: 'w-full h-full'}} ref={sigPadAdmin} /></div>
                       </div>
                       <div className="space-y-4">
                          <div className="flex justify-between items-center">
-                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Warehouse Incharge Sig (Karthik)</span>
+                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Warehouse Incharge Sig ({currentUser.name.toLowerCase().includes('reena') ? 'Reena' : 'Karthik'})</span>
                            <button onClick={() => sigPadWarehouse.current?.clear()} className="text-[9px] font-black text-rose-500 uppercase">Clear</button>
                          </div>
                          <div className="bg-white rounded-2xl overflow-hidden h-32"><SignatureCanvas penColor='black' canvasProps={{className: 'w-full h-full'}} ref={sigPadWarehouse} /></div>

@@ -34,7 +34,7 @@ export const BranchSelectionModal: React.FC<BranchSelectionModalProps> = ({
   onClose,
   isMandatory = false
 }) => {
-  const [selectedBranch, setSelectedBranch] = useState<BranchCode>(activeBranch || 'UAE');
+  const [selectedBranch, setSelectedBranch] = useState<BranchCode>(activeBranch || (currentUser.branch as BranchCode) || 'UAE');
   const [showSqlModal, setShowSqlModal] = useState(false);
   const [copiedSql, setCopiedSql] = useState(false);
   const [unauthorizedAttemptBranch, setUnauthorizedAttemptBranch] = useState<BranchCode | null>(null);
@@ -43,8 +43,8 @@ export const BranchSelectionModal: React.FC<BranchSelectionModalProps> = ({
 
   // Determine authorized branches for this user
   const userAllowedBranches: BranchCode[] = 
-    currentUser.role === UserRole.ADMIN 
-      ? ['UAE', 'KSA', 'QATAR'] 
+    (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.SEMI_ADMIN || currentUser.employee_id === 'OPS-ADMIN-01')
+      ? (currentUser.allowed_branches && currentUser.allowed_branches.length > 0 ? currentUser.allowed_branches : ['UAE', 'KSA', 'QATAR'])
       : (currentUser.allowed_branches && currentUser.allowed_branches.length > 0 
           ? currentUser.allowed_branches 
           : [(currentUser.branch || 'UAE') as BranchCode]);

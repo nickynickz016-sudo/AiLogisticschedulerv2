@@ -293,7 +293,8 @@ const App: React.FC = () => {
     // Auto-sync: If new users are added to USERS constant in code, add them to state
     // Use optional chaining and fallback to be safe
     const existingIds = new Set(users.filter(u => u?.profile?.employee_id).map((u: any) => u.profile.employee_id));
-    const missingUsers = USERS.filter(u => u?.profile?.employee_id && !existingIds.has(u.profile.employee_id));
+    const existingUsernames = new Set(users.filter(u => u?.username).map((u: any) => u.username.toLowerCase()));
+    const missingUsers = USERS.filter(u => u?.profile?.employee_id && (!existingIds.has(u.profile.employee_id) && !existingUsernames.has(u.username.toLowerCase())));
     
     // Also ensure all existing users have a permissions object
     users = users.map((u: any) => {
@@ -1241,10 +1242,19 @@ const App: React.FC = () => {
           // Synchronize credentials from Supabase
           const dbCredentials = data.daily_job_limits?.__credentials;
           if (dbCredentials && Array.isArray(dbCredentials)) {
-            const dbCredsStr = JSON.stringify(dbCredentials);
+            // Check if any default users (like newly added Reena) are missing from DB and merge them
+            const dbEmpIds = new Set(dbCredentials.map((u: any) => u?.profile?.employee_id));
+            const dbUsernames = new Set(dbCredentials.map((u: any) => u?.username?.toLowerCase()));
+            const missingFromDb = USERS.filter(u => u?.profile?.employee_id && (!dbEmpIds.has(u.profile.employee_id) && !dbUsernames.has(u.username?.toLowerCase())));
+            const mergedCredentials = missingFromDb.length > 0 ? [...dbCredentials, ...missingFromDb] : dbCredentials;
+
+            const dbCredsStr = JSON.stringify(mergedCredentials);
             if (dbCredsStr !== fetchedCredentialsRef.current) {
               fetchedCredentialsRef.current = dbCredsStr;
-              setAllCredentials(dbCredentials);
+              setAllCredentials(mergedCredentials);
+              if (missingFromDb.length > 0) {
+                saveCredentialsToDb(mergedCredentials);
+              }
             }
 
             const latestUser = currentUserRef.current;
@@ -1331,7 +1341,8 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!currentUser) return;
 
-    const isAdmin = currentUser.role === UserRole.ADMIN || currentUser.employee_id === 'OPS-ADMIN-01';
+    const isOpsAdmin = currentUser.role === UserRole.SEMI_ADMIN || currentUser.employee_id === 'OPS-ADMIN-01' || currentUser.employee_id === 'OPS-ADMIN-02' || currentUser.name.toLowerCase().includes('karthik') || currentUser.name.toLowerCase().includes('reena');
+    const isAdmin = currentUser.role === UserRole.ADMIN || isOpsAdmin;
     if (!isAdmin) return;
 
     const triggerBackupFlow = async () => {
@@ -2104,7 +2115,7 @@ const App: React.FC = () => {
         baseDate = getUAEToday();
     }
 
-    const branchPrefix = activeBranch === 'KSA' ? 'KSA-' : activeBranch === 'QATAR' ? 'QAT-' : 'AE-';
+    const branchPrefix = (job.branch || activeBranch) === 'KSA' ? 'KSA-' : (job.branch || activeBranch) === 'QATAR' ? 'QATAR-' : 'AE-';
     const cleanBaseId = getCleanJobNo(job.id || `${branchPrefix}${Date.now()}`);
 
     // --- Sunday Handling Detection ---
@@ -2217,7 +2228,7 @@ const App: React.FC = () => {
         const newJobEntry: Job = {
           ...job,
           id: uniqueId,
-          branch: activeBranch || 'UAE',
+          branch: job.branch || activeBranch || 'UAE',
           title: cleanBaseId,
           status: isSunday 
             ? (currentUser.role === UserRole.ADMIN ? JobStatus.ACTIVE : JobStatus.PENDING_ADD) 
@@ -2788,8 +2799,8 @@ const App: React.FC = () => {
 
   const handleSelectBranch = useCallback((branch: BranchCode) => {
     if (currentUser) {
-      const allowed = currentUser.role === UserRole.ADMIN 
-        ? ['UAE', 'KSA', 'QATAR']
+      const allowed = (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.SEMI_ADMIN || currentUser.employee_id === 'OPS-ADMIN-01')
+        ? (currentUser.allowed_branches && currentUser.allowed_branches.length > 0 ? currentUser.allowed_branches : ['UAE', 'KSA', 'QATAR'])
         : (currentUser.allowed_branches && currentUser.allowed_branches.length > 0
             ? currentUser.allowed_branches
             : [(currentUser.branch || 'UAE') as BranchCode]);
@@ -2825,8 +2836,8 @@ const App: React.FC = () => {
     setCurrentUser(user);
 
     // Prompt user to select branch, or auto-assign if only 1 authorized
-    const allowed: BranchCode[] = user.role === UserRole.ADMIN 
-      ? (['UAE', 'KSA', 'QATAR'] as BranchCode[])
+    const allowed: BranchCode[] = (user.role === UserRole.ADMIN || user.role === UserRole.SEMI_ADMIN || user.employee_id === 'OPS-ADMIN-01')
+      ? (user.allowed_branches && user.allowed_branches.length > 0 ? user.allowed_branches : (['UAE', 'KSA', 'QATAR'] as BranchCode[]))
       : (user.allowed_branches && user.allowed_branches.length > 0 
           ? user.allowed_branches 
           : [(user.branch || 'UAE') as BranchCode]);
@@ -2836,10 +2847,11 @@ const App: React.FC = () => {
       safeSessionStorage.setItem('writer_active_branch', allowed[0]);
       setIsBranchModalOpen(false);
     } else {
-      // Clear previous branch and prompt branch selector modal
-      setActiveBranch(null);
-      safeSessionStorage.removeItem('writer_active_branch');
-      setIsBranchModalOpen(true);
+      // Set initial branch to user's assigned branch if authorized (e.g. QATAR for Reena, UAE for Karthik/Admin)
+      const defaultBranch = (user.branch && allowed.includes(user.branch as BranchCode)) ? (user.branch as BranchCode) : allowed[0];
+      setActiveBranch(defaultBranch);
+      safeSessionStorage.setItem('writer_active_branch', defaultBranch);
+      setIsBranchModalOpen(false);
     }
 
     // Synchronize & record login event into centralized audit log
@@ -2939,8 +2951,8 @@ const App: React.FC = () => {
     );
   }
 
-  const currentUserAllowedBranches: BranchCode[] = currentUser.role === UserRole.ADMIN 
-    ? ['UAE', 'KSA', 'QATAR'] 
+  const currentUserAllowedBranches: BranchCode[] = (currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.SEMI_ADMIN || currentUser.employee_id === 'OPS-ADMIN-01')
+    ? (currentUser.allowed_branches && currentUser.allowed_branches.length > 0 ? currentUser.allowed_branches : ['UAE', 'KSA', 'QATAR'])
     : (currentUser.allowed_branches && currentUser.allowed_branches.length > 0 
         ? currentUser.allowed_branches 
         : [(currentUser.branch || 'UAE') as BranchCode]);
@@ -3359,6 +3371,9 @@ const App: React.FC = () => {
                 personnel={personnel}
                 vehicles={vehicles}
                 users={systemUsers}
+                activeBranch={activeBranch || 'UAE'}
+                onSelectBranch={handleSelectBranch}
+                onOpenBranchModal={() => setIsBranchModalOpen(true)}
               />
             )}
             {activeTab === 'warehouse' && (
@@ -3401,7 +3416,7 @@ const App: React.FC = () => {
               <ApprovalQueue 
                 jobs={jobs} 
                 onApproval={handleApproval}
-                isAdmin={currentUser.role === UserRole.ADMIN || (currentUser.permissions && currentUser.permissions.approvals) || currentUser.employee_id === 'OPS-ADMIN-01'}
+                isAdmin={currentUser.role === UserRole.ADMIN || (currentUser.permissions && currentUser.permissions.approvals) || currentUser.employee_id === 'OPS-ADMIN-01' || currentUser.employee_id === 'OPS-ADMIN-02' || currentUser.name.toLowerCase().includes('karthik') || currentUser.name.toLowerCase().includes('reena')}
                 personnel={personnel}
                 vehicles={vehicles}
                 users={systemUsers}
@@ -3474,7 +3489,7 @@ const App: React.FC = () => {
                 jobs={jobs} 
                 users={systemUsers}
                 logo={settings.company_logo} 
-                isReadOnly={currentUser.role !== UserRole.ADMIN && currentUser.employee_id !== 'OPS-ADMIN-01'} // Full Admins or OPS-ADMIN-01 can edit inventory
+                isReadOnly={currentUser.role !== UserRole.ADMIN && currentUser.employee_id !== 'OPS-ADMIN-01' && currentUser.employee_id !== 'OPS-ADMIN-02' && !currentUser.name.toLowerCase().includes('karthik') && !currentUser.name.toLowerCase().includes('reena')} // Full Admins or OPS-ADMIN (Karthik/Reena) can edit inventory
                 onlyFinalAssessment={restrictedCostingUsers.includes(currentUser.employee_id)} // Restrict costing view for specific users
                 initialSelectedJobId={costingJobId}
                 onLogActivity={logActivity}

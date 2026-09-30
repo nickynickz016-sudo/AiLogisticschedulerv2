@@ -66,6 +66,7 @@ INSERT INTO public.system_users (employee_id, name, username, password, role, st
 VALUES
   ('ADMIN-001', 'Administrator', 'Admin', 'Admin', 'ADMIN', 'Active', 'UAE', ARRAY['UAE', 'KSA', 'QATAR'], 'https://api.dicebear.com/8.x/initials/svg?seed=Admin'),
   ('OPS-ADMIN-01', 'Karthik', 'Karthik', 'Writer@123', 'USER', 'Active', 'UAE', ARRAY['UAE', 'KSA', 'QATAR'], 'https://api.dicebear.com/8.x/initials/svg?seed=Karthik'),
+  ('OPS-ADMIN-02', 'Reena Dsouza', 'Reena', 'Writer@123', 'USER', 'Active', 'QATAR', ARRAY['QATAR', 'UAE', 'KSA'], 'https://api.dicebear.com/8.x/initials/svg?seed=Reena'),
   ('WI061938', 'Groupage Specialist (WI061938)', 'WI061938', 'Writer@123', 'USER', 'Active', 'UAE', ARRAY['UAE', 'KSA'], 'https://api.dicebear.com/8.x/initials/svg?seed=WI061938'),
   ('OPS-101', 'Roxanne', 'User1', 'User1', 'USER', 'Active', 'UAE', ARRAY['UAE'], 'https://api.dicebear.com/8.x/initials/svg?seed=Roxanne'),
   ('OPS-102', 'Poonam', 'User2', 'User2', 'USER', 'Active', 'KSA', ARRAY['KSA'], 'https://api.dicebear.com/8.x/initials/svg?seed=Poonam'),

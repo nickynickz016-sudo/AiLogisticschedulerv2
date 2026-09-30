@@ -68,8 +68,9 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser, a
   // Authorization checks
   const isWI061938 = currentUser.employee_id === 'WI061938';
   const isAdmin = currentUser.role === UserRole.ADMIN;
-  // Let admins and Ops Admin (Karthik) also have access for easy review and management.
-  const isAuthorizedToBook = isWI061938 || isAdmin || currentUser.employee_id === 'OPS-ADMIN-01';
+  // Let admins and Ops Admins (Karthik, Reena, Semi-Admin) also have access for easy review and management.
+  const isOpsAdmin = currentUser.role === UserRole.SEMI_ADMIN || currentUser.employee_id === 'OPS-ADMIN-01' || currentUser.employee_id === 'OPS-ADMIN-02' || currentUser.name.toLowerCase().includes('karthik') || currentUser.name.toLowerCase().includes('reena');
+  const isAuthorizedToBook = isWI061938 || isAdmin || isOpsAdmin;
 
   // Forms
   const [shipperForm, setShipperForm] = useState({

@@ -20,6 +20,8 @@ interface ScheduleViewProps {
   vehicles: Vehicle[];
   users: UserProfile[];
   activeBranch?: BranchCode;
+  onSelectBranch?: (branch: BranchCode) => void;
+  onOpenBranchModal?: () => void;
 }
 
 // Generate hours with 30-minute intervals (48 slots)
@@ -34,18 +36,19 @@ const LOADING_TYPES: LoadingType[] = ['Warehouse Removal', 'Direct Loading', 'St
 
 // Updated country codes with validation rules
 const countryCodes = [
+  { name: 'Qatar', code: '+974', digits: 8 },
+  { name: 'KSA', code: '+966', digits: 9 },
   { name: 'UAE', code: '+971', digits: 9 },
   { name: 'USA', code: '+1', digits: 10 },
   { name: 'UK', code: '+44', digits: 10 },
   { name: 'India', code: '+91', digits: 10 },
-  { name: 'KSA', code: '+966', digits: 9 },
-  { name: 'Qatar', code: '+974', digits: 8 },
 ];
 
-// Helper to get UAE date string YYYY-MM-DD
-const getLocalDateString = (date: Date = new Date()) => {
+// Helper to get local date string YYYY-MM-DD for branch
+const getLocalDateString = (date: Date = new Date(), branch: BranchCode = 'UAE') => {
+  const timeZone = branch === 'QATAR' ? 'Asia/Qatar' : branch === 'KSA' ? 'Asia/Riyadh' : 'Asia/Dubai';
   return new Intl.DateTimeFormat('en-CA', { 
-    timeZone: 'Asia/Dubai', 
+    timeZone, 
     year: 'numeric', 
     month: '2-digit', 
     day: '2-digit' 
@@ -53,7 +56,7 @@ const getLocalDateString = (date: Date = new Date()) => {
 };
 
 export const ScheduleView: React.FC<ScheduleViewProps> = ({ 
-  jobs, onAddJob, onEditJob, onDeleteJob, onUpdateAllocation, onToggleLock, onUpdateJobConfirmation, currentUser, personnel, vehicles, users, activeBranch = 'UAE' 
+  jobs, onAddJob, onEditJob, onDeleteJob, onUpdateAllocation, onToggleLock, onUpdateJobConfirmation, currentUser, personnel, vehicles, users, activeBranch = 'UAE', onSelectBranch, onOpenBranchModal
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [isModalExpanded, setIsModalExpanded] = useState(false);
@@ -91,8 +94,9 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   // Edit Mode State
   const [isEditingMode, setIsEditingMode] = useState(false);
 
-  // Define permissions: Admin OR OPS-ADMIN-01 can manage schedule details (allocation/locks)
-  const canManageSchedule = currentUser.role === UserRole.ADMIN || currentUser.employee_id === 'OPS-ADMIN-01';
+  // Define permissions: Admin OR Semi-Admin Ops (Karthik / Reena / SEMI_ADMIN) can manage schedule details (allocation/locks)
+  const isOpsAdmin = currentUser.role === UserRole.SEMI_ADMIN || currentUser.employee_id === 'OPS-ADMIN-01' || currentUser.employee_id === 'OPS-ADMIN-02' || currentUser.name.toLowerCase().includes('karthik') || currentUser.name.toLowerCase().includes('reena');
+  const canManageSchedule = currentUser.role === UserRole.ADMIN || isOpsAdmin;
   const isOps106 = currentUser.employee_id === 'OPS-106';
 
   const selectedDate = getLocalDateString(currentDate);
@@ -104,41 +108,128 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     truck_qty: 1
   });
 
-  const today = getLocalDateString();
+  const today = getLocalDateString(undefined, activeBranch);
   
-  const defaultJobPrefix = activeBranch === 'KSA' ? 'KSA-' : activeBranch === 'QATAR' ? 'QA-' : 'AE-';
-  const defaultPhonePrefix = activeBranch === 'KSA' ? '+966 ' : activeBranch === 'QATAR' ? '+974 ' : '+971 ';
-
-  const initialNewJobState: Partial<Job> = {
-    id: defaultJobPrefix, 
-    branch: activeBranch,
-    shipper_name: '',
-    shipper_phone: defaultPhonePrefix,
-    client_email: '',
-    location: '',
-    shipment_details: 'Local Move',
-    description: '',
-    priority: 'LOW',
-    agent_name: '',
-    loading_type: 'Warehouse Removal',
-    main_category: 'Commercial',
-    sub_category: 'Export',
-    shuttle: 'No',
-    long_carry: 'No',
-    truck_qty: 1,
-    special_requests: { 
-      handyman: false, manpower: false, overtime: false,
-      documents: false, packingList: false, crateCertificate: false, walkThrough: false 
-    },
-    volume_cbm: 0,
-    job_time: '08:00',
-    job_date: today,
-    duration: 1,
-    assigned_to: 'Unassigned',
-    is_transporter: false
+  const getBranchJobPrefix = (branch?: BranchCode) => {
+    return branch === 'KSA' ? 'KSA-' : branch === 'QATAR' ? 'QATAR-' : 'AE-';
   };
 
-  const [newJob, setNewJob] = useState<Partial<Job>>(initialNewJobState);
+  const getBranchPhoneCode = (branch?: BranchCode) => {
+    return branch === 'KSA' ? '+966' : branch === 'QATAR' ? '+974' : '+971';
+  };
+
+  const defaultJobPrefix = getBranchJobPrefix(activeBranch);
+  const defaultPhoneCode = getBranchPhoneCode(activeBranch);
+  const defaultPhonePrefix = `${defaultPhoneCode} `;
+
+  const getInitialNewJobState = (branch: BranchCode = activeBranch): Partial<Job> => {
+    const jobPrefix = getBranchJobPrefix(branch);
+    const phoneCode = getBranchPhoneCode(branch);
+    return {
+      id: jobPrefix, 
+      branch: branch,
+      shipper_name: '',
+      shipper_phone: `${phoneCode} `,
+      client_email: '',
+      location: '',
+      shipment_details: 'Local Move',
+      description: '',
+      priority: 'LOW',
+      agent_name: '',
+      loading_type: 'Warehouse Removal',
+      main_category: 'Commercial',
+      sub_category: 'Export',
+      shuttle: 'No',
+      long_carry: 'No',
+      truck_qty: 1,
+      special_requests: { 
+        handyman: false, manpower: false, overtime: false,
+        documents: false, packingList: false, crateCertificate: false, walkThrough: false 
+      },
+      volume_cbm: 0,
+      job_time: '08:00',
+      job_date: today,
+      duration: 1,
+      assigned_to: 'Unassigned',
+      is_transporter: false
+    };
+  };
+
+  const initialNewJobState: Partial<Job> = getInitialNewJobState(activeBranch);
+
+  const [newJob, setNewJob] = useState<Partial<Job>>(() => getInitialNewJobState(activeBranch));
+
+  // Switch branch inside job modal: converts AE- prefix to QATAR- or KSA-, and changes phone default to Qatar / KSA
+  const handleModalBranchChange = (targetBranch: BranchCode) => {
+    const targetPrefix = getBranchJobPrefix(targetBranch);
+    const targetPhoneCode = getBranchPhoneCode(targetBranch);
+
+    setNewJob(prev => {
+      let currentId = prev.id || '';
+      const oldPrefixes = ['AE-', 'QA-', 'QAT-', 'QATAR-', 'KSA-'];
+      let replaced = false;
+      for (const p of oldPrefixes) {
+        if (currentId.startsWith(p)) {
+          currentId = `${targetPrefix}${currentId.slice(p.length)}`;
+          replaced = true;
+          break;
+        }
+      }
+      if (!replaced) {
+        currentId = currentId.trim() ? `${targetPrefix}${currentId}` : targetPrefix;
+      }
+
+      const phoneParts = (prev.shipper_phone || '').trim().split(' ');
+      const numberPart = phoneParts.length > 1 ? phoneParts.slice(1).join(' ') : '';
+      const newPhone = `${targetPhoneCode} ${numberPart}`.trimEnd() + (numberPart ? '' : ' ');
+
+      return {
+        ...prev,
+        branch: targetBranch,
+        id: currentId,
+        shipper_phone: newPhone
+      };
+    });
+  };
+
+  // Synchronize Job prefix and phone code whenever activeBranch changes (unless editing an existing job)
+  useEffect(() => {
+    if (!isEditingMode) {
+      setNewJob(prev => {
+        const oldPrefixes = ['AE-', 'QA-', 'QAT-', 'QATAR-', 'KSA-'];
+        const isPristineId = !prev.id || oldPrefixes.includes(prev.id.trim());
+        const jobPrefix = getBranchJobPrefix(activeBranch);
+        const phoneCode = getBranchPhoneCode(activeBranch);
+        
+        let nextId = jobPrefix;
+        if (!isPristineId && prev.id) {
+          let foundPrefix = false;
+          for (const p of oldPrefixes) {
+            if (prev.id.startsWith(p)) {
+              nextId = `${jobPrefix}${prev.id.slice(p.length)}`;
+              foundPrefix = true;
+              break;
+            }
+          }
+          if (!foundPrefix) {
+            nextId = `${jobPrefix}${prev.id}`;
+          }
+        }
+
+        const phoneParts = (prev.shipper_phone || '').trim().split(' ');
+        const hasNumberPart = phoneParts.length > 1 && phoneParts[1].length > 0;
+        const numberDigits = hasNumberPart ? phoneParts.slice(1).join(' ') : '';
+        const nextPhone = `${phoneCode} ${numberDigits}`.trimEnd() + (numberDigits ? '' : ' ');
+
+        return {
+          ...prev,
+          branch: activeBranch,
+          id: nextId,
+          shipper_phone: nextPhone
+        };
+      });
+    }
+  }, [activeBranch, isEditingMode]);
   const [dayDates, setDayDates] = useState<string[]>([]);
   const [showCopyModal, setShowCopyModal] = useState<Job | null>(null);
   const [copyDate, setCopyDate] = useState(getUAEToday());
@@ -598,7 +689,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   useEffect(() => {
     if (!currentUser || !jobs || jobs.length === 0) return;
 
-    const isAdmin = currentUser.role === UserRole.ADMIN || currentUser.employee_id === 'OPS-ADMIN-01';
+    const isOpsAdmin = currentUser.employee_id === 'OPS-ADMIN-01' || currentUser.employee_id === 'OPS-ADMIN-02' || currentUser.name.toLowerCase().includes('karthik') || currentUser.name.toLowerCase().includes('reena');
+    const isAdmin = currentUser.role === UserRole.ADMIN || isOpsAdmin;
     if (!isAdmin) return;
 
     const uaeTodayStr = getUAEToday();
@@ -824,16 +916,18 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   const handleCloseModal = () => {
     setShowModal(false);
     setIsModalExpanded(false);
-    setNewJob(initialNewJobState);
+    setNewJob(getInitialNewJobState(activeBranch));
     setDayDates([]);
     setIsEditingMode(false);
     setSelectedJob(null);
   };
 
   const generateUniqueId = () => {
+    const currentBranch = newJob.branch || activeBranch;
+    const currentPrefix = getBranchJobPrefix(currentBranch);
     const random = Math.floor(1000 + Math.random() * 9000);
     const suffix = new Date().getFullYear().toString().slice(-2);
-    setNewJob(prev => ({ ...prev, id: `AE-${random}-${suffix}` }));
+    setNewJob(prev => ({ ...prev, id: `${currentPrefix}${random}-${suffix}` }));
   };
 
   const getJobDayLabel = (job: Job) => {
@@ -1099,7 +1193,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     // Detailed Validation Logic
     const missingFields: string[] = [];
 
-    if (!newJob.id || newJob.id.trim() === 'AE-') missingFields.push("Job No.");
+    const emptyPrefixes = ['AE-', 'QA-', 'QAT-', 'QATAR-', 'KSA-', defaultJobPrefix];
+    if (!newJob.id || emptyPrefixes.includes(newJob.id.trim())) missingFields.push("Job No.");
     if (!newJob.shipper_name || !newJob.shipper_name.trim()) missingFields.push("Shipper Name");
     if (!newJob.job_date) missingFields.push("Start Date");
     if (!newJob.location || !newJob.location.trim()) missingFields.push("Location Address");
@@ -1406,13 +1501,52 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-500">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 bg-white p-4 md:p-8 rounded-[2rem] shadow-sm border border-slate-200">
         <div className="flex-1 w-full translate-y-1">
-          <div className="flex items-center gap-4 mb-4 md:mb-6">
-            <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center rotate-3 transform shadow-xl shadow-slate-200">
-                <Truck className="w-6 h-6 text-white -rotate-3" />
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4 md:mb-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center rotate-3 transform shadow-xl shadow-slate-200">
+                  <Truck className="w-6 h-6 text-white -rotate-3" />
+              </div>
+              <div>
+                  <h2 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight uppercase">Job Allocation Board</h2>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Fleet & Crew Synchronization</p>
+              </div>
             </div>
-            <div>
-                <h2 className="text-xl md:text-2xl font-black text-slate-800 tracking-tight uppercase">Job Allocation Board</h2>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Fleet & Crew Synchronization</p>
+
+            {/* Quick Hub Switcher for Jobs Schedule */}
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200 shadow-inner w-fit">
+              {(['UAE', 'KSA', 'QATAR'] as BranchCode[]).map(b => {
+                const isActive = (activeBranch || 'UAE') === b;
+                const userAllowed = currentUser.role === UserRole.ADMIN || currentUser.role === UserRole.SEMI_ADMIN || currentUser.employee_id === 'OPS-ADMIN-01'
+                  ? ['UAE', 'KSA', 'QATAR']
+                  : (currentUser.allowed_branches && currentUser.allowed_branches.length > 0
+                      ? currentUser.allowed_branches
+                      : [(currentUser.branch || 'UAE') as BranchCode]);
+                const isAuth = userAllowed.includes(b);
+                const prefix = b === 'KSA' ? 'KSA-' : b === 'QATAR' ? 'QATAR-' : 'AE-';
+
+                return (
+                  <button
+                    key={b}
+                    type="button"
+                    disabled={!isAuth}
+                    onClick={() => onSelectBranch && onSelectBranch(b)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${
+                      isActive 
+                        ? 'bg-white text-blue-700 shadow-md shadow-slate-200 border border-slate-200/80 scale-[1.02]' 
+                        : isAuth 
+                          ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60' 
+                          : 'text-slate-400 opacity-40 cursor-not-allowed'
+                    }`}
+                    title={isAuth ? `Switch Jobs Schedule to ${b} Hub (${prefix})` : `Access to ${b} branch restricted`}
+                  >
+                    <span>{BRANCHES[b]?.flag}</span>
+                    <span>{b}</span>
+                    <span className={`text-[8px] font-mono px-1.5 py-0.5 rounded ${isActive ? 'bg-blue-50 text-blue-600 font-bold' : 'bg-slate-200/70 text-slate-500'}`}>
+                      {prefix}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -1486,7 +1620,13 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
             <span className="hidden xl:inline">Export</span> Report
           </button>
           <button 
-            onClick={() => { setIsEditingMode(false); setShowModal(true); }}
+            onClick={() => { 
+              setIsEditingMode(false); 
+              setSelectedJob(null);
+              setDayDates([]);
+              setNewJob(getInitialNewJobState(activeBranch));
+              setShowModal(true); 
+            }}
             className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all font-black uppercase text-[9px] tracking-widest shadow-lg shadow-blue-100 whitespace-nowrap"
           >
             <Plus className="w-4 h-4" />
@@ -2434,6 +2574,47 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Branch / Operations Hub Selector */}
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Branch / Operations Hub *</span>
+                      </span>
+                      <span className="text-[9px] font-bold text-slate-500">
+                        Prefix: <strong className="text-blue-600 font-mono">{getBranchJobPrefix(newJob.branch || activeBranch)}</strong> | Phone: <strong className="text-emerald-600 font-mono">{getBranchPhoneCode(newJob.branch || activeBranch)}</strong>
+                      </span>
+                    </label>
+                    <div className="grid grid-cols-3 gap-3">
+                      {(['UAE', 'KSA', 'QATAR'] as BranchCode[]).map(b => {
+                        const isSelected = (newJob.branch || activeBranch) === b;
+                        const branchPrefix = getBranchJobPrefix(b);
+                        const phoneCode = getBranchPhoneCode(b);
+                        return (
+                          <button
+                            key={b}
+                            type="button"
+                            onClick={() => handleModalBranchChange(b)}
+                            className={`p-3 rounded-xl border-2 flex items-center justify-between transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-blue-50/90 border-blue-600 text-blue-950 shadow-sm ring-1 ring-blue-500/20'
+                                : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg">{BRANCHES[b]?.flag}</span>
+                              <div className="text-left">
+                                <p className="text-xs font-black leading-none">{b} Branch</p>
+                                <p className="text-[9px] font-mono text-slate-400 mt-0.5">{branchPrefix} • {phoneCode}</p>
+                              </div>
+                            </div>
+                            {isSelected && <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <div className="space-y-1.5">
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Job No. *</label>
                     <div className="relative">
@@ -2443,7 +2624,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                             className={`w-full px-5 py-3.5 pr-12 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none`}
                             value={newJob.id} 
                             onChange={e => setNewJob({...newJob, id: e.target.value})} 
-                            placeholder="AE-XXXX" 
+                            placeholder={`${getBranchJobPrefix(newJob.branch || activeBranch)}XXXX`} 
                         />
                         <button 
                             type="button" 
@@ -2587,7 +2768,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                     <div className="flex">
                       <select 
                         className="w-1/3 px-3 py-3.5 bg-slate-50 border border-r-0 border-slate-200 rounded-l-xl text-xs font-bold focus:ring-1 focus:ring-blue-500 outline-none appearance-none"
-                        value={newJob.shipper_phone?.split(' ')[0] || '+971'}
+                        value={newJob.shipper_phone?.split(' ')[0] || getBranchPhoneCode(newJob.branch || activeBranch)}
                         onChange={e => {
                           const numberPart = newJob.shipper_phone?.split(' ')[1] || '';
                           setNewJob({ ...newJob, shipper_phone: `${e.target.value} ${numberPart}` });
@@ -2600,11 +2781,11 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                         className="w-2/3 px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-r-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" 
                         value={newJob.shipper_phone?.split(' ')[1] || ''}
                         onChange={e => {
-                          const prefixPart = newJob.shipper_phone?.split(' ')[0] || '+971';
+                          const prefixPart = newJob.shipper_phone?.split(' ')[0] || getBranchPhoneCode(newJob.branch || activeBranch);
                           const val = e.target.value.replace(/\D/g, '');
                           setNewJob({ ...newJob, shipper_phone: `${prefixPart} ${val}` });
                         }}
-                        placeholder={`Req: ${countryCodes.find(c => c.code === (newJob.shipper_phone?.split(' ')[0] || '+971'))?.digits} digits`}
+                        placeholder={`Req: ${countryCodes.find(c => c.code === (newJob.shipper_phone?.split(' ')[0] || getBranchPhoneCode(newJob.branch || activeBranch)))?.digits || 8} digits`}
                       />
                     </div>
                   </div>

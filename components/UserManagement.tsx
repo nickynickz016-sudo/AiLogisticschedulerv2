@@ -22,7 +22,7 @@ interface UserManagementProps {
   jobs?: any[];
 }
 
-const DEFAULT_PERMISSIONS: UserPermissions = {
+export const DEFAULT_PERMISSIONS: UserPermissions = {
   dashboard: true,
   schedule: true,
   jobBoard: false,
@@ -43,6 +43,42 @@ const DEFAULT_PERMISSIONS: UserPermissions = {
   groupageTracker: true,
   activityLog: true,
   quotations: true,
+};
+
+// Same exact reference configuration as OPS-ADMIN-01 (Karthik)
+export const SEMI_ADMIN_PERMISSIONS: UserPermissions = {
+  dashboard: true,
+  schedule: true,
+  jobBoard: true,
+  warehouse: true,
+  importClearance: true,
+  approvals: true, 
+  writerDocs: true,
+  inventory: true,
+  tracking: true,
+  surveyTracker: true,
+  warehouseChecklist: true,
+  resources: true,
+  capacity: true,
+  users: false,
+  transporter: true,
+  ai: true,
+  digitalPackingList: true,
+  groupageTracker: true,
+  activityLog: true,
+  quotations: true,
+};
+
+export const ADMIN_PERMISSIONS: UserPermissions = Object.keys(DEFAULT_PERMISSIONS).reduce(
+  (acc, key) => ({ ...acc, [key]: true }), 
+  {} as UserPermissions
+);
+
+export const isSemiAdminUser = (user: UserProfile): boolean => {
+  return user.role === UserRole.SEMI_ADMIN || 
+         user.employee_id === 'OPS-ADMIN-01' || 
+         user.employee_id === 'OPS-ADMIN-02' ||
+         Boolean(user.name && (user.name.toLowerCase().includes('karthik') || user.name.toLowerCase().includes('reena')));
 };
 
 const PERMISSION_LABELS: Record<keyof UserPermissions, string> = {
@@ -360,6 +396,50 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     );
   }
 
+  const handleSelectRolePreset = (selectedRole: UserRole, isEdit: boolean = false) => {
+    if (isEdit && editingUser) {
+      let targetPerms: UserPermissions = { ...DEFAULT_PERMISSIONS };
+      let defaultBranches = editingUser.allowed_branches && editingUser.allowed_branches.length > 0
+        ? editingUser.allowed_branches
+        : (['UAE', 'KSA', 'QATAR'] as BranchCode[]);
+
+      if (selectedRole === UserRole.ADMIN) {
+        targetPerms = { ...ADMIN_PERMISSIONS };
+        defaultBranches = ['UAE', 'KSA', 'QATAR'];
+      } else if (selectedRole === UserRole.SEMI_ADMIN) {
+        targetPerms = { ...SEMI_ADMIN_PERMISSIONS };
+        defaultBranches = ['UAE', 'KSA', 'QATAR'];
+      }
+
+      setEditingUser({
+        ...editingUser,
+        role: selectedRole,
+        permissions: targetPerms,
+        allowed_branches: defaultBranches
+      });
+    } else {
+      let targetPerms: UserPermissions = { ...DEFAULT_PERMISSIONS };
+      let defaultBranches = newUser.allowed_branches && newUser.allowed_branches.length > 0
+        ? newUser.allowed_branches
+        : (['UAE', 'KSA', 'QATAR'] as BranchCode[]);
+
+      if (selectedRole === UserRole.ADMIN) {
+        targetPerms = { ...ADMIN_PERMISSIONS };
+        defaultBranches = ['UAE', 'KSA', 'QATAR'];
+      } else if (selectedRole === UserRole.SEMI_ADMIN) {
+        targetPerms = { ...SEMI_ADMIN_PERMISSIONS };
+        defaultBranches = ['UAE', 'KSA', 'QATAR'];
+      }
+
+      setNewUser({
+        ...newUser,
+        role: selectedRole,
+        permissions: targetPerms,
+        allowed_branches: defaultBranches
+      });
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUser.name || !newUser.employee_id || !newUser.username || !newUser.password) {
@@ -367,10 +447,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({
       return;
     }
     
-    // If role is Admin, force all permissions
-    const finalPermissions = newUser.role === UserRole.ADMIN 
-      ? Object.keys(DEFAULT_PERMISSIONS).reduce((acc, key) => ({...acc, [key]: true}), {} as UserPermissions)
-      : newUser.permissions;
+    // Role-based permissions enforcement
+    let finalPermissions = newUser.permissions;
+    if (newUser.role === UserRole.ADMIN) {
+      finalPermissions = { ...ADMIN_PERMISSIONS };
+    } else if (newUser.role === UserRole.SEMI_ADMIN) {
+      finalPermissions = { ...SEMI_ADMIN_PERMISSIONS, ...(newUser.permissions || {}) };
+    }
 
     onAddUser({ ...newUser, permissions: finalPermissions });
     setShowAddModal(false);
@@ -391,10 +474,12 @@ export const UserManagement: React.FC<UserManagementProps> = ({
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingUser) {
-        // If role changed to Admin, enforce full permissions
-        const finalPermissions = editingUser.role === UserRole.ADMIN 
-            ? Object.keys(DEFAULT_PERMISSIONS).reduce((acc, key) => ({...acc, [key]: true}), {} as UserPermissions)
-            : editingUser.permissions;
+        let finalPermissions = editingUser.permissions;
+        if (editingUser.role === UserRole.ADMIN) {
+          finalPermissions = { ...ADMIN_PERMISSIONS };
+        } else if (editingUser.role === UserRole.SEMI_ADMIN) {
+          finalPermissions = { ...SEMI_ADMIN_PERMISSIONS, ...(editingUser.permissions || {}) };
+        }
         
         onUpdateUser({ ...editingUser, permissions: finalPermissions });
         setShowEditModal(false);
@@ -685,11 +770,25 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                   </div>
                 </td>
                 <td className="p-6">
-                  <span className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase ${
-                    user.role === UserRole.ADMIN ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-slate-50 text-slate-600 border border-slate-100'
-                  }`}>
-                    {user.role}
-                  </span>
+                  {user.role === UserRole.ADMIN ? (
+                    <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200 inline-flex items-center gap-1.5 whitespace-nowrap shadow-sm">
+                      <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+                      administrative user access
+                    </span>
+                  ) : isSemiAdminUser(user) ? (
+                    <div className="flex flex-col gap-0.5 whitespace-nowrap">
+                      <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-50 text-amber-900 border border-amber-300 inline-flex items-center gap-1.5 w-fit shadow-sm">
+                        <Shield className="w-3.5 h-3.5 text-amber-600" />
+                        Semi Administrative user access
+                      </span>
+                      <span className="text-[8px] font-bold text-amber-700 tracking-tight ml-1">Ref: OPS-ADMIN-01</span>
+                    </div>
+                  ) : (
+                    <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider bg-slate-100 text-slate-700 border border-slate-200 inline-flex items-center gap-1.5 whitespace-nowrap">
+                      <User className="w-3 h-3 text-slate-400" />
+                      Standard user access
+                    </span>
+                  )}
                 </td>
                 <td className="p-6">
                   <div className="flex flex-col gap-1.5 min-w-[210px]">
@@ -853,11 +952,86 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                         </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Access Level</label>
-                        <select className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-medium" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as UserRole})}>
-                        <option value={UserRole.USER}>Standard User Access</option>
-                        <option value={UserRole.ADMIN}>Administrative Access</option>
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Access Level Authorization *</label>
+                            <span className="text-[9px] font-bold text-slate-400">Choose access role preset</span>
+                        </div>
+
+                        {/* Interactive 3-card role preset selector */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {/* Standard User Access */}
+                            <div 
+                                onClick={() => handleSelectRolePreset(UserRole.USER, false)}
+                                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                    newUser.role === UserRole.USER 
+                                      ? 'bg-slate-900 text-white border-slate-900 shadow-md' 
+                                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300'
+                                }`}
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                        newUser.role === UserRole.USER ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+                                    }`}>Standard</span>
+                                    {newUser.role === UserRole.USER && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+                                </div>
+                                <p className="font-extrabold text-xs">Standard user access</p>
+                                <p className={`text-[10px] mt-1 font-medium ${newUser.role === UserRole.USER ? 'text-slate-300' : 'text-slate-500'}`}>
+                                    Default operational workflow
+                                </p>
+                            </div>
+
+                            {/* Administrative User Access */}
+                            <div 
+                                onClick={() => handleSelectRolePreset(UserRole.ADMIN, false)}
+                                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                    newUser.role === UserRole.ADMIN 
+                                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-600/20' 
+                                      : 'bg-indigo-50/60 border-indigo-200 text-indigo-950 hover:bg-indigo-100/70 hover:border-indigo-300'
+                                }`}
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                        newUser.role === UserRole.ADMIN ? 'bg-white/20 text-white' : 'bg-indigo-200/80 text-indigo-900'
+                                    }`}>Administrative</span>
+                                    {newUser.role === UserRole.ADMIN && <CheckCircle2 className="w-4 h-4 text-white" />}
+                                </div>
+                                <p className="font-extrabold text-xs">administrative user access</p>
+                                <p className={`text-[10px] mt-1 font-medium ${newUser.role === UserRole.ADMIN ? 'text-indigo-100' : 'text-indigo-600'}`}>
+                                    Full system administration
+                                </p>
+                            </div>
+
+                            {/* Semi Administrative User Access */}
+                            <div 
+                                onClick={() => handleSelectRolePreset(UserRole.SEMI_ADMIN, false)}
+                                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                    newUser.role === UserRole.SEMI_ADMIN 
+                                      ? 'bg-amber-600 text-white border-amber-600 shadow-lg shadow-amber-600/20' 
+                                      : 'bg-amber-50/60 border-amber-200 text-amber-950 hover:bg-amber-100/70 hover:border-amber-300'
+                                }`}
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                        newUser.role === UserRole.SEMI_ADMIN ? 'bg-white/20 text-white' : 'bg-amber-200/80 text-amber-900'
+                                    }`}>Semi-Admin</span>
+                                    {newUser.role === UserRole.SEMI_ADMIN && <CheckCircle2 className="w-4 h-4 text-white" />}
+                                </div>
+                                <p className="font-extrabold text-xs">Semi Administrative user access</p>
+                                <p className={`text-[10px] mt-1 font-bold ${newUser.role === UserRole.SEMI_ADMIN ? 'text-amber-100' : 'text-amber-700'}`}>
+                                    Same reference for OPS-ADMIN-01
+                                </p>
+                            </div>
+                        </div>
+
+                        <select 
+                            className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-xs" 
+                            value={newUser.role} 
+                            onChange={e => handleSelectRolePreset(e.target.value as UserRole, false)}
+                        >
+                            <option value={UserRole.USER}>Standard user access</option>
+                            <option value={UserRole.ADMIN}>administrative user access</option>
+                            <option value={UserRole.SEMI_ADMIN}>Semi Administrative user access - Same reference for OPS-ADMIN-01</option>
                         </select>
                     </div>
 
@@ -918,11 +1092,32 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                         </div>
                     </div>
 
-                    {newUser.role === UserRole.USER && (
+                    {newUser.role === UserRole.SEMI_ADMIN && (
+                        <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 flex items-start gap-3">
+                            <Shield className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                            <div>
+                                <h5 className="text-xs font-black text-amber-900 uppercase tracking-wide">Semi-Administrative Authority (Ref: OPS-ADMIN-01)</h5>
+                                <p className="text-[11px] text-amber-800 font-medium mt-1 leading-relaxed">
+                                    Configured with the exact operational privileges of <strong>OPS-ADMIN-01 (Karthik)</strong>: Warehouse Checklists signing, Schedule allocation & lock, Approval Queue authorization, Warehouse Capacity, and Inventory editing across all authorized branches.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {newUser.role !== UserRole.ADMIN && (
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                            <div className="flex items-center gap-2 mb-4">
-                                <Shield className="w-4 h-4 text-slate-400" />
-                                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-widest">Module Permissions</h4>
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-2">
+                                    <Shield className="w-4 h-4 text-slate-400" />
+                                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-widest">
+                                        {newUser.role === UserRole.SEMI_ADMIN ? 'Authorized Operations Modules (OPS-ADMIN-01 Reference)' : 'Module Permissions'}
+                                    </h4>
+                                </div>
+                                {newUser.role === UserRole.SEMI_ADMIN && (
+                                    <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
+                                        18 Operations Modules Active
+                                    </span>
+                                )}
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 {Object.entries(PERMISSION_LABELS).map(([key, label]) => (
@@ -982,11 +1177,86 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                         </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                        <label className="text-[10px] font-bold uppercase text-slate-400 tracking-widest ml-1">Access Level</label>
-                        <select className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-medium" value={editingUser.role} onChange={e => setEditingUser({...editingUser, role: e.target.value as UserRole})}>
-                        <option value={UserRole.USER}>Standard User Access</option>
-                        <option value={UserRole.ADMIN}>Administrative Access</option>
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Access Level Authorization *</label>
+                            <span className="text-[9px] font-bold text-slate-400">Choose access role preset</span>
+                        </div>
+
+                        {/* Interactive 3-card role preset selector */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            {/* Standard User Access */}
+                            <div 
+                                onClick={() => handleSelectRolePreset(UserRole.USER, true)}
+                                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                    editingUser.role === UserRole.USER 
+                                      ? 'bg-slate-900 text-white border-slate-900 shadow-md' 
+                                      : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100 hover:border-slate-300'
+                                }`}
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                        editingUser.role === UserRole.USER ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+                                    }`}>Standard</span>
+                                    {editingUser.role === UserRole.USER && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+                                </div>
+                                <p className="font-extrabold text-xs">Standard user access</p>
+                                <p className={`text-[10px] mt-1 font-medium ${editingUser.role === UserRole.USER ? 'text-slate-300' : 'text-slate-500'}`}>
+                                    Default operational workflow
+                                </p>
+                            </div>
+
+                            {/* Administrative User Access */}
+                            <div 
+                                onClick={() => handleSelectRolePreset(UserRole.ADMIN, true)}
+                                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                    editingUser.role === UserRole.ADMIN 
+                                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-600/20' 
+                                      : 'bg-indigo-50/60 border-indigo-200 text-indigo-950 hover:bg-indigo-100/70 hover:border-indigo-300'
+                                }`}
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                        editingUser.role === UserRole.ADMIN ? 'bg-white/20 text-white' : 'bg-indigo-200/80 text-indigo-900'
+                                    }`}>Administrative</span>
+                                    {editingUser.role === UserRole.ADMIN && <CheckCircle2 className="w-4 h-4 text-white" />}
+                                </div>
+                                <p className="font-extrabold text-xs">administrative user access</p>
+                                <p className={`text-[10px] mt-1 font-medium ${editingUser.role === UserRole.ADMIN ? 'text-indigo-100' : 'text-indigo-600'}`}>
+                                    Full system administration
+                                </p>
+                            </div>
+
+                            {/* Semi Administrative User Access */}
+                            <div 
+                                onClick={() => handleSelectRolePreset(UserRole.SEMI_ADMIN, true)}
+                                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between ${
+                                    editingUser.role === UserRole.SEMI_ADMIN 
+                                      ? 'bg-amber-600 text-white border-amber-600 shadow-lg shadow-amber-600/20' 
+                                      : 'bg-amber-50/60 border-amber-200 text-amber-950 hover:bg-amber-100/70 hover:border-amber-300'
+                                }`}
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                        editingUser.role === UserRole.SEMI_ADMIN ? 'bg-white/20 text-white' : 'bg-amber-200/80 text-amber-900'
+                                    }`}>Semi-Admin</span>
+                                    {editingUser.role === UserRole.SEMI_ADMIN && <CheckCircle2 className="w-4 h-4 text-white" />}
+                                </div>
+                                <p className="font-extrabold text-xs">Semi Administrative user access</p>
+                                <p className={`text-[10px] mt-1 font-bold ${editingUser.role === UserRole.SEMI_ADMIN ? 'text-amber-100' : 'text-amber-700'}`}>
+                                    Same reference for OPS-ADMIN-01
+                                </p>
+                            </div>
+                        </div>
+
+                        <select 
+                            className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-xs" 
+                            value={editingUser.role} 
+                            onChange={e => handleSelectRolePreset(e.target.value as UserRole, true)}
+                        >
+                            <option value={UserRole.USER}>Standard user access</option>
+                            <option value={UserRole.ADMIN}>administrative user access</option>
+                            <option value={UserRole.SEMI_ADMIN}>Semi Administrative user access - Same reference for OPS-ADMIN-01</option>
                         </select>
                     </div>
 
@@ -1047,11 +1317,32 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                         </div>
                     </div>
 
-                    {editingUser.role === UserRole.USER && (
+                    {editingUser.role === UserRole.SEMI_ADMIN && (
+                        <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 flex items-start gap-3">
+                            <Shield className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                            <div>
+                                <h5 className="text-xs font-black text-amber-900 uppercase tracking-wide">Semi-Administrative Authority (Ref: OPS-ADMIN-01)</h5>
+                                <p className="text-[11px] text-amber-800 font-medium mt-1 leading-relaxed">
+                                    Configured with the exact operational privileges of <strong>OPS-ADMIN-01 (Karthik)</strong>: Warehouse Checklists signing, Schedule allocation & lock, Approval Queue authorization, Warehouse Capacity, and Inventory editing across all authorized branches.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    {editingUser.role !== UserRole.ADMIN && (
                         <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
-                            <div className="flex items-center gap-2 mb-4">
-                                <Shield className="w-4 h-4 text-slate-400" />
-                                <h4 className="text-xs font-bold text-slate-700 uppercase tracking-widest">Select Authorized Modules</h4>
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-2">
+                                    <Shield className="w-4 h-4 text-slate-400" />
+                                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-widest">
+                                        {editingUser.role === UserRole.SEMI_ADMIN ? 'Authorized Operations Modules (OPS-ADMIN-01 Reference)' : 'Select Authorized Modules'}
+                                    </h4>
+                                </div>
+                                {editingUser.role === UserRole.SEMI_ADMIN && (
+                                    <span className="text-[9px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
+                                        18 Operations Modules Active
+                                    </span>
+                                )}
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 {Object.entries(PERMISSION_LABELS).map(([key, label]) => (

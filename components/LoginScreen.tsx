@@ -32,10 +32,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin, users, logo }
         .single();
         
       if (!fetchErr && data?.daily_job_limits?.__credentials) {
-        latestUsers = data.daily_job_limits.__credentials;
+        const dbUsers: MockUser[] = data.daily_job_limits.__credentials;
+        const dbUsernames = new Set(dbUsers.map((u: any) => u.username?.toLowerCase()));
+        const missingUsers = users.filter(u => !dbUsernames.has(u.username?.toLowerCase()));
+        latestUsers = missingUsers.length > 0 ? [...dbUsers, ...missingUsers] : dbUsers;
       }
 
-      const user = latestUsers.find(u => u.username === username && u.password === password);
+      const user = latestUsers.find(u => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password);
       
       if (user) {
         if (user.profile.status === 'Disabled') {
