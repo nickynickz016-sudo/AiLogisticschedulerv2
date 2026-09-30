@@ -3,10 +3,13 @@ import {
   ClipboardCheck, Plus, Search, Calendar, MapPin, User, 
   Clock, Mail, Hash, Briefcase, Filter, ChevronRight, 
   Edit3, Trash2, X, CheckCircle2, ChevronDown, Info, XCircle, AlertCircle,
-  MoreVertical, ArrowUpRight, Check, History, List, LayoutGrid, Download
+  MoreVertical, ArrowUpRight, Check, History, List, LayoutGrid, Download,
+  Settings, Users, UserCheck, Sparkles
 } from 'lucide-react';
-import { Survey, SurveyStatus, SurveyType, SurveyMode, UserProfile } from '../types';
+import { Survey, SurveyStatus, SurveyType, SurveyMode, UserProfile, BranchCode, BRANCHES, AssignableSurveyor } from '../types';
 import { safeLocalStorage } from '../utils';
+import { getBranchSurveyors, subscribeToBranchSurveyors } from '../utils/surveyors';
+import { SurveyorManagementModal } from './SurveyorManagementModal';
 
 const localStorage = safeLocalStorage;
 
@@ -18,15 +21,8 @@ interface SurveyTrackerProps {
   onDeleteSurvey: (id: string) => void;
   currentUser: UserProfile;
   onGoSurvey?: (survey: Survey) => void;
+  activeBranch?: BranchCode;
 }
-
-const ASSIGNABLE_SURVEYORS = [
-  { id: 'OPS-101', name: 'Roxanne' },
-  { id: 'OPS-102', name: 'Poonam' },
-  { id: 'OPS-103', name: 'Divya' },
-  { id: 'OPS-204', name: 'Allen' },
-  { id: 'OPS-205', name: 'Daryl' }
-];
 
 export const SurveyTracker: React.FC<SurveyTrackerProps> = ({ 
   surveys, 
@@ -34,9 +30,11 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
   onUpdateSurvey, 
   onDeleteSurvey, 
   currentUser,
-  onGoSurvey
+  onGoSurvey,
+  activeBranch = 'UAE'
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showManageSurveyorsModal, setShowManageSurveyorsModal] = useState(false);
   const [editingSurvey, setEditingSurvey] = useState<Survey | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<SurveyStatus | 'All'>('All');
@@ -46,12 +44,36 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
+  // Dynamic branch-specific assignable surveyors (UAE defaults: Roxanne, Poonam, Divya, Allen, Daryl)
+  const [assignableSurveyors, setAssignableSurveyors] = useState<AssignableSurveyor[]>(() => 
+    getBranchSurveyors(activeBranch || 'UAE')
+  );
+
+  useEffect(() => {
+    setAssignableSurveyors(getBranchSurveyors(activeBranch || 'UAE'));
+  }, [activeBranch]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToBranchSurveyors((branch, updatedList) => {
+      if (branch === (activeBranch || 'UAE')) {
+        setAssignableSurveyors(updatedList);
+      }
+    });
+    return unsubscribe;
+  }, [activeBranch]);
+
+  const handleSurveyorsUpdated = (branch: BranchCode, updatedList: AssignableSurveyor[]) => {
+    if (branch === (activeBranch || 'UAE')) {
+      setAssignableSurveyors(updatedList);
+    }
+  };
+
   const uniqueSurveyorNames = Array.from(
     new Map(
       [
         ...surveys.map(s => s.surveyor_name),
         ...surveys.map(s => s.last_edited_by),
-        ...ASSIGNABLE_SURVEYORS.map(s => s.name),
+        ...assignableSurveyors.map(s => s.name),
         currentUser.name
       ]
         .filter(Boolean)
@@ -446,6 +468,15 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
             <span className="sm:hidden">Export</span>
           </button>
           <button
+            onClick={() => setShowManageSurveyorsModal(true)}
+            className="bg-white text-indigo-700 border-2 border-indigo-200 hover:border-indigo-400 px-4 py-2 rounded-xl font-black flex items-center gap-2 hover:bg-indigo-50 transition-all shadow-xs cursor-pointer"
+            title={`Configure assignable SDs / Surveyors for ${BRANCHES[activeBranch || 'UAE']?.name || activeBranch} (Add, Edit, Delete)`}
+          >
+            <Settings className="w-4 h-4 text-indigo-600" />
+            <span className="hidden sm:inline">Manage SD Team ({BRANCHES[activeBranch || 'UAE']?.name || activeBranch})</span>
+            <span className="sm:hidden">SD Team</span>
+          </button>
+          <button
             onClick={() => { resetForm(); setShowAddModal(true); }}
             className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-semibold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 cursor-pointer"
           >
@@ -459,12 +490,26 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
       <div className="bg-gradient-to-br from-indigo-50/70 to-slate-50 border border-indigo-100/60 rounded-[2rem] p-6 shadow-sm mb-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-1">
-            <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-              <ClipboardCheck className="w-5 h-5 text-indigo-600 animate-pulse" />
-              Surveyor Allocation Summary
-            </h2>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <ClipboardCheck className="w-5 h-5 text-indigo-600 animate-pulse" />
+                Surveyor Allocation Summary
+              </h2>
+              <span className="text-[10px] uppercase font-black px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200 shadow-2xs">
+                {BRANCHES[activeBranch || 'UAE']?.flag} {BRANCHES[activeBranch || 'UAE']?.name} SD Team
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowManageSurveyorsModal(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase tracking-wider transition-all shadow-xs cursor-pointer ml-1"
+                title={`Add, edit or delete SD names for ${BRANCHES[activeBranch || 'UAE']?.name || activeBranch}`}
+              >
+                <Settings className="w-3 h-3" />
+                <span>Manage SD Names (Add / Edit / Delete)</span>
+              </button>
+            </div>
             <p className="text-xs font-semibold text-slate-500">
-              Assigned Booked Moves per surveyor within selected date range
+              Assigned Booked Moves per surveyor for {BRANCHES[activeBranch || 'UAE']?.name} within selected date range
             </p>
           </div>
 
@@ -515,7 +560,7 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
 
         {/* Surveyor Count Row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mt-5">
-          {ASSIGNABLE_SURVEYORS.map((surveyor, idx) => {
+          {assignableSurveyors.map((surveyor, idx) => {
             const stats = getSurveyorStats(surveyor.name);
             const gradients = [
               'from-purple-50 to-purple-100/40 border-purple-100 text-purple-700',
@@ -574,6 +619,18 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
               </div>
             );
           })}
+          {assignableSurveyors.length === 0 && (
+            <div className="col-span-full p-8 text-center bg-white/60 rounded-2xl border border-dashed border-indigo-200 text-slate-500">
+              <p className="font-bold text-sm">No Surveyors / SD configured for {BRANCHES[activeBranch || 'UAE']?.name || activeBranch}</p>
+              <button
+                type="button"
+                onClick={() => setShowManageSurveyorsModal(true)}
+                className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors"
+              >
+                Configure SD Team
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -758,7 +815,7 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
                             onChange={(e) => handleAssigneeChange(survey, e.target.value)}
                           >
                             <option value={currentUser.name}>My Responsibility</option>
-                            {ASSIGNABLE_SURVEYORS.map(s => (
+                            {assignableSurveyors.map(s => (
                               <option key={s.id} value={s.name}>{s.name} ({s.id})</option>
                             ))}
                           </select>
@@ -1049,7 +1106,7 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
                         onChange={(e) => handleAssigneeChange(survey, e.target.value)}
                       >
                         <option value={currentUser.name}>My Responsibility</option>
-                        {ASSIGNABLE_SURVEYORS.map(s => (
+                        {assignableSurveyors.map(s => (
                           <option key={s.id} value={s.name}>{s.name} ({s.id})</option>
                         ))}
                       </select>
@@ -1139,17 +1196,27 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                    <User className="w-4 h-4" /> Surveyor Name
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                      <User className="w-4 h-4" /> Surveyor / SD Name
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowManageSurveyorsModal(true)}
+                      className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 hover:underline cursor-pointer"
+                      title={`Configure SD names for ${BRANCHES[activeBranch || 'UAE']?.name || activeBranch}`}
+                    >
+                      <Settings className="w-3 h-3" /> Manage SDs
+                    </button>
+                  </div>
                   {isAssigner ? (
                     <select
-                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100"
+                      className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100 font-bold text-slate-800"
                       value={formData.surveyor_name}
                       onChange={(e) => setFormData({ ...formData, surveyor_name: e.target.value })}
                     >
                       <option value={currentUser.name}>{currentUser.name} (Me)</option>
-                      {ASSIGNABLE_SURVEYORS.map(s => (
+                      {assignableSurveyors.map(s => (
                         <option key={s.id} value={s.name}>{s.name} ({s.id})</option>
                       ))}
                     </select>
@@ -1363,6 +1430,15 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
         <input type="text" name="assigned_by" readOnly />
         <input type="text" name="timestamp" readOnly />
       </form>
+
+      {/* Surveyor / SD Management Modal */}
+      <SurveyorManagementModal 
+        isOpen={showManageSurveyorsModal}
+        onClose={() => setShowManageSurveyorsModal(false)}
+        activeBranch={activeBranch || 'UAE'}
+        surveys={surveys}
+        onSurveyorsUpdated={handleSurveyorsUpdated}
+      />
     </div>
   );
 };

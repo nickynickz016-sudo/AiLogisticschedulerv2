@@ -1228,6 +1228,16 @@ const App: React.FC = () => {
           setSettings(settingsData);
           safeLocalStorage.setItem('writer_local_settings', JSON.stringify(settingsData));
           
+          // Synchronize branch surveyors (SDs) from Supabase across UAE, KSA, Qatar
+          const dbBranchSurveyors = data.daily_job_limits?.__branch_surveyors;
+          if (dbBranchSurveyors && typeof dbBranchSurveyors === 'object') {
+            Object.entries(dbBranchSurveyors).forEach(([bCode, list]) => {
+              if (Array.isArray(list) && list.length > 0) {
+                safeLocalStorage.setItem(`writer_branch_surveyors_${bCode}`, JSON.stringify(list));
+              }
+            });
+          }
+
           // Synchronize credentials from Supabase
           const dbCredentials = data.daily_job_limits?.__credentials;
           if (dbCredentials && Array.isArray(dbCredentials)) {
@@ -3333,6 +3343,7 @@ const App: React.FC = () => {
                 isAdmin={currentUser.role === UserRole.ADMIN} 
                 activeBranch={activeBranch || 'UAE'} 
                 users={systemUsers}
+                surveys={surveys}
               />
             )}
             {activeTab === 'schedule' && (

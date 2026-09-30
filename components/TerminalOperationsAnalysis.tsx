@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
-import { Job, JobStatus, UserProfile, BranchCode, BRANCHES, CustomsStatus } from '../types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Job, JobStatus, UserProfile, BranchCode, BRANCHES, CustomsStatus, AssignableSurveyor } from '../types';
 import { getCleanJobNo, getUAEToday } from '../utils';
+import { getBranchSurveyors, subscribeToBranchSurveyors } from '../utils/surveyors';
 import { 
   BarChart, 
   Bar, 
@@ -49,6 +50,8 @@ export interface UniqueOperationRecord {
   shipperName: string;
   requesterId: string;
   requesterName: string;
+  isSD?: boolean;
+  sdBranch?: string;
   dates: string[];
   earliestDate: string;
   latestDate: string;
@@ -95,6 +98,24 @@ export const TerminalOperationsAnalysis: React.FC<TerminalOperationsAnalysisProp
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [chartMode, setChartMode] = useState<'timeline' | 'comparison'>('timeline');
 
+  // Dynamic branch SD team
+  const [branchSDs, setBranchSDs] = useState<AssignableSurveyor[]>(() =>
+    getBranchSurveyors(activeBranch || 'UAE')
+  );
+
+  useEffect(() => {
+    setBranchSDs(getBranchSurveyors(activeBranch || 'UAE'));
+  }, [activeBranch]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToBranchSurveyors((branch, updatedList) => {
+      if (branch === (activeBranch || 'UAE')) {
+        setBranchSDs(updatedList);
+      }
+    });
+    return unsubscribe;
+  }, [activeBranch]);
+
   // Quick preset helper
   const handleApplyPreset = (preset: 'today' | 'week' | 'month' | 'last30' | 'all') => {
     if (preset === 'today') {
@@ -136,7 +157,7 @@ export const TerminalOperationsAnalysis: React.FC<TerminalOperationsAnalysisProp
     }
   };
 
-  // Build Requestor Options with formatted names and counts
+  // Build Requestor Options with formatted names, SD recognition, and counts
   const requestorOptions = useMemo(() => {
     const seenBaseJobsByReq: Record<string, Set<string>> = {};
 
@@ -157,16 +178,28 @@ export const TerminalOperationsAnalysis: React.FC<TerminalOperationsAnalysisProp
         u.username === reqId ||
         u.name?.toLowerCase() === reqId.toLowerCase()
       );
+      const isSD = branchSDs.some(sd => 
+        sd.id.toLowerCase() === reqId.toLowerCase() ||
+        sd.name.toLowerCase() === reqId.toLowerCase() ||
+        (matched && (
+          matched.name?.toLowerCase() === sd.name.toLowerCase() || 
+          matched.employee_id?.toLowerCase() === sd.id.toLowerCase()
+        ))
+      );
+
       return {
         id: reqId,
-        name: matched ? `${matched.name} (${reqId})` : reqId,
+        name: isSD 
+          ? `[SD] ${matched ? matched.name : reqId} (${reqId})` 
+          : (matched ? `${matched.name} (${reqId})` : reqId),
+        isSD,
         count: seenBaseJobsByReq[reqId].size
       };
     });
 
     list.sort((a, b) => b.count - a.count);
     return list;
-  }, [jobs, users]);
+  }, [jobs, users, branchSDs]);
 
   // Core Processing: 1 Job Number without suffix = 1 Count
   const analysisData = useMemo(() => {
@@ -179,7 +212,24 @@ export const TerminalOperationsAnalysis: React.FC<TerminalOperationsAnalysisProp
       if (endDate && job.job_date > endDate) return false;
 
       // Requestor check
-      if (selectedRequestor !== 'ALL') {
+      if (selectedRequestor === 'ALL_SDS') {
+        const reqId = job.requester_id || 'Unknown';
+        const matched = users.find(u => 
+          u.employee_id === reqId || 
+          u.id === reqId || 
+          u.username === reqId ||
+          u.name?.toLowerCase() === reqId.toLowerCase()
+        );
+        const matchesAnySD = branchSDs.some(sd => 
+          sd.id.toLowerCase() === reqId.toLowerCase() ||
+          sd.name.toLowerCase() === reqId.toLowerCase() ||
+          (matched && (
+            matched.name?.toLowerCase() === sd.name.toLowerCase() || 
+            matched.employee_id?.toLowerCase() === sd.id.toLowerCase()
+          ))
+        );
+        if (!matchesAnySD) return false;
+      } else if (selectedRequestor !== 'ALL') {
         const reqId = job.requester_id || 'Unknown';
         if (reqId !== selectedRequestor) return false;
       }
@@ -196,6 +246,7 @@ export const TerminalOperationsAnalysis: React.FC<TerminalOperationsAnalysisProp
       shipperName: string;
       requesterId: string;
       requesterName: string;
+      isSD: boolean;
       datesSet: Set<string>;
       rawJobs: Job[];
     }>();
@@ -223,6 +274,15 @@ export const TerminalOperationsAnalysis: React.FC<TerminalOperationsAnalysisProp
       );
       const requesterName = matchedUser ? matchedUser.name : (job.requester_id || 'Unknown');
 
+      const isSD = branchSDs.some(sd => 
+        sd.id.toLowerCase() === (job.requester_id || '').toLowerCase() ||
+        sd.name.toLowerCase() === (job.requester_id || '').toLowerCase() ||
+        (matchedUser && (
+          matchedUser.name?.toLowerCase() === sd.name.toLowerCase() || 
+          matchedUser.employee_id?.toLowerCase() === sd.id.toLowerCase()
+        ))
+      );
+
       if (!groupMap.has(groupKey)) {
         groupMap.set(groupKey, {
           baseJobNo,
@@ -231,6 +291,7 @@ export const TerminalOperationsAnalysis: React.FC<TerminalOperationsAnalysisProp
           shipperName: job.shipper_name || 'N/A',
           requesterId: job.requester_id || 'N/A',
           requesterName,
+          isSD,
           datesSet: new Set([job.job_date]),
           rawJobs: [job]
         });
@@ -266,6 +327,8 @@ export const TerminalOperationsAnalysis: React.FC<TerminalOperationsAnalysisProp
         shipperName: g.shipperName,
         requesterId: g.requesterId,
         requesterName: g.requesterName,
+        isSD: g.isSD,
+        sdBranch: activeBranch,
         dates,
         earliestDate: dates[0] || primaryJob.job_date,
         latestDate: dates[dates.length - 1] || primaryJob.job_date,
@@ -632,6 +695,9 @@ export const TerminalOperationsAnalysis: React.FC<TerminalOperationsAnalysisProp
                 className="w-full bg-transparent border-none outline-none font-bold text-xs text-slate-800 cursor-pointer p-0"
               >
                 <option value="ALL">All Requestors (Entire Team)</option>
+                {branchSDs.length > 0 && (
+                  <option value="ALL_SDS">⭐ All SD Coordinators ({BRANCHES[activeBranch || 'UAE']?.name} SD Team)</option>
+                )}
                 {requestorOptions.map(req => (
                   <option key={req.id} value={req.id}>
                     {req.name} • {req.count} unique job{req.count !== 1 ? 's' : ''}
@@ -1074,11 +1140,18 @@ export const TerminalOperationsAnalysis: React.FC<TerminalOperationsAnalysisProp
                       {/* Requestor */}
                       <td className="py-3 px-4 whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
-                          <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center text-[9px] font-bold">
+                          <span className={`w-5 h-5 rounded-full ${r.isSD ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-200 text-slate-700'} flex items-center justify-center text-[9px] font-black`}>
                             {r.requesterName.charAt(0).toUpperCase()}
                           </span>
                           <div>
-                            <span className="font-bold text-slate-800">{r.requesterName}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-slate-800">{r.requesterName}</span>
+                              {r.isSD && (
+                                <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[8px] font-black uppercase bg-indigo-100 text-indigo-800 border border-indigo-200" title={`Service Delivery Coordinator (${r.sdBranch || activeBranch})`}>
+                                  SD
+                                </span>
+                              )}
+                            </div>
                             <span className="text-[10px] text-slate-400 block">{r.requesterId}</span>
                           </div>
                         </div>

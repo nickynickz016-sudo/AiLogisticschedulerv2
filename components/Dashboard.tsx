@@ -1,15 +1,17 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { getUAEToday } from '../utils';
-import { Job, JobStatus, SystemSettings, JobCostSheet, CustomsStatus, BranchCode, BRANCHES, UserProfile } from '../types';
+import { Job, JobStatus, SystemSettings, JobCostSheet, CustomsStatus, BranchCode, BRANCHES, UserProfile, Survey, SurveyStatus, AssignableSurveyor } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, Download, Loader2, Activity, Calendar, X, Filter, CalendarRange, ListFilter, Camera, DollarSign, FileText, PieChart as PieIcon, Globe } from 'lucide-react';
+import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, Download, Loader2, Activity, Calendar, X, Filter, CalendarRange, ListFilter, Camera, DollarSign, FileText, PieChart as PieIcon, Globe, Users, Settings, Plus } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import html2canvas from 'html2canvas';
 import * as XLSX from 'xlsx';
 import { supabase } from '../supabaseClient';
 import { TerminalOperationsAnalysis } from './TerminalOperationsAnalysis';
+import { getBranchSurveyors, subscribeToBranchSurveyors } from '../utils/surveyors';
+import { SurveyorManagementModal } from './SurveyorManagementModal';
 
 // Extend jsPDF with the autoTable plugin
 type jsPDFWithAutoTable = jsPDF & {
@@ -23,12 +25,39 @@ interface DashboardProps {
   isAdmin: boolean;
   activeBranch?: BranchCode;
   users?: UserProfile[];
+  surveys?: Survey[];
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin, activeBranch = 'UAE', users = [] }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ 
+  jobs, 
+  settings, 
+  isAdmin, 
+  activeBranch = 'UAE', 
+  users = [],
+  surveys = []
+}) => {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [showDownloadOptions, setShowDownloadOptions] = useState(false);
   const [isScreenshotting, setIsScreenshotting] = useState(false);
+  const [showManageSurveyorsModal, setShowManageSurveyorsModal] = useState(false);
+  
+  // Dynamic branch-specific assignable SDs / Surveyors
+  const [assignableSurveyors, setAssignableSurveyors] = useState<AssignableSurveyor[]>(() =>
+    getBranchSurveyors(activeBranch || 'UAE')
+  );
+
+  useEffect(() => {
+    setAssignableSurveyors(getBranchSurveyors(activeBranch || 'UAE'));
+  }, [activeBranch]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToBranchSurveyors((branch, updatedList) => {
+      if (branch === (activeBranch || 'UAE')) {
+        setAssignableSurveyors(updatedList);
+      }
+    });
+    return unsubscribe;
+  }, [activeBranch]);
   
   // Summary Modal State
   const [showSummary, setShowSummary] = useState(false);
@@ -421,8 +450,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin, a
         
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
           <button 
+            onClick={() => setShowManageSurveyorsModal(true)}
+            className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-5 py-3 rounded-xl hover:bg-indigo-700 transition-all font-bold uppercase text-[10px] tracking-widest shadow-md shadow-indigo-200 cursor-pointer"
+            title={`Configure assignable SDs / Surveyors for ${BRANCHES[activeBranch]?.name || activeBranch} (Add, Edit, Delete)`}
+          >
+            <Users className="w-4 h-4" /> Manage SD Team ({BRANCHES[activeBranch]?.name})
+          </button>
+
+          <button 
             onClick={() => setShowSummary(true)}
-            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all font-bold uppercase text-[10px] tracking-widest shadow-md shadow-blue-200"
+            className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 transition-all font-bold uppercase text-[10px] tracking-widest shadow-md shadow-blue-200 cursor-pointer"
           >
             <Activity className="w-4 h-4" /> Activities Summary
           </button>
@@ -489,6 +526,97 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin, a
             </div>
           </div>
         ))}
+      </div>
+
+      {/* SD (Service Delivery) Team Hub - Dynamic across UAE, QATAR, and KSA */}
+      <div className="bg-gradient-to-br from-indigo-50/70 via-white to-slate-50 border border-indigo-100 rounded-[2rem] p-6 md:p-8 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <span className="text-2xl leading-none">{BRANCHES[activeBranch]?.flag}</span>
+              <h3 className="text-lg md:text-xl font-black text-slate-800 tracking-tight">
+                SD (Service Delivery) Team • {BRANCHES[activeBranch]?.name} Hub
+              </h3>
+              <span className="text-[10px] uppercase font-black px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
+                {assignableSurveyors.length} Active SDs
+              </span>
+            </div>
+            <p className="text-xs font-semibold text-slate-500 mt-1">
+              Active coordinators and survey deliverers for {BRANCHES[activeBranch]?.name}. You can add, edit, or delete SD names for this hub at any time.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowManageSurveyorsModal(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-indigo-200 cursor-pointer self-start sm:self-auto"
+            title={`Configure assignable SDs / Surveyors for ${BRANCHES[activeBranch]?.name || activeBranch} (Add, Edit, Delete)`}
+          >
+            <Settings className="w-4 h-4" />
+            <span>Manage SD Team (Add / Edit / Delete)</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {assignableSurveyors.map((sd) => {
+            const sdSurveys = (surveys || []).filter(s => 
+              s.surveyor_name.toLowerCase() === sd.name.toLowerCase() &&
+              (s.branch ? s.branch === activeBranch : true)
+            );
+            const booked = sdSurveys.filter(s => s.status === SurveyStatus.BOOKED).length;
+            const pending = sdSurveys.filter(s => s.status === SurveyStatus.PENDING).length;
+
+            return (
+              <div 
+                key={sd.id} 
+                className="bg-white p-4 rounded-2xl border border-indigo-100 hover:border-indigo-300 hover:shadow-md transition-all group flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="w-8 h-8 rounded-full bg-indigo-50 group-hover:bg-indigo-600 text-indigo-600 group-hover:text-white font-black text-xs flex items-center justify-center transition-colors shadow-xs">
+                      {sd.name.charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+                      {sd.id}
+                    </span>
+                  </div>
+                  <h4 className="font-black text-sm text-slate-800 truncate mb-0.5" title={sd.name}>
+                    {sd.name}
+                  </h4>
+                  <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider mb-2">
+                    SD Coordinator
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold">
+                  <span className="text-slate-500">Booked: <strong className="text-emerald-600">{booked}</strong></span>
+                  {pending > 0 ? (
+                    <span className="text-amber-600">{pending} pend</span>
+                  ) : (
+                    <span className="text-slate-300 font-medium">0 pend</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          <button
+            type="button"
+            onClick={() => setShowManageSurveyorsModal(true)}
+            className="p-4 rounded-2xl border-2 border-dashed border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all flex flex-col items-center justify-center text-center gap-2 group cursor-pointer min-h-[110px]"
+            title={`Add a new SD coordinator to ${BRANCHES[activeBranch]?.name || activeBranch}`}
+          >
+            <div className="w-7 h-7 rounded-full bg-indigo-100 group-hover:bg-indigo-600 text-indigo-600 group-hover:text-white flex items-center justify-center transition-colors">
+              <Plus className="w-4 h-4" />
+            </div>
+            <span className="text-xs font-black text-indigo-700 uppercase tracking-wider">
+              + Add / Edit SDs
+            </span>
+            <span className="text-[10px] text-slate-400 font-semibold">
+              for {BRANCHES[activeBranch]?.name}
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Precision Operations & Unique Job Analysis Engine (Replaces Job Trend Analysis) */}
@@ -639,6 +767,19 @@ export const Dashboard: React.FC<DashboardProps> = ({ jobs, settings, isAdmin, a
           </div>
         </div>
       )}
+
+      {/* Surveyor / SD Management Modal */}
+      <SurveyorManagementModal 
+        isOpen={showManageSurveyorsModal}
+        onClose={() => setShowManageSurveyorsModal(false)}
+        activeBranch={activeBranch}
+        surveys={surveys}
+        onSurveyorsUpdated={(branch, updated) => {
+          if (branch === activeBranch) {
+            setAssignableSurveyors(updated);
+          }
+        }}
+      />
     </div>
   );
 };

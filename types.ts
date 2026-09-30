@@ -282,6 +282,14 @@ export enum SurveyStatus {
 export type SurveyType = 'Physical' | 'Whatsapp' | 'Video Call';
 export type SurveyMode = 'Export' | 'Import' | 'Domestic' | 'Storage' | 'International';
 
+export interface AssignableSurveyor {
+  id: string;
+  name: string;
+  branch: BranchCode;
+  email?: string;
+  phone?: string;
+}
+
 export interface Survey {
   id: string;
   branch?: BranchCode;
