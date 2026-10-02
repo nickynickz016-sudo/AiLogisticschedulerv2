@@ -2,8 +2,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Save, Eraser, CheckSquare, PenTool, Printer } from 'lucide-react';
 import jsPDF from 'jspdf';
+import { BranchCode, getBranchDetails } from '../types';
 
-export const WalkThroughDisclaimer: React.FC = () => {
+interface WalkThroughDisclaimerProps {
+  activeBranch?: BranchCode;
+}
+
+export const WalkThroughDisclaimer: React.FC<WalkThroughDisclaimerProps> = ({ activeBranch = 'UAE' }) => {
   const [formData, setFormData] = useState({
     clientName: '',
     jobId: '',
@@ -113,14 +118,23 @@ export const WalkThroughDisclaimer: React.FC = () => {
     }
     
     const doc = new jsPDF();
+    const branchDetails = getBranchDetails(activeBranch || 'UAE');
     
     // Header
-    doc.setFontSize(22);
+    doc.setFontSize(18);
     doc.setFont("helvetica", "bold");
-    doc.text("WRITER RELOCATIONS", 105, 20, { align: "center" });
+    doc.text(branchDetails.legal_name.toUpperCase(), 105, 18, { align: "center" });
     
-    doc.setFontSize(16);
-    doc.text("WALK THROUGH DISCLAIMER", 105, 30, { align: "center" });
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(100);
+    doc.text(branchDetails.address, 105, 23, { align: "center" });
+    doc.text(`Tel: ${branchDetails.tel} • Email: ${branchDetails.email}`, 105, 27, { align: "center" });
+    
+    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0);
+    doc.text("WALK THROUGH DISCLAIMER", 105, 36, { align: "center" });
     
     // Job Details
     doc.setFontSize(10);
@@ -176,15 +190,19 @@ export const WalkThroughDisclaimer: React.FC = () => {
         doc.line(120, yPos + 25, 180, yPos + 25);
     }
     
-    doc.save(`Disclaimer_${formData.clientName}_${formData.jobId}.pdf`);
+    // Bottom branch footer
+    doc.setFontSize(7);
+    doc.setTextColor(140);
+    doc.text(`Writer Relocations (${branchDetails.name} Hub) • ${branchDetails.address}`, 105, 285, { align: 'center' });
+
+    doc.save(`Disclaimer_${activeBranch || 'UAE'}_${formData.clientName}_${formData.jobId}.pdf`);
   };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Walk Through Disclaimer</h2>
-          <p className="text-slate-500 text-sm font-medium mt-1">Digital sign-off for job completion and premises inspection</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Walk Through Disclaimer</h2>
         </div>
         <button 
           onClick={generatePDF}

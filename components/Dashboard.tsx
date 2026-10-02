@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { getUAEToday } from '../utils';
-import { Job, JobStatus, SystemSettings, JobCostSheet, CustomsStatus, BranchCode, BRANCHES, UserProfile, Survey, SurveyStatus, AssignableSurveyor } from '../types';
+import { Job, JobStatus, SystemSettings, JobCostSheet, CustomsStatus, BranchCode, BRANCHES, getBranchDetails, UserProfile, UserRole, Survey, SurveyStatus, AssignableSurveyor } from '../types';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { Package, Clock, AlertCircle, TrendingUp, BarChart3, ArrowUpRight, Download, Loader2, Activity, Calendar, X, Filter, CalendarRange, ListFilter, Camera, DollarSign, FileText, PieChart as PieIcon, Globe, Users, Settings, Plus } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -26,6 +26,7 @@ interface DashboardProps {
   activeBranch?: BranchCode;
   users?: UserProfile[];
   surveys?: Survey[];
+  currentUser?: UserProfile;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ 
@@ -34,7 +35,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   isAdmin, 
   activeBranch = 'UAE', 
   users = [],
-  surveys = []
+  surveys = [],
+  currentUser
 }) => {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [showDownloadOptions, setShowDownloadOptions] = useState(false);
@@ -82,6 +84,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   ).length;
 
 
+
+  const canManageSDTeam = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.SEMI_ADMIN || isAdmin;
 
   const stats = [
     { label: 'Job Executed', value: jobs.filter(j => j.status === JobStatus.ACTIVE && !j.is_transporter).length, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50/50' },
@@ -169,19 +173,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
       const doc = new jsPDF() as jsPDFWithAutoTable;
       const generationDate = new Date().toLocaleDateString();
 
+      const branchDetails = getBranchDetails(activeBranch);
+
       // Define header and footer for each page
       const pageContent = (data: any) => {
         // Header
-        doc.setFontSize(20);
+        doc.setFontSize(18);
         doc.setTextColor(40);
         doc.setFont('helvetica', 'bold');
-        doc.text('WRITER Relocations - Operations Report', data.settings.margin.left, 22);
+        doc.text(`WRITER Relocations - Operations Report (${branchDetails.name})`, data.settings.margin.left, 18);
         
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(100);
+        doc.text(`${branchDetails.legal_name} • ${branchDetails.address}`, data.settings.margin.left, 24);
+
         // Footer
         const pageCount = doc.getNumberOfPages ? doc.getNumberOfPages() : (doc.internal.pages.length - 1);
-        doc.setFontSize(10);
-        doc.setTextColor(150);
-        doc.text(`Page ${data.pageNumber} of ${pageCount}`, data.settings.margin.left, doc.internal.pageSize.height - 10);
+        doc.setFontSize(7.5);
+        doc.setTextColor(140);
+        doc.text(`Writer Relocations (${branchDetails.name} Hub) • ${branchDetails.address} • Page ${data.pageNumber} of ${pageCount}`, data.settings.margin.left, doc.internal.pageSize.height - 10);
         doc.text(`Generated on: ${generationDate}`, doc.internal.pageSize.width - data.settings.margin.right, doc.internal.pageSize.height - 10, { align: 'right' });
       };
 
@@ -300,21 +311,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const doc = new jsPDF() as jsPDFWithAutoTable;
     const generationDate = new Date().toLocaleDateString();
 
+    const branchDetails = getBranchDetails(activeBranch);
+
     // Define header and footer
     const pageContent = (data: any) => {
-        doc.setFontSize(20);
+        doc.setFontSize(18);
         doc.setTextColor(40);
         doc.setFont('helvetica', 'bold');
-        doc.text('Activities Summary Report', data.settings.margin.left, 22);
+        doc.text(`Activities Summary Report (${branchDetails.name})`, data.settings.margin.left, 18);
         
-        doc.setFontSize(10);
+        doc.setFontSize(8);
         doc.setTextColor(100);
-        doc.text(`Filter: ${summaryFilterType.toUpperCase()} - ${summaryFilterType === 'day' ? summaryDate : summaryFilterType === 'range' ? `${summaryStartDate} to ${summaryEndDate}` : summaryMonth}`, data.settings.margin.left, 28);
+        doc.text(`${branchDetails.legal_name} • ${branchDetails.address}`, data.settings.margin.left, 24);
+        doc.text(`Filter: ${summaryFilterType.toUpperCase()} - ${summaryFilterType === 'day' ? summaryDate : summaryFilterType === 'range' ? `${summaryStartDate} to ${summaryEndDate}` : summaryMonth}`, data.settings.margin.left, 29);
 
         const pageCount = doc.getNumberOfPages ? doc.getNumberOfPages() : (doc.internal.pages.length - 1);
-        doc.setFontSize(10);
-        doc.setTextColor(150);
-        doc.text(`Page ${data.pageNumber} of ${pageCount}`, data.settings.margin.left, doc.internal.pageSize.height - 10);
+        doc.setFontSize(7.5);
+        doc.setTextColor(140);
+        doc.text(`Writer Relocations (${branchDetails.name} Hub) • ${branchDetails.address} • Page ${data.pageNumber} of ${pageCount}`, data.settings.margin.left, doc.internal.pageSize.height - 10);
         doc.text(`Generated on: ${generationDate}`, doc.internal.pageSize.width - data.settings.margin.right, doc.internal.pageSize.height - 10, { align: 'right' });
     };
 
@@ -514,14 +528,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-8">
         {stats.map((stat, i) => (
-          <div key={i} className="bg-white p-4 md:p-8 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl transition-all group cursor-default">
-            <div className="flex flex-col md:flex-row items-center md:items-center gap-3 md:gap-8 text-center md:text-left">
-              <div className={`${stat.bg} p-3 md:p-5 rounded-xl md:rounded-2xl transition-all group-hover:scale-110 border border-transparent group-hover:border-slate-100 shadow-sm`}>
+          <div key={i} className="bg-white p-3.5 sm:p-5 md:p-8 rounded-[1.5rem] md:rounded-[2rem] border border-slate-200 shadow-sm hover:shadow-xl transition-all group cursor-default">
+            <div className="flex flex-col md:flex-row items-center md:items-center gap-2.5 sm:gap-4 md:gap-8 text-center md:text-left">
+              <div className={`${stat.bg} p-2.5 sm:p-3 md:p-5 rounded-xl md:rounded-2xl transition-all group-hover:scale-110 border border-transparent group-hover:border-slate-100 shadow-sm shrink-0`}>
                 <stat.icon className={`w-5 h-5 md:w-8 md:h-8 ${stat.color}`} />
               </div>
-              <div className="min-w-0 w-full overflow-hidden">
-                <p className="text-[8px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest mb-0.5 md:mb-1.5 truncate">{stat.label}</p>
-                <p className="text-xl md:text-3xl font-black text-slate-900 tracking-tight truncate">{stat.value}</p>
+              <div className="min-w-0 w-full">
+                <p className="text-[9px] sm:text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-wider mb-0.5 md:mb-1.5 break-words leading-tight">{stat.label}</p>
+                <p className="text-lg sm:text-2xl md:text-3xl font-black text-slate-900 tracking-tight break-words leading-none">{stat.value}</p>
               </div>
             </div>
           </div>
@@ -529,35 +543,32 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       {/* SD (Service Delivery) Team Hub - Dynamic across UAE, QATAR, and KSA */}
-      <div className="bg-gradient-to-br from-indigo-50/70 via-white to-slate-50 border border-indigo-100 rounded-[2rem] p-6 md:p-8 shadow-sm space-y-6">
+      <div className="bg-gradient-to-br from-indigo-50/70 via-white to-slate-50 border border-indigo-100 rounded-[2rem] p-5 sm:p-6 md:p-8 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="text-2xl leading-none">{BRANCHES[activeBranch]?.flag}</span>
-              <h3 className="text-lg md:text-xl font-black text-slate-800 tracking-tight">
-                SD (Service Delivery) Team • {BRANCHES[activeBranch]?.name} Hub
-              </h3>
-              <span className="text-[10px] uppercase font-black px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
-                {assignableSurveyors.length} Active SDs
-              </span>
-            </div>
-            <p className="text-xs font-semibold text-slate-500 mt-1">
-              Active coordinators and survey deliverers for {BRANCHES[activeBranch]?.name}. You can add, edit, or delete SD names for this hub at any time.
-            </p>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <span className="text-2xl leading-none">{BRANCHES[activeBranch]?.flag}</span>
+            <h3 className="text-base sm:text-lg md:text-xl font-black text-slate-800 tracking-tight">
+              SD (Service Delivery) Team • {BRANCHES[activeBranch]?.name} Hub
+            </h3>
+            <span className="text-[10px] uppercase font-black px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
+              {assignableSurveyors.length} Active SDs
+            </span>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowManageSurveyorsModal(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-indigo-200 cursor-pointer self-start sm:self-auto"
-            title={`Configure assignable SDs / Surveyors for ${BRANCHES[activeBranch]?.name || activeBranch} (Add, Edit, Delete)`}
-          >
-            <Settings className="w-4 h-4" />
-            <span>Manage SD Team (Add / Edit / Delete)</span>
-          </button>
+          {canManageSDTeam && (
+            <button
+              type="button"
+              onClick={() => setShowManageSurveyorsModal(true)}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-wider transition-all shadow-md shadow-indigo-200 cursor-pointer self-start sm:self-auto"
+              title={`Configure assignable SDs / Surveyors for ${BRANCHES[activeBranch]?.name || activeBranch} (Add, Edit, Delete)`}
+            >
+              <Settings className="w-4 h-4" />
+              <span>Manage SD Team</span>
+            </button>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5 sm:gap-4">
           {assignableSurveyors.map((sd) => {
             const sdSurveys = (surveys || []).filter(s => 
               s.surveyor_name.toLowerCase() === sd.name.toLowerCase() &&
@@ -580,7 +591,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       {sd.id}
                     </span>
                   </div>
-                  <h4 className="font-black text-sm text-slate-800 truncate mb-0.5" title={sd.name}>
+                  <h4 className="font-black text-xs sm:text-sm text-slate-800 break-words leading-snug mb-0.5" title={sd.name}>
                     {sd.name}
                   </h4>
                   <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider mb-2">
@@ -600,22 +611,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
             );
           })}
 
-          <button
-            type="button"
-            onClick={() => setShowManageSurveyorsModal(true)}
-            className="p-4 rounded-2xl border-2 border-dashed border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all flex flex-col items-center justify-center text-center gap-2 group cursor-pointer min-h-[110px]"
-            title={`Add a new SD coordinator to ${BRANCHES[activeBranch]?.name || activeBranch}`}
-          >
-            <div className="w-7 h-7 rounded-full bg-indigo-100 group-hover:bg-indigo-600 text-indigo-600 group-hover:text-white flex items-center justify-center transition-colors">
-              <Plus className="w-4 h-4" />
-            </div>
-            <span className="text-xs font-black text-indigo-700 uppercase tracking-wider">
-              + Add / Edit SDs
-            </span>
-            <span className="text-[10px] text-slate-400 font-semibold">
-              for {BRANCHES[activeBranch]?.name}
-            </span>
-          </button>
+          {canManageSDTeam && (
+            <button
+              type="button"
+              onClick={() => setShowManageSurveyorsModal(true)}
+              className="p-4 rounded-2xl border-2 border-dashed border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50/50 transition-all flex flex-col items-center justify-center text-center gap-2 group cursor-pointer min-h-[110px]"
+              title={`Add a new SD coordinator to ${BRANCHES[activeBranch]?.name || activeBranch}`}
+            >
+              <div className="w-7 h-7 rounded-full bg-indigo-100 group-hover:bg-indigo-600 text-indigo-600 group-hover:text-white flex items-center justify-center transition-colors">
+                <Plus className="w-4 h-4" />
+              </div>
+              <span className="text-xs font-black text-indigo-700 uppercase tracking-wider">
+                + Add / Edit SDs
+              </span>
+              <span className="text-[10px] text-slate-400 font-semibold">
+                for {BRANCHES[activeBranch]?.name}
+              </span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -769,17 +782,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
       )}
 
       {/* Surveyor / SD Management Modal */}
-      <SurveyorManagementModal 
-        isOpen={showManageSurveyorsModal}
-        onClose={() => setShowManageSurveyorsModal(false)}
-        activeBranch={activeBranch}
-        surveys={surveys}
-        onSurveyorsUpdated={(branch, updated) => {
-          if (branch === activeBranch) {
-            setAssignableSurveyors(updated);
-          }
-        }}
-      />
+      {canManageSDTeam && (
+        <SurveyorManagementModal 
+          isOpen={showManageSurveyorsModal}
+          onClose={() => setShowManageSurveyorsModal(false)}
+          activeBranch={activeBranch}
+          surveys={surveys}
+          onSurveyorsUpdated={(branch, updated) => {
+            if (branch === activeBranch) {
+              setAssignableSurveyors(updated);
+            }
+          }}
+        />
+      )}
     </div>
   );
 };

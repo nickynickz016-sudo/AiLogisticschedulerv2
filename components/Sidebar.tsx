@@ -60,13 +60,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const sidebarClasses = `
     fixed inset-y-0 left-0 z-50 bg-white shadow-2xl lg:shadow-xl border-r border-slate-200 
     transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static h-screen flex flex-col
-    ${isMobileOpen ? 'translate-x-0 w-80' : '-translate-x-full lg:translate-x-0'}
-    ${isCollapsed ? 'lg:w-24' : 'lg:w-80'}
+    ${isMobileOpen ? 'translate-x-0 w-72 sm:w-80 max-w-[85vw]' : '-translate-x-full lg:translate-x-0'}
+    ${isCollapsed ? 'lg:w-20 xl:w-24' : 'lg:w-72 xl:w-80'}
   `;
 
   return (
     <aside className={sidebarClasses}>
-      <div className={`p-6 md:p-10 border-b border-slate-100 bg-white shrink-0 flex items-center justify-between ${isCollapsed ? 'lg:justify-center lg:px-4' : 'items-start'}`}>
+      <div className={`p-5 sm:p-6 md:p-8 border-b border-slate-100 bg-white shrink-0 flex items-center justify-between ${isCollapsed ? 'lg:justify-center lg:px-4' : 'items-start'}`}>
         <div className="flex flex-col select-none">
           {!isCollapsed ? (
             <>

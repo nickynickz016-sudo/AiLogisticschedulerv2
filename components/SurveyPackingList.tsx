@@ -9,7 +9,7 @@ import {
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { supabase } from '../supabaseClient';
-import { UserProfile, UserRole } from '../types';
+import { UserProfile, UserRole, BranchCode, getBranchDetails } from '../types';
 import { safeLocalStorage } from '../utils';
 
 const localStorage = safeLocalStorage;
@@ -186,6 +186,7 @@ interface SurveyPackingListProps {
   onClearPreloadSurveyData?: () => void;
   logo?: string;
   onLogActivity?: (action_type: string, entity_type: string, entity_id: string, details: string, entity_title?: string, previous_data?: any, new_data?: any) => void;
+  activeBranch?: BranchCode;
 }
 
 // Inline canvas component for reliable signature capture
@@ -338,7 +339,8 @@ export const SurveyPackingList: React.FC<SurveyPackingListProps> = ({
   preloadSurveyData,
   onClearPreloadSurveyData,
   logo,
-  onLogActivity
+  onLogActivity,
+  activeBranch = 'UAE'
 }) => {
   // Simulator Role State (keeps detect user default, allows override)
   const [activeRole, setActiveRole] = useState<string>(() => {
@@ -1360,6 +1362,8 @@ export const SurveyPackingList: React.FC<SurveyPackingListProps> = ({
     const borderColor = [226, 232, 240];    // Slate 200 (Clean border lines)
     const textColor = [71, 85, 105];         // Slate 600 (Softer body typography)
 
+    const branchDetails = getBranchDetails(activeBranch || currentUser?.branch || 'UAE');
+
     // Header drawing function with exact 1-inch left & right margins (25.4mm)
     const drawPageHeader = () => {
       // Top elegant accent line
@@ -1391,7 +1395,10 @@ export const SurveyPackingList: React.FC<SurveyPackingListProps> = ({
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(8);
       doc.setTextColor(148, 163, 184); // slate-400
-      doc.text("PREMIUM PACKING LIST & MOVE MANIFEST", 184.6, 15, { align: 'right' });
+      doc.text("PREMIUM PACKING LIST & MOVE MANIFEST", 184.6, 14, { align: 'right' });
+      doc.setFontSize(6.5);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`${branchDetails.city.toUpperCase()} (${branchDetails.name.toUpperCase()}) HUB`, 184.6, 18, { align: 'right' });
 
       // Clean slim line separating header from page content (25.4 to 184.6)
       doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
@@ -1409,9 +1416,10 @@ export const SurveyPackingList: React.FC<SurveyPackingListProps> = ({
       doc.line(25.4, 271.6, 184.6, 271.6);
 
       doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
+      doc.setFontSize(7);
       doc.setTextColor(148, 163, 184); // slate-400
-      doc.text("Writer Relocations GCC", 25.4, 277);
+      doc.text(`Writer Relocations (${branchDetails.name}) • ${branchDetails.address}`, 25.4, 276);
+      doc.text(`Tel: ${branchDetails.tel} • Email: ${branchDetails.email}`, 25.4, 280);
       doc.text(`Page ${pageNo} of ${totalPages}`, 184.6, 277, { align: 'right' });
     };
 
@@ -1782,9 +1790,6 @@ export const SurveyPackingList: React.FC<SurveyPackingListProps> = ({
           <h2 className="text-xl md:text-2xl font-black tracking-tight leading-none mb-1">
             Survey / Packing List Module
           </h2>
-          <p className="text-slate-300 text-[11px] font-medium leading-relaxed max-w-xl">
-            Streamlined system mapping Move Surveyors, OPS-106 pack managers, physical signatures, and automatic package allocators.
-          </p>
         </div>
 
         {/* Dynamic simulator switches */}

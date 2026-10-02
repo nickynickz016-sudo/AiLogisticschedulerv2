@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Edit2, Save, X, Plus, Package, AlertTriangle, Loader2, Database, FileInput, ClipboardList, ChevronRight, Calculator, Truck, User, MapPin, RefreshCw, Trash2, Printer, ChevronDown, FileText, FileDown, Calendar, Info, CheckCircle2, BarChart2 } from 'lucide-react';
 import { supabase, fetchAllJobsFromDb } from '../supabaseClient';
-import { InventoryItem, Job, JobCostSheet, CostSheetItem, UserProfile, InventoryConsumption, InventoryPriceHistory, BranchCode, BRANCHES } from '../types';
+import { InventoryItem, Job, JobCostSheet, CostSheetItem, UserProfile, InventoryConsumption, InventoryPriceHistory, BranchCode, BRANCHES, getBranchDetails } from '../types';
 import { formatJobNoForExcel, getCleanJobNo } from '../utils';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -1563,15 +1563,19 @@ export const Inventory: React.FC<InventoryProps> = ({
         }
     }
 
-    doc.setFontSize(16);
+    const branchDetails = getBranchDetails(activeBranch || 'UAE');
+
+    doc.setFontSize(15);
     doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]);
     doc.setFont("helvetica", "bold");
-    doc.text("WRITER RELOCATIONS", margin + 60, 18);
+    doc.text(branchDetails.legal_name.toUpperCase(), margin + 60, 17);
     
-    doc.setFontSize(10);
+    doc.setFontSize(9.5);
     doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]);
     doc.setFont("helvetica", "normal");
-    doc.text("JOB COSTING ASSESSMENT", margin + 60, 24);
+    doc.text(`JOB COSTING ASSESSMENT • ${branchDetails.name.toUpperCase()} HUB`, margin + 60, 23);
+    doc.setFontSize(7.5);
+    doc.text(`${branchDetails.address} • Tel: ${branchDetails.tel}`, margin + 60, 28);
 
     doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
     doc.line(margin, 35, pageWidth - margin, 35);
@@ -1730,9 +1734,15 @@ export const Inventory: React.FC<InventoryProps> = ({
     doc.text("GRAND TOTAL", pageWidth - margin - 90, yPos + 10);
     
     doc.setFontSize(12);
-    doc.text(`${totalCost.toFixed(2)} AED`, pageWidth - margin - 15, yPos + 10, { align: 'right' });
+    doc.text(`${totalCost.toFixed(2)} ${branchDetails.currency}`, pageWidth - margin - 15, yPos + 10, { align: 'right' });
 
-    doc.save(`JobCost_${selectedJobId}.pdf`);
+    // Running footer
+    doc.setFontSize(7.5);
+    doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Writer Relocations (${branchDetails.name} Hub) • ${branchDetails.address}`, margin, doc.internal.pageSize.getHeight() - 8);
+
+    doc.save(`JobCost_${activeBranch || 'UAE'}_${selectedJobId}.pdf`);
   }
 
   // New function for Master List PDF
@@ -1765,15 +1775,19 @@ export const Inventory: React.FC<InventoryProps> = ({
         }
     }
 
-    doc.setFontSize(16);
+    const branchDetails = getBranchDetails(activeBranch || 'UAE');
+
+    doc.setFontSize(15);
     doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]);
     doc.setFont("helvetica", "bold");
-    doc.text("WRITER RELOCATIONS", margin + 60, 18);
+    doc.text(branchDetails.legal_name.toUpperCase(), margin + 60, 17);
     
-    doc.setFontSize(10);
+    doc.setFontSize(9.5);
     doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]);
     doc.setFont("helvetica", "normal");
-    doc.text("INVENTORY MASTER LIST", margin + 60, 24);
+    doc.text(`INVENTORY MASTER LIST • ${branchDetails.name.toUpperCase()} HUB`, margin + 60, 23);
+    doc.setFontSize(7.5);
+    doc.text(`${branchDetails.address} • Tel: ${branchDetails.tel}`, margin + 60, 28);
 
     doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
     doc.line(margin, 35, pageWidth - margin, 35);
@@ -1783,8 +1797,9 @@ export const Inventory: React.FC<InventoryProps> = ({
     // --- Meta Data ---
     doc.setFontSize(8);
     doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]);
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, margin, yPos);
-    doc.text(`Total Items: ${filteredItems.length}`, margin + 60, yPos);
+    doc.text(`Hub: ${branchDetails.name} (${branchDetails.code}) | Currency: ${branchDetails.currency}`, margin, yPos);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, margin + 80, yPos);
+    doc.text(`Total Items: ${filteredItems.length}`, margin + 140, yPos);
 
     yPos += 10;
 
@@ -1803,7 +1818,7 @@ export const Inventory: React.FC<InventoryProps> = ({
 
     (doc as any).autoTable({
         startY: yPos,
-        head: [['SR#', 'Code', 'Description', 'Unit', 'Stock', 'Min. Level', 'Price (AED)']],
+        head: [['SR#', 'Code', 'Description', 'Unit', 'Stock', 'Min. Level', `Price (${branchDetails.currency})`]],
         body: tableBody,
         margin: { left: margin, right: margin },
         headStyles: { 
@@ -1828,16 +1843,21 @@ export const Inventory: React.FC<InventoryProps> = ({
             3: { cellWidth: 20, halign: 'center' }, // Unit
             4: { cellWidth: 25, halign: 'center', fontStyle: 'bold' }, // Stock
             5: { cellWidth: 25, halign: 'center', textColor: [234, 88, 12] }, // Min Level
-            6: { cellWidth: 30, halign: 'right', fontStyle: 'bold', textColor: [5, 150, 105] } // Price
+            6: { cellWidth: 35, halign: 'right', fontStyle: 'bold', textColor: [5, 150, 105] } // Price
         },
         theme: 'grid',
         styles: {
             lineWidth: 0.1,
             lineColor: colors.border
+        },
+        didDrawPage: (data: any) => {
+          doc.setFontSize(7.5);
+          doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]);
+          doc.text(`Writer Relocations (${branchDetails.name} Hub) • ${branchDetails.address} • Page ${data.pageNumber}`, margin, doc.internal.pageSize.getHeight() - 8);
         }
     });
 
-    doc.save(`Inventory_Master_${new Date().toISOString().split('T')[0]}.pdf`);
+    doc.save(`Inventory_Master_${activeBranch || 'UAE'}_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
   // Filter materials for the Cost Sheet Table View

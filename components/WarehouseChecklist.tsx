@@ -38,7 +38,9 @@ import {
   SurpriseVisitChecklist,
   DailyMonitoringChecklist,
   UserProfile, 
-  UserRole 
+  UserRole,
+  BranchCode,
+  getBranchDetails 
 } from '../types';
 import SignatureCanvas from 'react-signature-canvas';
 import { jsPDF } from 'jspdf';
@@ -153,6 +155,7 @@ interface WarehouseChecklistProps {
   onSaveDaily: (check: Omit<DailyMonitoringChecklist, 'id'>) => void;
   onUpdateDaily: (id: string, check: Partial<DailyMonitoringChecklist>) => void;
   currentUser: UserProfile;
+  activeBranch?: BranchCode;
 }
 
 const initialPatrolRounds = [
@@ -196,7 +199,8 @@ export const WarehouseChecklist: React.FC<WarehouseChecklistProps> = ({
   onUpdateSurprise,
   onSaveDaily,
   onUpdateDaily,
-  currentUser 
+  currentUser,
+  activeBranch = 'UAE' 
 }) => {
   const [activeTab, setActiveTab] = useState<'new' | 'history' | 'approval'>('new');
   const [moduleType, setModuleType] = useState<'closing' | 'patrolling' | 'safety' | 'surprise' | 'daily'>('closing');
@@ -208,13 +212,15 @@ export const WarehouseChecklist: React.FC<WarehouseChecklistProps> = ({
   const [declineComments, setDeclineComments] = useState('');
   const [showDeclineForm, setShowDeclineForm] = useState(false);
   
+  const branchDetails = getBranchDetails(activeBranch);
+
   const sigPadSecurity = useRef<SignatureCanvas>(null);
   const sigPadAdmin = useRef<SignatureCanvas>(null);
   const sigPadWarehouse = useRef<SignatureCanvas>(null);
 
   const initialPatrolForm = {
     date: new Date().toISOString().split('T')[0],
-    location: 'Dubai',
+    location: branchDetails.address,
     status: 'Pending Approval' as const,
     rounds: initialPatrolRounds,
     unusual_observation: '',
@@ -262,7 +268,7 @@ export const WarehouseChecklist: React.FC<WarehouseChecklistProps> = ({
   const initialSafetyForm = {
     date: new Date().toISOString().split('T')[0],
     time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-    location: 'Dubai',
+    location: branchDetails.address,
     status: 'Pending Approval' as const,
     hydrant_tank_full: { status: false, litres: '', remarks: '' },
     hydrant_indicator_working: { status: false, remarks: '' },
@@ -295,7 +301,7 @@ export const WarehouseChecklist: React.FC<WarehouseChecklistProps> = ({
     in_time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
     exit_time: '',
     check_conducted_by: currentUser.name,
-    name_of_facility: 'Warehouse DXB',
+    name_of_facility: `${branchDetails.city} Warehouse (${branchDetails.code})`,
     status: 'Pending Approval' as const,
     main_gate_guard_name: '',
     main_gate_guard_alert: false,
@@ -341,7 +347,7 @@ export const WarehouseChecklist: React.FC<WarehouseChecklistProps> = ({
   const initialDailyForm = {
     date: new Date().toISOString().split('T')[0],
     time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-    location: 'Dubai',
+    location: branchDetails.address,
     status: 'Pending Approval' as const,
     perimeter_clean: false,
     gates_functioning: false,

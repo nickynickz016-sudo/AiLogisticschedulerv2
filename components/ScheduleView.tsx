@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { getUAEToday, getCleanJobNo, getJobDayNumber, getJobDayLabel as getJobDayLabelFromUtils, safeLocalStorage, downloadExcelWorkbook } from '../utils';
-import { Job, JobStatus, LoadingType, UserProfile, Personnel, Vehicle, UserRole, ShipmentDetailsType, BranchCode, BRANCHES } from '../types';
-import { Plus, Search, Package, Clock, User, X, Calendar as CalendarIcon, CheckCircle2, Check, Truck, Settings2, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Phone, Mail, Briefcase, FileText, AlertCircle, MapPin, RefreshCw, Edit2, Maximize2, Minimize2, Copy, Download, Building2, Filter, Loader2, Globe } from 'lucide-react';
+import { Job, JobStatus, LoadingType, UserProfile, Personnel, Vehicle, UserRole, ShipmentDetailsType, BranchCode, BRANCHES, Priority } from '../types';
+import { Plus, Search, Package, Clock, User, X, Calendar as CalendarIcon, CheckCircle2, Check, Truck, Settings2, Lock, Unlock, Trash2, Users, ChevronLeft, ChevronRight, Maximize, Minimize, Phone, Mail, Briefcase, FileText, AlertCircle, MapPin, RefreshCw, Edit2, Maximize2, Minimize2, Copy, Download, Building2, Filter, Loader2, Globe, Tag } from 'lucide-react';
 import { JobDetailModal } from './JobDetailModal';
 import * as XLSX from 'xlsx';
 import { supabase } from '../supabaseClient';
@@ -134,7 +134,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
       location: '',
       shipment_details: 'Local Move',
       description: '',
-      priority: 'LOW',
+      priority: 'Standard',
       agent_name: '',
       loading_type: 'Warehouse Removal',
       main_category: 'Commercial',
@@ -231,6 +231,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     }
   }, [activeBranch, isEditingMode]);
   const [dayDates, setDayDates] = useState<string[]>([]);
+  const [priorityFilter, setPriorityFilter] = useState<'ALL' | 'Standard' | 'VIP' | 'VVIP'>('ALL');
   const [showCopyModal, setShowCopyModal] = useState<Job | null>(null);
   const [copyDate, setCopyDate] = useState(getUAEToday());
   
@@ -1083,25 +1084,39 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
     };
   };
 
-  // Filter jobs based on selected date OR global search filter
-  const filteredJobs = jobs.filter(j => 
-    !j.is_warehouse_activity &&
-    !j.is_import_clearance &&
-    !j.is_transporter &&
-    (filter ? true : j.job_date === selectedDate) && // If filtering, search all dates. Else restrict to selected date.
-    (j.id.toLowerCase().includes(filter.toLowerCase()) || 
-     j.shipper_name.toLowerCase().includes(filter.toLowerCase())) &&
-    j.status !== JobStatus.REJECTED
-  );
+  // Filter jobs based on selected date OR global search filter, and priority filter
+  const filteredJobs = jobs.filter(j => {
+    if (j.is_warehouse_activity || j.is_import_clearance || j.is_transporter) return false;
+    if (j.status === JobStatus.REJECTED) return false;
+    if (!filter && j.job_date !== selectedDate) return false;
+    
+    // Priority filter (ALL, Standard, VIP, VVIP)
+    if (priorityFilter !== 'ALL') {
+      const p = j.priority === 'VVIP' ? 'VVIP' : (j.priority === 'VIP' || j.priority === 'HIGH') ? 'VIP' : 'Standard';
+      if (p !== priorityFilter) return false;
+    }
+
+    if (filter) {
+      const q = filter.toLowerCase();
+      const matchSearch = j.id.toLowerCase().includes(q) || 
+                          j.shipper_name.toLowerCase().includes(q) ||
+                          (j.priority && j.priority.toLowerCase().includes(q));
+      if (!matchSearch) return false;
+    }
+
+    return true;
+  });
 
   const handleEditClick = (e: React.MouseEvent, job: Job) => {
     e.stopPropagation();
     setSelectedJob(job);
     const cleanId = getCleanJobNo(job.id);
     const dur = job.duration || 1;
+    const normalizedPriority = (job.priority === 'VVIP' ? 'VVIP' : (job.priority === 'VIP' || job.priority === 'HIGH') ? 'VIP' : 'Standard') as Priority;
     setNewJob({
       ...job,
       id: cleanId,
+      priority: normalizedPriority,
       duration: dur
     });
     setIsEditingMode(true);
@@ -1464,8 +1479,20 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                           } ${isHoveredGroup ? 'ring-2 ring-indigo-500 scale-102 z-10 shadow-md font-black' : ''}`}
                           title={`${job.shipper_name}${isMulti ? ` - Day ${dayNum} of ${job.duration}` : ''}`}
                         >
-                          {isMulti && <span className="opacity-70 mr-1">[{cleanNo}]</span>}
-                          {job.shipper_name}
+                          <div className="flex items-center gap-1 overflow-hidden">
+                            {isMulti && <span className="opacity-70 shrink-0">[{cleanNo}]</span>}
+                            {job.priority === 'VVIP' && (
+                              <span className="bg-purple-200/90 text-purple-950 font-black text-[7.5px] px-1 py-0.2 rounded shrink-0">
+                                VVIP
+                              </span>
+                            )}
+                            {(job.priority === 'VIP' || job.priority === 'HIGH') && (
+                              <span className="bg-amber-200/90 text-amber-950 font-black text-[7.5px] px-1 py-0.2 rounded shrink-0">
+                                VIP
+                              </span>
+                            )}
+                            <span className="truncate">{job.shipper_name}</span>
+                          </div>
                           {isMulti && <span className="text-[8px] opacity-80 block text-right font-black mt-0.5">{durationLabel}</span>}
                         </div>
                       );
@@ -1612,6 +1639,29 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
               />
             </div>
           )}
+          {viewMode !== 'month' && (
+            <div className="relative">
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value as any)}
+                className={`px-3 py-3 rounded-xl border text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer transition-all ${
+                  priorityFilter === 'VVIP'
+                    ? 'bg-purple-50 text-purple-900 border-purple-300 ring-2 ring-purple-400/20'
+                    : priorityFilter === 'VIP'
+                      ? 'bg-amber-50 text-amber-900 border-amber-300 ring-2 ring-amber-400/20'
+                      : priorityFilter === 'Standard'
+                        ? 'bg-blue-50 text-blue-900 border-blue-200'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                }`}
+                title="Filter by Job Priority"
+              >
+                <option value="ALL">All Priorities</option>
+                <option value="Standard">Standard</option>
+                <option value="VIP">★ VIP</option>
+                <option value="VVIP">★ VVIP</option>
+              </select>
+            </div>
+          )}
           <button 
             onClick={handleOpenExportModal}
             className="flex items-center justify-center gap-2 bg-white border border-slate-200 text-slate-600 px-5 py-3 rounded-xl hover:bg-slate-50 transition-all font-black uppercase text-[9px] tracking-widest shadow-sm whitespace-nowrap"
@@ -1699,6 +1749,17 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                  <div>
                                     <div className="flex items-center gap-2 mb-1">
                                       <p className={`text-[10px] font-black uppercase tracking-widest ${isMulti ? colors.text : 'text-blue-600'}`}>ID: {getCleanJobNo(job.id)}</p>
+                                      {job.priority && (
+                                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border transition-all ${
+                                          job.priority === 'VVIP'
+                                            ? 'bg-purple-100 text-purple-900 border-purple-300 shadow-xs'
+                                            : (job.priority === 'VIP' || job.priority === 'HIGH')
+                                              ? 'bg-amber-100 text-amber-900 border-amber-300 shadow-xs'
+                                              : 'bg-slate-100 text-slate-700 border-slate-200'
+                                        }`}>
+                                          {job.priority === 'VVIP' ? '★ VVIP' : (job.priority === 'VIP' || job.priority === 'HIGH') ? '★ VIP' : 'Standard'}
+                                        </span>
+                                      )}
                                       {/* Display date when searching globally */}
                                       {filter && <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">{new Date(job.job_date).toLocaleDateString(undefined, {month:'numeric', day:'numeric'})}</span>}
                                       {dayLabel && (
@@ -1708,7 +1769,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                       )}
                                       {job.is_locked && <Lock className="w-3 h-3 text-amber-500" />}
                                     </div>
-                                    <h4 className="font-bold text-base text-slate-800 leading-tight truncate max-w-[150px] md:max-w-none">{job.shipper_name}</h4>
+                                    <h4 className="font-bold text-sm sm:text-base text-slate-800 leading-snug break-words">{job.shipper_name}</h4>
                                     <div className="flex items-center gap-1.5 mt-1">
                                       <User className="w-3 h-3 text-slate-400" />
                                       <span className="text-[10px] text-slate-500 font-bold">{requester ? requester.name : job.requester_id}</span>
@@ -1932,6 +1993,17 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                                 <div className="flex items-center gap-2">
                                     <span className={isMulti ? colors.text : 'text-blue-600'}>{getCleanJobNo(job.id)}</span>
                                     {job.is_locked && <Lock className="w-3 h-3 text-amber-500" />}
+                                    {job.priority && (
+                                      <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border transition-all ${
+                                        job.priority === 'VVIP'
+                                          ? 'bg-purple-100 text-purple-900 border-purple-300'
+                                          : (job.priority === 'VIP' || job.priority === 'HIGH')
+                                            ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                                      }`}>
+                                        {job.priority === 'VVIP' ? '★ VVIP' : (job.priority === 'VIP' || job.priority === 'HIGH') ? '★ VIP' : 'Standard'}
+                                      </span>
+                                    )}
                                 </div>
                                 {dayLabel && (
                                     <span className={`text-[9px] font-bold px-2 py-0.5 rounded border w-fit ${isMulti ? colors.badge : 'bg-violet-100 text-violet-700 border-violet-200'}`}>
@@ -1944,7 +2016,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                            <div className="flex flex-col">
                               <span className="text-sm font-bold text-slate-800">{job.shipper_name}</span>
                               <div className="flex items-center gap-2 mt-1">
-                                <span className="text-[10px] text-slate-400 font-medium uppercase truncate max-w-[200px]">{job.location}</span>
+                                <span className="text-[10px] text-slate-400 font-medium uppercase break-words">{job.location}</span>
                                 {job.shuttle === 'Yes' && <span className="text-[8px] font-bold bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded border border-amber-100">Shuttle</span>}
                                 {job.long_carry === 'Yes' && <span className="text-[8px] font-bold bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded border border-amber-100">Long Carry</span>}
                               </div>
@@ -2130,7 +2202,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
       {/* Export Report Modal */}
       {showExportModal && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
            <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden p-6 space-y-5">
               <div className="text-center">
                  <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-inner">
@@ -2273,8 +2345,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
       {/* Copy Job Modal */}
       {showCopyModal && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-           <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden p-6 space-y-6">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+           <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-sm shadow-2xl overflow-hidden p-5 sm:p-6 space-y-6 my-auto">
               <div className="text-center">
                  <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
                     <Copy className="w-6 h-6 text-emerald-600" />
@@ -2305,9 +2377,9 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
       {/* Allocation Edit Modal */}
       {showAllocationModal && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-           <div className={`bg-white rounded-3xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden flex flex-col ${expandedSection ? 'h-[85vh]' : 'max-h-[90vh]'}`}>
-              <div className="p-8 border-b bg-slate-900 flex justify-between items-center text-white shrink-0">
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+           <div className={`bg-white rounded-2xl sm:rounded-3xl w-full max-w-lg shadow-2xl animate-in zoom-in-95 duration-300 overflow-hidden flex flex-col my-auto ${expandedSection ? 'h-[90vh] sm:h-[85vh]' : 'max-h-[92vh]'}`}>
+              <div className="p-5 sm:p-8 border-b bg-slate-900 flex justify-between items-center text-white shrink-0">
                  <div>
                    <h3 className="text-lg font-bold uppercase tracking-widest">Dispatch Allocation</h3>
                    <p className="text-[10px] font-medium opacity-70 uppercase tracking-tighter">Job No: {getCleanJobNo(showAllocationModal.id)}</p>
@@ -2543,9 +2615,9 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
 
       {/* New/Edit Job Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className={`bg-white rounded-[2rem] w-full shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col max-h-[95vh] h-full md:h-auto border border-slate-200 overflow-hidden transition-all ease-in-out ${isModalExpanded ? 'max-w-6xl' : 'max-w-3xl'}`}>
-            <div className="p-6 md:p-8 border-b flex justify-between items-center bg-white shrink-0">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className={`bg-white rounded-2xl md:rounded-[2rem] w-full shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col max-h-[96vh] md:max-h-[92vh] h-full md:h-auto border border-slate-200 overflow-hidden transition-all ease-in-out my-auto ${isModalExpanded ? 'max-w-6xl' : 'max-w-3xl'}`}>
+            <div className="p-4 sm:p-6 md:p-8 border-b flex justify-between items-center bg-white shrink-0">
                <div className="flex items-center gap-4">
                   <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center rotate-45 transform">
                     <span className="text-white font-black text-lg -rotate-45">W</span>
@@ -2562,7 +2634,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                </div>
             </div>
             
-            <form onSubmit={handleSubmit} className="p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-10">
+            <form onSubmit={handleSubmit} className="p-4 sm:p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-8 md:space-y-10">
               
               {/* Section 1: Operational Basics */}
               <section>
@@ -2585,7 +2657,7 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                         Prefix: <strong className="text-blue-600 font-mono">{getBranchJobPrefix(newJob.branch || activeBranch)}</strong> | Phone: <strong className="text-emerald-600 font-mono">{getBranchPhoneCode(newJob.branch || activeBranch)}</strong>
                       </span>
                     </label>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
                       {(['UAE', 'KSA', 'QATAR'] as BranchCode[]).map(b => {
                         const isSelected = (newJob.branch || activeBranch) === b;
                         const branchPrefix = getBranchJobPrefix(b);
@@ -2650,6 +2722,32 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
                       )}
                     </label>
                     <input required type="date" className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none" value={newJob.job_date} onChange={e => handleStartDateChange(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Tag className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Job Priority *</span>
+                      </span>
+                      <span className={`text-[8.5px] font-black uppercase px-2 py-0.5 rounded-full border transition-all ${
+                        newJob.priority === 'VVIP'
+                          ? 'bg-purple-100 text-purple-900 border-purple-300'
+                          : newJob.priority === 'VIP'
+                            ? 'bg-amber-100 text-amber-900 border-amber-300'
+                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                      }`}>
+                        {newJob.priority === 'VVIP' ? '★ VVIP Protocol' : newJob.priority === 'VIP' ? '★ VIP Handling' : 'Standard'}
+                      </span>
+                    </label>
+                    <select 
+                      className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer"
+                      value={newJob.priority === 'VVIP' ? 'VVIP' : (newJob.priority === 'VIP' || newJob.priority === 'HIGH') ? 'VIP' : (newJob.priority || 'Standard')} 
+                      onChange={e => setNewJob({...newJob, priority: e.target.value as Priority})}
+                    >
+                      <option value="Standard">Standard</option>
+                      <option value="VIP">VIP</option>
+                      <option value="VVIP">VVIP</option>
+                    </select>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">

@@ -1470,7 +1470,7 @@ export const GroupageTracker: React.FC<GroupageTrackerProps> = ({ currentUser, a
                                       First In
                                     </span>
                                   )}
-                                  <span className="text-zinc-800 truncate" title={item.shipper_name}>
+                                  <span className="text-zinc-800 break-words leading-tight" title={item.shipper_name}>
                                     {item.shipper_name}
                                   </span>
                                 </div>

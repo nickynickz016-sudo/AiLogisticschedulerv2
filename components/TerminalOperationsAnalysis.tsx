@@ -587,9 +587,6 @@ export const TerminalOperationsAnalysis: React.FC<TerminalOperationsAnalysisProp
               1 Job No. = 1 Count (Day 1 / Day 2 Multi-Day Deduplicated)
             </span>
           </div>
-          <p className="text-slate-500 font-medium text-xs md:text-sm mt-1.5">
-            Precision throughput accounting for <span className="font-bold text-slate-700">Jobs Schedule</span>, <span className="font-bold text-slate-700">Warehouse Activity</span>, and <span className="font-bold text-slate-700">Customs Clearance</span>. Multi-day entries are counted as a single job without suffix duplication.
-          </p>
         </div>
 
         {/* Global Action Tools */}

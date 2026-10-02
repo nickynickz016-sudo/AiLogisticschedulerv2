@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { FileText, Package, Box, Truck, Eraser, PenTool, Trash2, Printer, ClipboardCheck, Layers, ArrowLeftRight, ChevronLeft, ChevronRight, Monitor, Upload, Wrench, ShieldCheck, Plus, Check, Grid, Car, AlertTriangle } from 'lucide-react';
+import { FileText, Package, Box, Truck, Eraser, PenTool, Trash2, Printer, ClipboardCheck, Layers, ArrowLeftRight, ChevronLeft, ChevronRight, Monitor, Upload, Wrench, ShieldCheck, Plus, Check, Grid, Car, AlertTriangle, Building2, MapPin } from 'lucide-react';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { UserProfile } from '../types';
+import { UserProfile, BranchCode, BRANCHES, getBranchDetails } from '../types';
 
 // Types for form data
 interface PackingForm {
@@ -262,11 +262,34 @@ interface WriterDocsProps {
   onUpdateLogo?: (base64: string) => void;
   isAdmin?: boolean;
   currentUser?: UserProfile;
+  activeBranch?: BranchCode;
+  onSelectBranch?: (branch: BranchCode) => void;
 }
 
-export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAdmin, currentUser }) => {
+export const WriterDocs: React.FC<WriterDocsProps> = ({ 
+  logo, 
+  onUpdateLogo, 
+  isAdmin, 
+  currentUser,
+  activeBranch = 'UAE',
+  onSelectBranch
+}) => {
   const [activeForm, setActiveForm] = useState<'packing' | 'unpacking' | 'delivery' | 'crating' | 'electronicList' | 'accessorial' | 'warehouseReceipt' | 'handyman' | 'containerInspection' | 'vehicleInspection'>('packing');
+  const [selectedBranch, setSelectedBranch] = useState<BranchCode>(activeBranch);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (activeBranch) {
+      setSelectedBranch(activeBranch);
+    }
+  }, [activeBranch]);
+
+  const handleBranchSwitch = (bCode: BranchCode) => {
+    setSelectedBranch(bCode);
+    if (onSelectBranch) {
+      onSelectBranch(bCode);
+    }
+  };
 
   // --- Forms State ---
   const [packingData, setPackingData] = useState<PackingForm>({
@@ -751,22 +774,25 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
     const margin = 20;
     let yPos = 20;
 
+    const branchDetails = getBranchDetails(selectedBranch);
+
     const colors = {
       textDark: [45, 55, 72], textLight: [113, 128, 150], accent: [30, 41, 59], border: [226, 232, 240], bg: [248, 250, 252],
     };
 
-    const getReferenceNumber = (formType: string) => {
+    const getReferenceNumber = (formType: string, bCode: BranchCode) => {
+      const pfx = bCode === 'QATAR' ? 'WQAT' : bCode === 'KSA' ? 'WKSA' : 'WUAE';
       switch (formType) {
-        case 'packing': return 'Ref: MovePlanning16/2024';
-        case 'unpacking': return 'Ref: MovePlanning16/2024';
-        case 'delivery': return 'Ref: WUAEOPS-WH-20/2024';
-        case 'crating': return 'Ref : WUAEOPS-WH-03/2024';
-        case 'electronicList': return 'Ref : WUAEOPS-WH-04/2024';
-        case 'accessorial': return 'Ref : WUAEOPS-WH-15/2024';
-        case 'warehouseReceipt': return 'Ref : WUAEOPS-WH-01/2024';
-        case 'handyman': return 'Ref : WUAEOPS-WH-20/2024';
-        case 'containerInspection': return 'Ref : WUAEOPS-WH-22/2024';
-        case 'vehicleInspection': return 'Ref : WUAEOPS-WH-19/2024';
+        case 'packing': return `Ref: MovePlanning16/${bCode}/2026`;
+        case 'unpacking': return `Ref: MovePlanning16/${bCode}/2026`;
+        case 'delivery': return `Ref: ${pfx}OPS-WH-20/2026`;
+        case 'crating': return `Ref : ${pfx}OPS-WH-03/2026`;
+        case 'electronicList': return `Ref : ${pfx}OPS-WH-04/2026`;
+        case 'accessorial': return `Ref : ${pfx}OPS-WH-15/2026`;
+        case 'warehouseReceipt': return `Ref : ${pfx}OPS-WH-01/2026`;
+        case 'handyman': return `Ref : ${pfx}OPS-WH-20/2026`;
+        case 'containerInspection': return `Ref : ${pfx}OPS-WH-22/2026`;
+        case 'vehicleInspection': return `Ref : ${pfx}OPS-WH-19/2026`;
         default: return '';
       }
     };
@@ -800,17 +826,21 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
       
       const textX = margin + titleXOffset;
       doc.setFontSize(10); doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]); doc.setFont("helvetica", "bold");
-      doc.text("WRITER RELOCATIONS", textX, 18);
-      doc.setFontSize(8); doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]); doc.setFont("helvetica", "normal");
-      doc.text("PREMIUM LOGISTICS SERVICES", textX, 22);
+      doc.text(branchDetails.legal_name.toUpperCase(), textX, 18);
+      doc.setFontSize(7.5); doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]); doc.setFont("helvetica", "normal");
+      doc.text(`PREMIUM LOGISTICS SERVICES • ${branchDetails.city.toUpperCase()} (${branchDetails.name.toUpperCase()})`, textX, 22);
 
-      // Inject Reference Number
-      const refNum = getReferenceNumber(activeForm);
+      // Inject Reference Number with branch identifier
+      const refNum = getReferenceNumber(activeForm, selectedBranch);
       if (refNum) {
-          doc.setFontSize(10); 
+          doc.setFontSize(9); 
           doc.setTextColor(0, 0, 0); // Black
           doc.setFont("helvetica", "bold");
-          doc.text(refNum, pageWidth - margin, 20, { align: 'right' });
+          doc.text(refNum, pageWidth - margin, 18, { align: 'right' });
+          doc.setFontSize(7);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]);
+          doc.text(`${branchDetails.country}`, pageWidth - margin, 23, { align: 'right' });
       }
 
       doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
@@ -1086,7 +1116,7 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
         yPos += Math.max(h1, h2, h3) + 10;
 
         const h4 = addField("Mode", warehouseReceiptData.mode, margin, yPos, 65);
-        const h5 = addField("Wh Location", warehouseReceiptData.whLocation, margin + 70, yPos, 65);
+        const h5 = addField("Wh Location", warehouseReceiptData.whLocation || getBranchDetails(selectedBranch).address, margin + 70, yPos, 65);
         const h6 = addField("Total Pkgs", warehouseReceiptData.totalPkgs, margin + 140, yPos, 45);
         yPos += Math.max(h4, h5, h6) + 10;
 
@@ -1591,18 +1621,41 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
 
     const addGlobalFooter = () => {
         const pageCount = doc.getNumberOfPages ? doc.getNumberOfPages() : (doc.internal.pages.length - 1);
-        doc.setFontSize(8); doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]); doc.setFont("helvetica", "normal");
         for (let i = 1; i <= pageCount; i++) {
             doc.setPage(i);
-            const footerY = pageHeight - 20;
-            doc.text("P.O. Box 34892", pageWidth / 2, footerY, { align: "center" });
-            doc.text("Dubai, UAE", pageWidth / 2, footerY + 4, { align: "center" });
-            doc.text("Phone: (971) 4 340 8814   Fax: (971) 4 340 8815", pageWidth / 2, footerY + 8, { align: "center" });
-            if (currentUser) doc.text(`Generated by: ${currentUser.name}`, pageWidth - margin, footerY + 8, { align: "right" });
+            const footerY = pageHeight - 18;
+            
+            // Clean subtle divider line
+            doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
+            doc.setLineWidth(0.3);
+            doc.line(margin, footerY - 3, pageWidth - margin, footerY - 3);
+
+            // Line 1: Exact Branch Address requested by user
+            doc.setFontSize(7.5);
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(colors.textDark[0], colors.textDark[1], colors.textDark[2]);
+            doc.text(branchDetails.address, pageWidth / 2, footerY + 1, { align: "center" });
+
+            // Line 2: PO Box, City, Country, Legal Entity
+            doc.setFontSize(6.5);
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(colors.textLight[0], colors.textLight[1], colors.textLight[2]);
+            const poBoxStr = branchDetails.po_box ? `${branchDetails.po_box} • ` : '';
+            doc.text(`${poBoxStr}${branchDetails.city}, ${branchDetails.country} • ${branchDetails.legal_name}`, pageWidth / 2, footerY + 5, { align: "center" });
+
+            // Line 3: Phone / Fax / Email Coordinates
+            const faxStr = branchDetails.fax ? `   Fax: ${branchDetails.fax}` : '';
+            doc.text(`Phone: ${branchDetails.tel}${faxStr}   Email: ${branchDetails.email}`, pageWidth / 2, footerY + 9, { align: "center" });
+
+            // Left / Right footer metadata
+            if (currentUser) {
+              doc.text(`Staff: ${currentUser.name} (${selectedBranch} Hub)`, pageWidth - margin, footerY + 9, { align: "right" });
+            }
+            doc.text(`Page ${i} of ${pageCount}`, margin, footerY + 9);
         }
     };
     addGlobalFooter();
-    doc.save(`Writer_${activeForm}_${new Date().toISOString().slice(0,10)}.pdf`);
+    doc.save(`Writer_${selectedBranch}_${activeForm}_${new Date().toISOString().slice(0,10)}.pdf`);
   };
 
   const accessorialItems = [
@@ -1713,6 +1766,53 @@ export const WriterDocs: React.FC<WriterDocsProps> = ({ logo, onUpdateLogo, isAd
             <button onClick={handlePrint} className="flex items-center gap-2 bg-slate-900 text-white px-5 py-2.5 rounded-xl hover:bg-slate-800 transition-all font-bold text-xs uppercase tracking-widest shadow-lg">
               <Printer className="w-4 h-4" /> SAVE PDF
             </button>
+        </div>
+      </div>
+
+      {/* Branch & Office Location Banner */}
+      <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0 mt-0.5 sm:mt-0">
+            <Building2 className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Active Document Branch & Office Address:</span>
+              <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${BRANCHES[selectedBranch]?.badge_color || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+                {BRANCHES[selectedBranch]?.flag} {BRANCHES[selectedBranch]?.name} Hub ({selectedBranch})
+              </span>
+            </div>
+            <p className="text-sm font-bold text-slate-800 mt-1 break-words">
+              {getBranchDetails(selectedBranch).address}
+            </p>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Tel: <span className="font-semibold text-slate-700">{getBranchDetails(selectedBranch).tel}</span> • Email: <span className="font-semibold text-slate-700">{getBranchDetails(selectedBranch).email}</span> • Entity: <span className="font-semibold text-slate-700">{getBranchDetails(selectedBranch).legal_name}</span>
+            </p>
+          </div>
+        </div>
+
+        {/* Branch Quick Switcher */}
+        <div className="flex items-center gap-1.5 bg-slate-50 p-1.5 rounded-xl border border-slate-200 shrink-0 self-start md:self-auto">
+          {(['QATAR', 'KSA', 'UAE'] as BranchCode[]).map((bCode) => {
+            const b = BRANCHES[bCode];
+            const isSelected = selectedBranch === bCode;
+            return (
+              <button
+                key={bCode}
+                type="button"
+                onClick={() => handleBranchSwitch(bCode)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                  isSelected 
+                    ? 'bg-white text-blue-600 shadow-sm border border-slate-200/80 ring-1 ring-blue-500/20' 
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/60'
+                }`}
+                title={`Switch document address to ${b.name}: ${b.address}`}
+              >
+                <span>{b.flag}</span>
+                <span>{bCode}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 

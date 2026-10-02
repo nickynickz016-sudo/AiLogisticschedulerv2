@@ -187,9 +187,6 @@ export const SurveyorManagementModal: React.FC<SurveyorManagementModalProps> = (
                   Branch Aware
                 </span>
               </h3>
-              <p className="text-xs text-slate-500 font-medium">
-                Configure assignable Survey Directors / Surveyors for UAE, KSA, and Qatar
-              </p>
             </div>
           </div>
           <button 

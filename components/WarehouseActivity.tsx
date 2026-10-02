@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { getUAEToday, getCleanJobNo } from '../utils';
-import { Job, JobStatus, UserProfile, Personnel, Vehicle, UserRole, SystemSettings } from '../types';
+import { Job, JobStatus, UserProfile, Personnel, Vehicle, UserRole, SystemSettings, BranchCode, getBranchDetails } from '../types';
 import { Plus, X, Box, User, Clock, AlertCircle, Info, Calendar, RefreshCw, ChevronLeft, ChevronRight, Activity, LayoutList, CalendarDays, Edit2, Truck, Users, ArrowRight, FileDown, Sliders, Calculator } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -18,6 +18,7 @@ interface WarehouseActivityProps {
   settings?: SystemSettings;
   onSetWarehouseLimit?: (date: string, limit: number) => void;
   onOpenCosting?: (jobId: string) => void;
+  activeBranch?: BranchCode;
 }
 
 // Helper to get UAE date string YYYY-MM-DD
@@ -34,7 +35,8 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
   users = [],
   settings,
   onSetWarehouseLimit,
-  onOpenCosting
+  onOpenCosting,
+  activeBranch = 'UAE'
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -79,14 +81,20 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
 
   const handleDownloadPDF = () => {
     const doc = new jsPDF({ orientation: 'landscape' });
+    const branchDetails = getBranchDetails(activeBranch || 'UAE');
     
     // Add title
-    doc.setFontSize(18);
-    doc.text(`Warehouse Activity Report - ${selectedDate}`, 14, 22);
+    doc.setFontSize(16);
+    doc.setTextColor(30, 41, 59);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Warehouse Activity Report - ${branchDetails.name} Hub`, 14, 18);
     
-    // Add generation date
-    doc.setFontSize(10);
-    doc.text(`Generated on: ${new Date().toLocaleString()}`, 14, 30);
+    // Branch address & coordinates
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text(`${branchDetails.legal_name} • ${branchDetails.address}`, 14, 24);
+    doc.text(`Tel: ${branchDetails.tel} • Email: ${branchDetails.email} • Date: ${selectedDate} • Generated: ${new Date().toLocaleString()}`, 14, 29);
 
     // Prepare table data
     const tableData = dailyActivities.map(activity => {
@@ -121,12 +129,18 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
     autoTable(doc, {
         head: [['Unit ID', 'Date', 'Shipper', 'Activity', 'Team Leader', 'Crew Assigned', 'Bus Assigned', 'Truck Assigned', 'Requested By', 'Status']],
         body: tableData,
-        startY: 40,
+        startY: 34,
         styles: { fontSize: 8 },
-        headStyles: { fillColor: [37, 99, 235] } // Blue-600
+        headStyles: { fillColor: [37, 99, 235] },
+        didDrawPage: (data: any) => {
+          const pageHeight = doc.internal.pageSize.getHeight();
+          doc.setFontSize(7.5);
+          doc.setTextColor(140);
+          doc.text(`Writer Relocations (${branchDetails.name} Hub) • ${branchDetails.address} • Page ${data.pageNumber}`, 14, pageHeight - 8);
+        }
     });
 
-    doc.save(`warehouse-activity-${selectedDate}.pdf`);
+    doc.save(`warehouse-activity-${activeBranch || 'UAE'}-${selectedDate}.pdf`);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -527,9 +541,9 @@ export const WarehouseActivity: React.FC<WarehouseActivityProps> = ({
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-8 border-b bg-white flex justify-between items-center shrink-0">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[92vh] my-auto">
+            <div className="p-5 sm:p-8 border-b bg-white flex justify-between items-center shrink-0">
               <div>
                 <h3 className="text-xl font-bold text-slate-800 uppercase tracking-widest">{isEditing ? 'Edit Reservation' : 'Warehouse Reservation'}</h3>
                 <p className="text-sm text-slate-400 font-medium">Booking for {selectedDate}</p>

@@ -17,9 +17,9 @@ export const SundayJobModal: React.FC<SundayJobModalProps> = ({ isOpen, onClose,
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-300">
-        <div className="relative p-8 md:p-10">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto animate-in fade-in duration-300">
+      <div className="bg-white rounded-2xl sm:rounded-[2rem] w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-300 my-auto">
+        <div className="relative p-5 sm:p-8 md:p-10">
           <button 
             onClick={onClose}
             className="absolute top-6 right-6 p-2 hover:bg-slate-100 rounded-full transition-colors group"

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Job, UserProfile, ImportClearanceCostSheet, ImportCostItem, DEFAULT_IMPORT_CLEARANCE_ITEMS } from '../types';
+import { Job, UserProfile, ImportClearanceCostSheet, ImportCostItem, DEFAULT_IMPORT_CLEARANCE_ITEMS, BranchCode } from '../types';
 import { supabase } from '../supabaseClient';
 import { generateImportCostSheetPdf } from '../utils/importCostSheetPdf';
 import { 
@@ -28,6 +28,7 @@ interface ImportCostSheetModalProps {
   logo?: string;
   onClose: () => void;
   onSaved?: (sheet: ImportClearanceCostSheet) => void;
+  activeBranch?: BranchCode;
 }
 
 const STORAGE_KEY_PREFIX = 'import_cost_sheet_';
@@ -37,7 +38,8 @@ export const ImportCostSheetModal: React.FC<ImportCostSheetModalProps> = ({
   currentUser,
   logo,
   onClose,
-  onSaved
+  onSaved,
+  activeBranch
 }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -439,8 +441,9 @@ export const ImportCostSheetModal: React.FC<ImportCostSheetModalProps> = ({
 
   const handleDownloadPdf = () => {
     try {
-      const doc = generateImportCostSheetPdf({ sheet, logo });
-      const filename = `Import_Cost_Sheet_${sheet.job_no || sheet.job_id || 'IMP'}_${sheet.date || 'UAE'}.pdf`;
+      const bCode = activeBranch || sheet.branch || job.branch || 'UAE';
+      const doc = generateImportCostSheetPdf({ sheet, logo, branch: bCode });
+      const filename = `Import_Cost_Sheet_${sheet.job_no || sheet.job_id || 'IMP'}_${bCode}_${sheet.date || 'DATE'}.pdf`;
       doc.save(filename);
       showToast('PDF downloaded successfully!', 'success');
     } catch (err: any) {
@@ -451,7 +454,8 @@ export const ImportCostSheetModal: React.FC<ImportCostSheetModalProps> = ({
 
   const handlePrint = () => {
     try {
-      const doc = generateImportCostSheetPdf({ sheet, logo });
+      const bCode = activeBranch || sheet.branch || job.branch || 'UAE';
+      const doc = generateImportCostSheetPdf({ sheet, logo, branch: bCode });
       const blob = doc.output('blob');
       const url = URL.createObjectURL(blob);
       const iframe = document.createElement('iframe');

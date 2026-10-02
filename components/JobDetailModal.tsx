@@ -77,16 +77,16 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({ job, onClose, us
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="bg-white rounded-3xl w-full max-w-4xl shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh] h-full md:h-auto overflow-hidden">
+    <div className="fixed inset-0 z-[120] flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-300">
+      <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-4xl shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col max-h-[96vh] md:max-h-[90vh] h-full md:h-auto overflow-hidden my-auto">
         {/* Header */}
-        <div className="p-6 md:p-8 border-b bg-slate-50/50 flex justify-between items-start shrink-0">
+        <div className="p-4 sm:p-6 md:p-8 border-b bg-slate-50/50 flex justify-between items-start shrink-0">
           <div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <span className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase ${getStatusInfo().color}`}>{getStatusInfo().text}</span>
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+              <span className={`px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[9px] font-bold uppercase ${getStatusInfo().color}`}>{getStatusInfo().text}</span>
               <span className="text-xs font-bold text-slate-400 uppercase">Job ID: {getCleanJobNo(job.id)}</span>
             </div>
-            <h3 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight mt-2">{job.shipper_name}</h3>
+            <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-slate-800 tracking-tight mt-1.5 sm:mt-2">{job.shipper_name}</h3>
           </div>
           <div className="flex items-center gap-2">
             <button 
@@ -97,11 +97,11 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({ job, onClose, us
                 {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 Send Alert
             </button>
-            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-all text-slate-400"><X className="w-6 h-6" /></button>
+            <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-all text-slate-400"><X className="w-5 h-5 sm:w-6 sm:h-6" /></button>
           </div>
         </div>
         
-        <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-10">
+        <div className="p-4 sm:p-6 md:p-8 overflow-y-auto custom-scrollbar space-y-6 md:space-y-10 flex-1">
           {/* Core Details */}
           <section>
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Core Details</h4>
@@ -110,8 +110,21 @@ export const JobDetailModal: React.FC<JobDetailModalProps> = ({ job, onClose, us
               <DetailItem icon={Phone} label="Shipper Phone" value={job.shipper_phone} />
               <DetailItem icon={Mail} label="Client Email" value={job.client_email} />
               <DetailItem icon={Calendar} label="Date" value={new Date(job.job_date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} />
-              <DetailItem icon={Clock} label="Time" value={job.job_time} />
-              <DetailItem icon={Tag} label="Priority" value={job.priority} />
+              <DetailItem 
+                icon={Tag} 
+                label="Priority" 
+                value={
+                  <span className={`inline-flex items-center gap-1 mt-1 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
+                    job.priority === 'VVIP'
+                      ? 'bg-purple-100 text-purple-900 border-purple-300'
+                      : (job.priority === 'VIP' || job.priority === 'HIGH')
+                        ? 'bg-amber-100 text-amber-900 border-amber-300'
+                        : 'bg-slate-100 text-slate-700 border-slate-200'
+                  }`}>
+                    {job.priority === 'VVIP' ? '★ VVIP Protocol' : (job.priority === 'VIP' || job.priority === 'HIGH') ? '★ VIP Handling' : 'Standard'}
+                  </span>
+                } 
+              />
               <DetailItem icon={MapPin} label="Location" value={job.location} />
               {job.last_edited_by && (
                 <DetailItem icon={User} label="Last Edited By" value={job.last_edited_by} />

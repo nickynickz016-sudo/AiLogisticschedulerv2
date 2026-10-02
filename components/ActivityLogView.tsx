@@ -337,19 +337,6 @@ export const ActivityLogView: React.FC<ActivityLogViewProps> = ({
         </div>
       </div>
 
-      {/* Internal Diagnostics Explanation Box */}
-      {totalDeletions > 0 && (
-        <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 md:p-5 flex items-start gap-4 text-amber-900">
-          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-          <div className="text-xs space-y-1">
-            <h4 className="font-bold text-amber-950 uppercase tracking-tight">Deletion Safety & Diagnostics Insight</h4>
-            <p className="text-amber-800 leading-relaxed">
-              If items or job schedules appeared missing, check the <strong>Delete</strong> logs below. The system automatically preserves the full snapshot payload before any removal. You can click any activity entry to view connected history or restore deleted jobs instantly.
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Filter Control Bar */}
       <div className="bg-white p-5 md:p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4">
         <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">

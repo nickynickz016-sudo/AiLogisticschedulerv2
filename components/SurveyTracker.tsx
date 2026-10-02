@@ -6,7 +6,7 @@ import {
   MoreVertical, ArrowUpRight, Check, History, List, LayoutGrid, Download,
   Settings, Users, UserCheck, Sparkles
 } from 'lucide-react';
-import { Survey, SurveyStatus, SurveyType, SurveyMode, UserProfile, BranchCode, BRANCHES, AssignableSurveyor } from '../types';
+import { Survey, SurveyStatus, SurveyType, SurveyMode, UserProfile, UserRole, BranchCode, BRANCHES, AssignableSurveyor } from '../types';
 import { safeLocalStorage } from '../utils';
 import { getBranchSurveyors, subscribeToBranchSurveyors } from '../utils/surveyors';
 import { SurveyorManagementModal } from './SurveyorManagementModal';
@@ -447,70 +447,72 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
     }
   };
 
+  const canManageSDTeam = currentUser?.role === UserRole.ADMIN || currentUser?.role === UserRole.SEMI_ADMIN;
+
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <ClipboardCheck className="w-8 h-8 text-indigo-600" />
-            Survey Tracker
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
+            <ClipboardCheck className="w-7 h-7 sm:w-8 sm:h-8 text-indigo-600 shrink-0" />
+            <span>Survey Tracker</span>
           </h1>
-          <p className="text-slate-500 mt-1">Manage and track survey bookings</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <button
             onClick={handleDownloadExcel}
-            className="bg-white text-slate-700 border border-slate-200 px-4 py-2 rounded-xl font-semibold flex items-center gap-2 hover:bg-slate-50 hover:text-indigo-600 transition-all shadow-sm cursor-pointer"
+            className="bg-white text-slate-700 border border-slate-200 px-3.5 sm:px-4 py-2 rounded-xl font-semibold flex items-center gap-2 hover:bg-slate-50 hover:text-indigo-600 transition-all shadow-sm cursor-pointer text-xs sm:text-sm"
             title="Download all survey information in Excel spreadsheet format"
           >
-            <Download className="w-5 h-5 text-indigo-600" />
+            <Download className="w-4 h-4 text-indigo-600" />
             <span className="hidden sm:inline">Export Excel</span>
             <span className="sm:hidden">Export</span>
           </button>
-          <button
-            onClick={() => setShowManageSurveyorsModal(true)}
-            className="bg-white text-indigo-700 border-2 border-indigo-200 hover:border-indigo-400 px-4 py-2 rounded-xl font-black flex items-center gap-2 hover:bg-indigo-50 transition-all shadow-xs cursor-pointer"
-            title={`Configure assignable SDs / Surveyors for ${BRANCHES[activeBranch || 'UAE']?.name || activeBranch} (Add, Edit, Delete)`}
-          >
-            <Settings className="w-4 h-4 text-indigo-600" />
-            <span className="hidden sm:inline">Manage SD Team ({BRANCHES[activeBranch || 'UAE']?.name || activeBranch})</span>
-            <span className="sm:hidden">SD Team</span>
-          </button>
+          {canManageSDTeam && (
+            <button
+              onClick={() => setShowManageSurveyorsModal(true)}
+              className="bg-white text-indigo-700 border-2 border-indigo-200 hover:border-indigo-400 px-3.5 sm:px-4 py-2 rounded-xl font-black flex items-center gap-2 hover:bg-indigo-50 transition-all shadow-xs cursor-pointer text-xs sm:text-sm"
+              title={`Configure assignable SDs / Surveyors for ${BRANCHES[activeBranch || 'UAE']?.name || activeBranch} (Add, Edit, Delete)`}
+            >
+              <Settings className="w-4 h-4 text-indigo-600" />
+              <span className="hidden sm:inline">Manage SD Team ({BRANCHES[activeBranch || 'UAE']?.name || activeBranch})</span>
+              <span className="sm:hidden">SD Team</span>
+            </button>
+          )}
           <button
             onClick={() => { resetForm(); setShowAddModal(true); }}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-semibold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 cursor-pointer"
+            className="bg-indigo-600 text-white px-3.5 sm:px-4 py-2 rounded-xl font-semibold flex items-center gap-2 hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200 cursor-pointer text-xs sm:text-sm"
           >
-            <Plus className="w-5 h-5" />
-            Book Survey
+            <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+            <span>Book Survey</span>
           </button>
         </div>
       </div>
 
       {/* Allocation Summary Banner */}
-      <div className="bg-gradient-to-br from-indigo-50/70 to-slate-50 border border-indigo-100/60 rounded-[2rem] p-6 shadow-sm mb-6">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+      <div className="bg-gradient-to-br from-indigo-50/70 to-slate-50 border border-indigo-100/60 rounded-[2rem] p-4 sm:p-6 shadow-sm mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 sm:gap-6">
           <div className="space-y-1">
             <div className="flex items-center gap-2.5 flex-wrap">
-              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <ClipboardCheck className="w-5 h-5 text-indigo-600 animate-pulse" />
-                Surveyor Allocation Summary
+              <h2 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
+                <ClipboardCheck className="w-5 h-5 text-indigo-600 animate-pulse shrink-0" />
+                <span>Surveyor Allocation Summary</span>
               </h2>
               <span className="text-[10px] uppercase font-black px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200 shadow-2xs">
                 {BRANCHES[activeBranch || 'UAE']?.flag} {BRANCHES[activeBranch || 'UAE']?.name} SD Team
               </span>
-              <button
-                type="button"
-                onClick={() => setShowManageSurveyorsModal(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase tracking-wider transition-all shadow-xs cursor-pointer ml-1"
-                title={`Add, edit or delete SD names for ${BRANCHES[activeBranch || 'UAE']?.name || activeBranch}`}
-              >
-                <Settings className="w-3 h-3" />
-                <span>Manage SD Names (Add / Edit / Delete)</span>
-              </button>
+              {canManageSDTeam && (
+                <button
+                  type="button"
+                  onClick={() => setShowManageSurveyorsModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-black uppercase tracking-wider transition-all shadow-xs cursor-pointer ml-1"
+                  title={`Add, edit or delete SD names for ${BRANCHES[activeBranch || 'UAE']?.name || activeBranch}`}
+                >
+                  <Settings className="w-3 h-3" />
+                  <span>Manage SD Names</span>
+                </button>
+              )}
             </div>
-            <p className="text-xs font-semibold text-slate-500">
-              Assigned Booked Moves per surveyor for {BRANCHES[activeBranch || 'UAE']?.name} within selected date range
-            </p>
           </div>
 
           {/* Filters (Mode Filter & Date Picker Range) */}
@@ -772,13 +774,13 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-base font-black text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
+                    <h3 className="text-sm sm:text-base font-black text-slate-900 group-hover:text-indigo-600 transition-colors break-words leading-snug">
                       {survey.shipper_name}
                     </h3>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-slate-500 font-bold text-[11px]">
                       <span className="flex items-center gap-1">
                         <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="truncate">{survey.location}</span>
+                        <span className="break-words">{survey.location}</span>
                       </span>
                       <span className="text-slate-200">•</span>
                       <span className="flex items-center gap-1">
@@ -1432,13 +1434,15 @@ export const SurveyTracker: React.FC<SurveyTrackerProps> = ({
       </form>
 
       {/* Surveyor / SD Management Modal */}
-      <SurveyorManagementModal 
-        isOpen={showManageSurveyorsModal}
-        onClose={() => setShowManageSurveyorsModal(false)}
-        activeBranch={activeBranch || 'UAE'}
-        surveys={surveys}
-        onSurveyorsUpdated={handleSurveyorsUpdated}
-      />
+      {canManageSDTeam && (
+        <SurveyorManagementModal 
+          isOpen={showManageSurveyorsModal}
+          onClose={() => setShowManageSurveyorsModal(false)}
+          activeBranch={activeBranch || 'UAE'}
+          surveys={surveys}
+          onSurveyorsUpdated={handleSurveyorsUpdated}
+        />
+      )}
     </div>
   );
 };

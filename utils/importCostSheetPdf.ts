@@ -1,12 +1,13 @@
 import jsPDF from 'jspdf';
-import { ImportClearanceCostSheet, DEFAULT_IMPORT_CLEARANCE_ITEMS, ImportCostItem } from '../types';
+import { ImportClearanceCostSheet, DEFAULT_IMPORT_CLEARANCE_ITEMS, ImportCostItem, getBranchDetails, BranchCode } from '../types';
 
 export interface GenerateImportCostPdfOptions {
   sheet: ImportClearanceCostSheet;
   logo?: string;
+  branch?: BranchCode;
 }
 
-export const generateImportCostSheetPdf = ({ sheet, logo }: GenerateImportCostPdfOptions): jsPDF => {
+export const generateImportCostSheetPdf = ({ sheet, logo, branch }: GenerateImportCostPdfOptions): jsPDF => {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -19,6 +20,7 @@ export const generateImportCostSheetPdf = ({ sheet, logo }: GenerateImportCostPd
   const contentWidth = pageWidth - margin * 2; // 182mm
 
   let y = 10;
+  const branchDetails = getBranchDetails((sheet as any).branch || branch || 'UAE');
 
   // 1. TOP LOGO
   let logoDrawn = false;
@@ -35,7 +37,7 @@ export const generateImportCostSheetPdf = ({ sheet, logo }: GenerateImportCostPd
       const logoX = (pageWidth - w) / 2;
       doc.addImage(logo, 'PNG', logoX, y, w, h);
       logoDrawn = true;
-      y += h + 5;
+      y += h + 4;
     } catch (e) {
       console.warn('Could not draw provided base64 logo', e);
     }
@@ -67,6 +69,13 @@ export const generateImportCostSheetPdf = ({ sheet, logo }: GenerateImportCostPd
 
     y += 18;
   }
+
+  // Branch Address subtitle
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`${branchDetails.legal_name} • ${branchDetails.address}`, pageWidth / 2, y, { align: 'center' });
+  y += 5;
 
   // 2. HEADER INFO SECTION
   doc.setFont('helvetica', 'bold');
@@ -421,6 +430,12 @@ export const generateImportCostSheetPdf = ({ sheet, logo }: GenerateImportCostPd
 
   doc.setLineWidth(0.3);
   doc.line(margin + 30, sigY + 0.5, margin + 85, sigY + 0.5);
+
+  // Running footer with branch details
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.5);
+  doc.setTextColor(148, 163, 184);
+  doc.text(`${branchDetails.legal_name} • ${branchDetails.address} • Tel: ${branchDetails.tel}`, pageWidth / 2, pageHeight - 6, { align: 'center' });
 
   return doc;
 };

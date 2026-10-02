@@ -516,8 +516,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h2 className="text-3xl font-bold text-slate-800 tracking-tight">User Access Management</h2>
-          <p className="text-slate-500 text-sm font-medium mt-1">Control system access for admins and operations staff</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">User Access Management</h2>
         </div>
         <button 
           onClick={() => setShowAddModal(true)}

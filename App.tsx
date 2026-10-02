@@ -86,7 +86,7 @@ const defaultJobs: Job[] = [
     shipper_phone: '+971501234567',
     client_email: 'john.doe@example.com',
     location: 'Dubai Marina, Elite Residence',
-    priority: 'High' as any,
+    priority: 'VIP' as any,
     loading_type: 'House Move' as any,
     volume_cbm: 12,
     job_date: new Date().toISOString().split('T')[0],
@@ -105,7 +105,7 @@ const defaultJobs: Job[] = [
     shipper_phone: '+971509876543',
     client_email: 'sarah.smith@example.com',
     location: 'Jumeirah Heights to Corniche, Abu Dhabi',
-    priority: 'Medium' as any,
+    priority: 'Standard' as any,
     loading_type: 'Apartment Move' as any,
     volume_cbm: 24,
     job_date: new Date().toISOString().split('T')[0],
@@ -124,7 +124,7 @@ const defaultJobs: Job[] = [
     shipper_phone: '+966501234567',
     client_email: 'fahad@example.sa',
     location: 'Al Nakheel District, Riyadh',
-    priority: 'High' as any,
+    priority: 'VIP' as any,
     loading_type: 'House Move' as any,
     volume_cbm: 32,
     job_date: new Date().toISOString().split('T')[0],
@@ -143,7 +143,7 @@ const defaultJobs: Job[] = [
     shipper_phone: '+97455123456',
     client_email: 'rashid@example.qa',
     location: 'Porto Arabia, The Pearl, Doha',
-    priority: 'Medium' as any,
+    priority: 'Standard' as any,
     loading_type: 'Apartment Move' as any,
     volume_cbm: 20,
     job_date: new Date().toISOString().split('T')[0],
@@ -2236,7 +2236,7 @@ const App: React.FC = () => {
           created_at: Date.now(),
           requester_id: currentUser.employee_id,
           assigned_to: job.assigned_to || 'Unassigned',
-          priority: job.priority || 'LOW',
+          priority: job.priority || 'Standard',
           description: job.description || 'N/A',
           shipment_details: job.shipment_details || 'N/A',
           job_date: currentDateStr,
@@ -2977,7 +2977,7 @@ const App: React.FC = () => {
   ];
 
   return (
-    <div className="flex min-h-screen bg-[#f8fafc] text-slate-900 font-sans selection:bg-blue-100 selection:text-blue-900 overflow-hidden">
+    <div className="flex min-h-screen bg-[#f8fafc] text-slate-900 font-sans selection:bg-blue-100 selection:text-blue-900 overflow-hidden w-full">
       <HolidayAlertModal isOpen={showHolidayAlert} onClose={() => setShowHolidayAlert(false)} />
       
       {/* Branch Selection & Switcher Modal */}
@@ -3026,8 +3026,8 @@ const App: React.FC = () => {
 
       {/* Admin Delete Confirmation Modal */}
       {deleteConfirmation && (
-        <div className="fixed inset-0 bg-slate-900/45 backdrop-blur-sm z-[9999] flex items-center justify-center p-4" id="admin_delete_confirm_overlay">
-          <div className="bg-white rounded-xl shadow-2xl border border-slate-100 max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200" id="admin_delete_confirm_modal">
+        <div className="fixed inset-0 bg-slate-900/45 backdrop-blur-sm z-[9999] flex items-center justify-center p-3 sm:p-4 overflow-y-auto" id="admin_delete_confirm_overlay">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-100 max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto" id="admin_delete_confirm_modal">
             {/* Header */}
             <div className="bg-rose-50 px-6 py-5 border-b border-rose-100 flex items-start gap-4">
               <div className="p-2 bg-rose-100 text-rose-600 rounded-lg">
@@ -3123,9 +3123,9 @@ const App: React.FC = () => {
         onOpenBranchModal={() => setIsBranchModalOpen(true)}
       />
 
-      <div className="flex-1 flex flex-col h-screen overflow-hidden w-full relative">
-        <header className="h-16 md:h-20 border-b bg-white/90 backdrop-blur-xl flex items-center justify-between px-3 md:px-10 sticky top-0 z-30 shadow-sm shrink-0">
-          <div className="flex items-center gap-2 md:gap-6">
+      <div className="flex-1 flex flex-col h-screen overflow-hidden w-full min-w-0 relative">
+        <header className="h-16 md:h-20 border-b bg-white/90 backdrop-blur-xl flex items-center justify-between px-2 sm:px-6 md:px-8 lg:px-10 sticky top-0 z-30 shadow-sm shrink-0 w-full min-w-0">
+          <div className="flex items-center gap-1.5 sm:gap-4 md:gap-6 min-w-0">
             {/* Mobile Menu Button */}
             <button 
               onClick={() => setIsMobileMenuOpen(true)}
@@ -3144,7 +3144,7 @@ const App: React.FC = () => {
             </button>
 
             <div className="flex items-center gap-2 md:gap-8">
-              <h1 className="font-bold text-base md:text-xl text-slate-800 tracking-tight uppercase border-r pr-3 md:pr-8 border-slate-200 hidden xs:block">Ops Central</h1>
+              <h1 className="font-bold text-base md:text-xl text-slate-800 tracking-tight uppercase border-r pr-2 sm:pr-3 md:pr-8 border-slate-200 hidden sm:block shrink-0">Ops Central</h1>
               <div className="flex items-center gap-1.5 md:gap-3 bg-slate-50 px-2.5 py-1 md:px-4 md:py-2 rounded-full border border-slate-100">
                 <span className="w-1.5 h-1.5 md:w-2.5 md:h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 <span className="text-[8px] md:text-[10px] text-slate-500 font-black uppercase tracking-widest leading-none">
@@ -3345,8 +3345,8 @@ const App: React.FC = () => {
           </div>
         </header>
 
-        <main className="flex-1 p-3 md:p-8 lg:p-10 overflow-y-auto custom-scrollbar w-full">
-          <div className="max-w-[1700px] mx-auto pb-12">
+        <main className="flex-1 p-2 sm:p-4 md:p-8 lg:p-10 overflow-y-auto custom-scrollbar w-full min-w-0">
+          <div className="max-w-[1700px] w-full mx-auto pb-12 min-w-0">
             {activeTab === 'dashboard' && (
               <Dashboard 
                 jobs={jobs} 
@@ -3356,6 +3356,7 @@ const App: React.FC = () => {
                 activeBranch={activeBranch || 'UAE'} 
                 users={systemUsers}
                 surveys={surveys}
+                currentUser={currentUser}
               />
             )}
             {activeTab === 'schedule' && (
@@ -3380,7 +3381,7 @@ const App: React.FC = () => {
               <WarehouseActivity 
                 jobs={jobs} 
                 onAddJob={handleAddJob} 
-                onEditJob={handleEditJob}
+                onEditJob={handleEditJob} 
                 onDeleteJob={handleDeleteJob}
                 currentUser={currentUser}
                 personnel={personnel}
@@ -3392,6 +3393,7 @@ const App: React.FC = () => {
                   setCostingJobId(jobId);
                   setActiveTab('inventory');
                 }}
+                activeBranch={activeBranch || 'UAE'}
               />
             )}
             {activeTab === 'import-clearance' && (
@@ -3402,6 +3404,7 @@ const App: React.FC = () => {
                 currentUser={currentUser}
                 onUpdateCustomsStatus={handleUpdateCustomsStatus}
                 logo={settings.company_logo}
+                activeBranch={activeBranch || 'UAE'}
               />
             )}
             {activeTab === 'quotations' && (
@@ -3454,6 +3457,7 @@ const App: React.FC = () => {
                 onClearPreloadSurveyData={() => setPreloadPackingSurvey(null)}
                 logo={settings.company_logo}
                 onLogActivity={logActivity}
+                activeBranch={activeBranch || 'UAE'}
               />
             )}
             {activeTab === 'warehouse-checklist' && (
@@ -3474,6 +3478,7 @@ const App: React.FC = () => {
                 onSaveDaily={handleSaveDailyMonitoring}
                 onUpdateDaily={handleUpdateDailyMonitoring}
                 currentUser={currentUser}
+                activeBranch={activeBranch || 'UAE'}
               />
             )}
             {activeTab === 'writer-docs' && (
@@ -3482,6 +3487,8 @@ const App: React.FC = () => {
                 onUpdateLogo={handleUpdateLogo}
                 isAdmin={currentUser.role === UserRole.ADMIN}
                 currentUser={currentUser}
+                activeBranch={activeBranch || 'UAE'}
+                onSelectBranch={handleSelectBranch}
               />
             )}
             {activeTab === 'inventory' && (

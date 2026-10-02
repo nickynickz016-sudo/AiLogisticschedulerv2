@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { getUAEToday } from '../utils';
-import { Job, JobStatus, UserProfile, CustomsStatus, UserRole, ImportClearanceCostSheet } from '../types';
+import { Job, JobStatus, UserProfile, CustomsStatus, UserRole, ImportClearanceCostSheet, BranchCode } from '../types';
 import { 
   Plus, 
   X, 
@@ -35,6 +35,7 @@ interface ImportClearanceProps {
   currentUser: UserProfile;
   onUpdateCustomsStatus: (jobId: string, status: CustomsStatus) => void;
   logo?: string;
+  activeBranch?: BranchCode;
 }
 
 // Helper to get UAE date string YYYY-MM-DD
@@ -46,7 +47,8 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({
   onDeleteJob, 
   currentUser, 
   onUpdateCustomsStatus,
-  logo 
+  logo,
+  activeBranch = 'UAE'
 }) => {
   const [showModal, setShowModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getLocalToday());
@@ -257,8 +259,9 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({
         };
       }
 
-      const doc = generateImportCostSheetPdf({ sheet: sheetData, logo });
-      doc.save(`Import_Cost_Sheet_${sheetData.job_no || activity.id}_${sheetData.date}.pdf`);
+      const bCode = activeBranch || (activity as any).branch || 'UAE';
+      const doc = generateImportCostSheetPdf({ sheet: sheetData, logo, branch: bCode });
+      doc.save(`Import_Cost_Sheet_${sheetData.job_no || activity.id}_${bCode}_${sheetData.date}.pdf`);
     } catch (err) {
       console.error('Quick download failed', err);
       // If error, open the modal instead
@@ -633,9 +636,9 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({
 
       {/* New Activity Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden">
-            <div className="p-8 border-b bg-white flex justify-between items-center rounded-t-3xl">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-2xl shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[92vh] my-auto">
+            <div className="p-5 sm:p-8 border-b bg-white flex justify-between items-center shrink-0">
               <div>
                 <h3 className="text-xl font-bold text-slate-800 uppercase tracking-widest text-indigo-600">Import Documentation</h3>
                 <p className="text-sm text-slate-400 font-medium">Filing for {selectedDate}</p>
@@ -699,6 +702,7 @@ export const ImportClearance: React.FC<ImportClearanceProps> = ({
           job={selectedCostSheetJob}
           currentUser={currentUser}
           logo={logo}
+          activeBranch={activeBranch}
           onClose={() => setSelectedCostSheetJob(null)}
           onSaved={(sheet) => {
             setCostSummaries(prev => ({

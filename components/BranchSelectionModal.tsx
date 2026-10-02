@@ -141,11 +141,11 @@ NOTIFY pgrst, 'reload schema';`;
   const branchList = Object.values(BRANCHES);
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-4 overflow-y-auto">
-      <div className="relative w-full max-w-4xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden my-auto animate-in fade-in zoom-in duration-200">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/80 backdrop-blur-md p-2 sm:p-4 overflow-y-auto">
+      <div className="relative w-full max-w-4xl bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[94vh] flex flex-col animate-in fade-in zoom-in duration-200">
         
         {/* Header */}
-        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 px-8 py-7 text-white relative">
+        <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 px-4 sm:px-8 py-5 sm:py-7 text-white relative shrink-0">
           {!isMandatory && onClose && (
             <button
               onClick={onClose}
@@ -194,7 +194,7 @@ NOTIFY pgrst, 'reload schema';`;
 
         {/* Unauthorized Access Warning Banner */}
         {unauthorizedAttemptBranch && (
-          <div className="mx-8 mt-6 p-4 bg-rose-50 border-2 border-rose-300 rounded-2xl flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="mx-4 sm:mx-8 mt-4 sm:mt-6 p-3 sm:p-4 bg-rose-50 border-2 border-rose-300 rounded-2xl flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 duration-200 shrink-0">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-rose-100 text-rose-600 rounded-xl shrink-0">
                 <Lock className="w-5 h-5" />
@@ -218,8 +218,8 @@ NOTIFY pgrst, 'reload schema';`;
         )}
 
         {/* Branch Cards */}
-        <div className="p-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="p-4 sm:p-6 md:p-8 overflow-y-auto custom-scrollbar flex-1">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-5">
             {branchList.map((branch) => {
               const isSelected = selectedBranch === branch.code;
               const isCurrent = activeBranch === branch.code;

@@ -830,10 +830,10 @@ CREATE POLICY "Allow delete for all on quotations" ON public.quotations FOR DELE
                       </td>
 
                       {/* Client */}
-                      <td className="py-3.5 px-4">
-                        <p className="font-bold text-slate-800 truncate max-w-[180px]">{quote.client_name || '—'}</p>
+                      <td className="py-3.5 px-4 min-w-[160px]">
+                        <p className="font-bold text-slate-800 break-words text-xs sm:text-sm leading-snug">{quote.client_name || '—'}</p>
                         {quote.company_name && (
-                          <p className="text-[10px] text-slate-400 truncate max-w-[180px]">{quote.company_name}</p>
+                          <p className="text-[10px] text-slate-400 break-words leading-tight mt-0.5">{quote.company_name}</p>
                         )}
                       </td>
 

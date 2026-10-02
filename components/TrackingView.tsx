@@ -302,8 +302,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ jobs, onUpdateJob, l
                 </div>
             )}
             <div>
-                <h2 className="text-3xl font-bold text-slate-800 tracking-tight">Shipment Tracking</h2>
-                <p className="text-slate-500 text-sm font-medium mt-1">Real-time status updates and client visibility</p>
+                <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 tracking-tight">Shipment Tracking</h2>
             </div>
         </div>
       </div>

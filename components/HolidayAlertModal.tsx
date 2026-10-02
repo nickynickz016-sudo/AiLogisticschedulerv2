@@ -14,12 +14,12 @@ export const HolidayAlertModal: React.FC<HolidayAlertModalProps> = ({ isOpen, on
 
   return (
     <div 
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300"
+      className="fixed inset-0 z-[200] flex items-center justify-center p-2 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-300"
       aria-modal="true"
       role="alertdialog"
     >
       <div 
-        className="bg-white rounded-3xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden text-center p-10"
+        className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-md shadow-2xl animate-in zoom-in-95 duration-200 overflow-hidden text-center p-6 sm:p-10 my-auto"
         role="document"
       >
         <div className="mx-auto w-16 h-16 bg-rose-50 border-4 border-rose-100 rounded-full flex items-center justify-center mb-6">

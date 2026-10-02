@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { Quotation } from '../types';
+import { Quotation, getBranchDetails } from '../types';
 
 export interface GenerateQuotationPdfOptions {
   quotation: Quotation;
@@ -151,17 +151,19 @@ export const generateQuotationPdf = ({
   }
 
   // Header Right: Company Coordinates & Certifications
+  const branchDetails = getBranchDetails(quotation.branch);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(8);
   doc.setTextColor(...primaryDark);
-  doc.text('WRITER RELOCATIONS LLC', pageWidth - margin, y + 2, { align: 'right' });
+  doc.text(branchDetails.legal_name.toUpperCase(), pageWidth - margin, y + 2, { align: 'right' });
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(100, 116, 139);
-  doc.text('Jebel Ali Free Zone / Dubai Investments Park, UAE', pageWidth - margin, y + 6, { align: 'right' });
-  doc.text('Tel: +971 4 885 1234 | Email: info@writerrelocations.com', pageWidth - margin, y + 10, { align: 'right' });
-  doc.text('FIDI FAIM Certified | ISO 9001:2015 Accredited Member', pageWidth - margin, y + 14, { align: 'right' });
+  doc.text(branchDetails.address, pageWidth - margin, y + 6, { align: 'right' });
+  const faxText = branchDetails.fax ? ` | Fax: ${branchDetails.fax}` : '';
+  doc.text(`Tel: ${branchDetails.tel}${faxText} | Email: ${branchDetails.email}`, pageWidth - margin, y + 10, { align: 'right' });
+  doc.text(`FIDI FAIM Certified | ISO 9001:2015 Accredited • ${branchDetails.city}`, pageWidth - margin, y + 14, { align: 'right' });
 
   y += 20;
 
@@ -760,7 +762,7 @@ export const generateQuotationPdf = ({
     doc.setTextColor(148, 163, 184);
 
     doc.text(
-      'Writer Relocations - An ISO 9001:2015 & FIDI FAIM Certified International Mobility Provider. All Rights Reserved.',
+      `Writer Relocations (${branchDetails.name}) • ${branchDetails.address} • ISO 9001:2015 & FIDI FAIM Certified`,
       margin,
       pageHeight - 8
     );

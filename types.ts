@@ -11,8 +11,15 @@ export interface Branch {
   phone_code: string;
   flag: string;
   badge_color: string;
-  address?: string;
-  port?: string;
+  address: string;
+  port: string;
+  po_box?: string;
+  city?: string;
+  tel?: string;
+  fax?: string;
+  email?: string;
+  legal_name?: string;
+  ref_code?: string;
 }
 
 export const BRANCHES: Record<BranchCode, Branch> = {
@@ -26,8 +33,15 @@ export const BRANCHES: Record<BranchCode, Branch> = {
     phone_code: '+971',
     flag: '🇦🇪',
     badge_color: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-    address: 'Dubai & Abu Dhabi, UAE',
-    port: 'Jebel Ali Port / Port Rashid'
+    address: 'P.O. Box 34892, Dubai Investments Park, Dubai, UAE',
+    port: 'Jebel Ali Port / Port Rashid',
+    po_box: 'P.O. Box 34892',
+    city: 'Dubai',
+    tel: '+971 4 340 8814',
+    fax: '+971 4 340 8815',
+    email: 'info@writerrelocations.com',
+    legal_name: 'Writer Relocations LLC',
+    ref_code: 'WUAE'
   },
   KSA: {
     id: 'KSA',
@@ -39,8 +53,14 @@ export const BRANCHES: Record<BranchCode, Branch> = {
     phone_code: '+966',
     flag: '🇸🇦',
     badge_color: 'bg-green-100 text-green-800 border-green-300',
-    address: 'Riyadh & Jeddah, KSA',
-    port: 'Jeddah Islamic Port / King Abdulaziz Port Dammam'
+    address: 'Warehouse 4, Street Ibn Hajar Asqalani, Al Aziziyah Area, Riyadh, Kingdom of Saudi Arabia',
+    port: 'Jeddah Islamic Port / King Abdulaziz Port Dammam',
+    po_box: 'P.O. Box 78912',
+    city: 'Riyadh',
+    tel: '+966 11 234 5678',
+    email: 'ksa@writerrelocations.com',
+    legal_name: 'Writer Relocations Saudi Arabia Ltd.',
+    ref_code: 'WKSA'
   },
   QATAR: {
     id: 'QATAR',
@@ -52,9 +72,45 @@ export const BRANCHES: Record<BranchCode, Branch> = {
     phone_code: '+974',
     flag: '🇶🇦',
     badge_color: 'bg-amber-100 text-amber-800 border-amber-300',
-    address: 'Doha, Qatar',
-    port: 'Hamad Port, Doha'
+    address: 'Building 401 , street 241, Zone, 91 Street 241, Doha, Qatar',
+    port: 'Hamad Port, Doha',
+    po_box: 'P.O. Box 55432',
+    city: 'Doha',
+    tel: '+974 4488 1234',
+    email: 'qatar@writerrelocations.com',
+    legal_name: 'Writer Relocations W.L.L.',
+    ref_code: 'WQAT'
   }
+};
+
+export interface BranchDetails extends Branch {
+  po_box: string;
+  city: string;
+  tel: string;
+  email: string;
+  legal_name: string;
+  ref_code: string;
+}
+
+export const getBranchDetails = (branchCode?: string | null): BranchDetails => {
+  const code = ((branchCode || 'UAE').toUpperCase()) as BranchCode;
+  const b = BRANCHES[code] || BRANCHES.UAE;
+  return {
+    ...b,
+    address: b.address || (code === 'QATAR' 
+      ? 'Building 401 , street 241, Zone, 91 Street 241, Doha, Qatar'
+      : code === 'KSA'
+      ? 'Warehouse 4, Street Ibn Hajar Asqalani, Al Aziziyah Area, Riyadh, Kingdom of Saudi Arabia'
+      : 'P.O. Box 34892, Dubai Investments Park, Dubai, UAE'),
+    po_box: b.po_box || (code === 'QATAR' ? 'P.O. Box 55432' : code === 'KSA' ? 'P.O. Box 78912' : 'P.O. Box 34892'),
+    city: b.city || (code === 'QATAR' ? 'Doha' : code === 'KSA' ? 'Riyadh' : 'Dubai'),
+    tel: b.tel || (code === 'QATAR' ? '+974 4488 1234' : code === 'KSA' ? '+966 11 234 5678' : '+971 4 340 8814'),
+    fax: b.fax || (code === 'UAE' ? '+971 4 340 8815' : undefined),
+    email: b.email || (code === 'QATAR' ? 'qatar@writerrelocations.com' : code === 'KSA' ? 'ksa@writerrelocations.com' : 'info@writerrelocations.com'),
+    legal_name: b.legal_name || (code === 'QATAR' ? 'Writer Relocations W.L.L.' : code === 'KSA' ? 'Writer Relocations Saudi Arabia Ltd.' : 'Writer Relocations LLC'),
+    ref_code: b.ref_code || (code === 'QATAR' ? 'WQAT' : code === 'KSA' ? 'WKSA' : 'WUAE'),
+    port: b.port || (code === 'QATAR' ? 'Hamad Port, Doha' : code === 'KSA' ? 'Jeddah Islamic Port' : 'Jebel Ali Port / Port Rashid')
+  };
 };
 
 export enum UserRole {
@@ -80,7 +136,7 @@ export enum CustomsStatus {
 }
 
 export type LoadingType = 'Warehouse Removal' | 'Storage' | 'Local Storage' | 'Direct Loading' | 'Delivery';
-export type Priority = 'LOW' | 'MEDIUM' | 'HIGH';
+export type Priority = 'Standard' | 'VIP' | 'VVIP' | 'LOW' | 'MEDIUM' | 'HIGH';
 export type ShipmentDetailsType = 'Local Move' | 'Sea FCL' | 'AIR' | 'AIR LCL' | 'SEA LCL' | 'Groupage' | 'Road';
 
 export type MainCategory = 'Commercial' | 'Agent' | 'Private' | 'Corporate';
